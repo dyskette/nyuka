@@ -70,13 +70,20 @@ jobs:
       # schema, so a migration that outpaces its entity compiles and fails at
       # runtime. This converts that class of bug into a build failure and is
       # the control that makes ADR-0002 safe rather than merely convenient.
+      # ADR-0002: SeaORM type-checks against ENTITY definitions, not the live
+      # schema, so a migration that outpaces its entity compiles and fails at
+      # runtime. Regenerating and diffing turns that into a build failure, and
+      # is the control that makes ADR-0002 safe rather than merely convenient.
       - name: Schema drift check
         run: |
           set -euo pipefail
-          echo "TODO(scaffold): run migrations, then"
-          echo "  sea-orm-cli generate entity -o /tmp/entity"
-          echo "  diff -ru crates/persistence/src/entity /tmp/entity"
-          echo "See ADR-0002 follow-up 1."
+          cargo install sea-orm-cli --locked --version ^2
+          cargo run -q -p nyuka-persistence --bin migrate -- fresh
+          sea-orm-cli generate entity \
+            --database-url "$DATABASE_URL" \
+            --output-dir /tmp/entity \
+            --with-serde both
+          diff -ru crates/persistence/src/entity /tmp/entity
 
       # ADR-0008/0009: openapi.json is the frontend contract. Stale means the
       # generated TypeScript client no longer matches the server.
