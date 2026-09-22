@@ -64,6 +64,9 @@ jobs:
           test -f crates/aidoku-runtime/conformance/nyuka-conformance.aix
 
       - name: Test
+        # DATABASE_URL is set for the whole job, so the migration and claim
+        # tests run rather than skipping. A skipped concurrency test looks
+        # exactly like a passing one.
         run: cargo test --workspace --all-features
 
       # ADR-0002: SeaORM type-checks against ENTITY definitions, not the live

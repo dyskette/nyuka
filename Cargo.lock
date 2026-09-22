@@ -2962,11 +2962,13 @@ dependencies = [
  "futures",
  "nyuka-domain",
  "nyuka-persistence",
+ "sea-orm",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "url",
  "uuid",
 ]
 
