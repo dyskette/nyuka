@@ -77,12 +77,19 @@ jobs:
       - name: Schema drift check
         run: |
           set -euo pipefail
-          cargo install sea-orm-cli --locked --version ^2
+          # rustls, not native-tls: the default features pull openssl-sys,
+          # which needs system OpenSSL headers the runner does not have.
+          cargo install sea-orm-cli --locked --version '^2' \
+            --no-default-features \
+            --features codegen,sqlx-postgres,runtime-tokio-rustls
           cargo run -q -p nyuka-persistence --bin migrate -- fresh
+          # These flags must match the ones the committed entities were
+          # generated with, or the diff fails on formatting rather than drift.
           sea-orm-cli generate entity \
             --database-url "$DATABASE_URL" \
             --output-dir /tmp/entity \
-            --with-serde both
+            --with-serde both \
+            --ignore-tables seaql_migrations
           diff -ru crates/persistence/src/entity /tmp/entity
 
       # ADR-0008/0009: openapi.json is the frontend contract. Stale means the

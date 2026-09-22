@@ -14,6 +14,12 @@
 #![forbid(unsafe_code)]
 
 pub mod connect;
+/// SeaORM entities.
+///
+/// **Generated, not written.** `sea-orm-cli generate entity` produces these
+/// from a migrated database, and CI regenerates and diffs them (ADR-0002).
+/// Editing one by hand makes the drift check fail against something it cannot
+/// reproduce — change the migration instead.
 pub mod entity;
 pub mod migration;
 pub mod repository;
