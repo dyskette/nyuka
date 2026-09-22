@@ -141,6 +141,14 @@ mime_guess = "2.0"
 version = "10.0"
 features = ["build", "cargo"]
 
+# The wasmtime dependency graph makes a full-debug target directory very
+# large — 16 GB in practice, which has filled the disk more than once.
+# Line tables keep backtraces with file and line numbers, which is what
+# debugging here actually needs; step-through debugging wants `debug = true`
+# instead, at roughly 4x the size.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

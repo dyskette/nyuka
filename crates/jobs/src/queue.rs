@@ -188,6 +188,24 @@ impl PostgresQueue {
         Ok(JobId(row.try_get("", "id").map_err(db)?))
     }
 
+    /// Whether a job with this idempotency key already exists.
+    ///
+    /// `enqueue` alone cannot tell the caller whether it inserted or matched
+    /// an existing row, because both return the same id. The scheduler needs
+    /// the difference to report what a tick actually did.
+    pub async fn exists(&self, idempotency_key: &str) -> Result<bool> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT 1 AS present FROM job WHERE idempotency_key = $1",
+                [idempotency_key.into()],
+            ))
+            .await
+            .map_err(db)?;
+        Ok(row.is_some())
+    }
+
     /// Claims one runnable job, or `None` when there is nothing to do.
     ///
     /// Exactly-once across concurrent workers. Keep this in one place: the
