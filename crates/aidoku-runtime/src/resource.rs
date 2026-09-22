@@ -28,7 +28,7 @@ pub struct Html {
 }
 
 /// An in-flight or completed HTTP request.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Request {
     pub method: i32,
     pub url: Option<String>,
@@ -37,7 +37,7 @@ pub struct Request {
     pub response: Option<Response>,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Response {
     pub status: u16,
     pub headers: Vec<(String, String)>,
