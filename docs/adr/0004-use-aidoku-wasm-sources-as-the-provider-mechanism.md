@@ -181,9 +181,39 @@ Working end to end, with correct data: **JSON-API sources.** `en.dankefurslesen`
 **Not working: HTML-scraping sources.** `ar.aasq`, `en.asurascans`, `en.flamecomics`, and `en.weebcentral` all instantiate, fetch, parse, make hundreds to thousands of `html::*` calls, and return a well-formed result containing **zero entries**. The spike's `html` module represents nodes as re-parsed outer-HTML strings, which is adequate for a simple fixture — a selftest confirms `select` → `get` → `attr` → nested `select_first` all return correct values — but does not reproduce Jsoup's behaviour on real pages. Correcting two semantics (a missing attribute must be `NoResult` rather than an empty string; `select` must exclude the element itself) reduced the call volume substantially without producing entries.
 
 > [!IMPORTANT]
-> This is the spike's most useful negative result: **a host implementation cannot be developed against live sites.** With a live page you cannot distinguish "my `html` module is wrong" from "the site changed its markup" — and ADR-0004 already expects the latter to happen routinely. The conformance `.aix` with **fixed fixture HTML** is therefore not a regression test to add afterwards; it is the only way to build the `html` module at all. Follow-up 3 moves ahead of the host implementation work, not after it.
+> This was the spike's most useful negative result: **a host implementation cannot be developed against live sites.** With a live page you cannot distinguish "my `html` module is wrong" from "the site changed its markup" — and this ADR already expects the latter to happen routinely. The conformance `.aix` with **fixed fixture HTML** is therefore not a regression test to add afterwards; it is the only way to build the `html` module at all. Follow-up 3 moves ahead of the host implementation work, not after it.
+
+### Resolved: the `abs:` attribute prefix
+
+The conformance fixture found the cause within one iteration, and it was not a DOM-fidelity problem at all.
+
+Aidoku follows **Jsoup's `abs:` convention**: `element.attr("abs:src")` means *resolve this attribute value against the document's base URI*. Sources use it for every cover image and series link. A host that treats `abs:href` as a literal attribute name finds nothing, returns a miss, and the source discards the entry — silently, with no error anywhere. That is why HTML-scraping sources produced well-formed results containing zero entries while JSON sources were unaffected.
+
+Three things are required, and all three are now covered by fixture checks:
+
+1. **`html::attr` must honour the `abs:` prefix**, stripping it and resolving the raw value against the base. A plain lookup must still return the unresolved value.
+2. **`html::base_uri` must return the document base**, which arrives either from the base-URL argument to `parse`/`parse_fragment` or, far more commonly, from the URL of the request that `net::html` was called on. Threading the request URL into the document is not optional.
+3. **The base must propagate** through `select` → `get` → nested `select_first`, because that is the path by which a source reaches the `<img>` inside a card.
+
+With those implemented, every source tested returns real data, including absolute cover URLs:
+
+| Source | Before | After |
+|---|---|---|
+| `ar.aasq` | 0 entries | **21** |
+| `en.asurascans` | 0 entries | **20** |
+| `en.flamecomics` | 0 entries | **167** |
+| `en.weebcentral` | 0 entries | **31** |
+| `en.dankefurslesen` | 20 | 20 |
+| `en.hivescans` | 18 | 18 |
+| `en.guya` | 6 | 6 |
+
+The conformance suite stands at 22 checks, all passing. Two of them exist only because they were wrong first: the `abs:` resolution checks, and the discovery that an empty string and an absent value are indistinguishable across this boundary.
+
+This is the strongest available evidence for follow-up 3's ordering. The bug was invisible against live sites — four sources failed identically for a reason that looked like markup drift — and obvious against a fixture that asserted one behaviour by name.
 
 `html::set_text` was never reached on the listing path by any of the seven sources. Mutation is still in the required import surface, so it must be implemented, but it is not on the critical path for catalog browsing — which lowers the urgency of the mutable-DOM choice in follow-up 4 without removing it.
+
+It is also worth recording what the spike did **not** find. The throwaway `html` module models nodes as re-parsed outer-HTML strings, which is inefficient and loses parent and sibling context, and it was the prime suspect for the zero-entry failure. It was not the cause: all 22 conformance checks pass against it, including `own_text` excluding child elements and `select` excluding the element itself. The real implementation should still keep a tree with node ids — `parent`, `siblings`, `next`, and `prev` are in the ABI and cannot be served by a detached string — but the string model was adequate for the listing path, and the DOM choice is a performance and completeness decision rather than a correctness blocker for browsing.
 
 ## Consequences
 

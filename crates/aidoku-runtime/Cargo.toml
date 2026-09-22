@@ -33,4 +33,5 @@ rquickjs = { workspace = true, optional = true }
 [dev-dependencies]
 # The spike example only needs to read HTML, so `scraper` is sufficient there.
 scraper = { workspace = true }
+url = { workspace = true }
 anyhow = { workspace = true }

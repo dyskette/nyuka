@@ -36,8 +36,19 @@ enum Res {
     Request(Req),
     /// A parsed document or element. Held as owned HTML so handles carry no
     /// lifetimes; the real implementation should keep a tree and node ids.
-    Node(Rc<String>),
-    NodeList(Rc<Vec<String>>),
+    ///
+    /// The base URI travels with the node: `attr("abs:href")` resolves against
+    /// it, and it must survive select -> get -> nested select_first, because
+    /// that is the path by which a source obtains absolute cover and series
+    /// URLs.
+    Node {
+        html: Rc<String>,
+        base: Option<Rc<String>>,
+    },
+    NodeList {
+        items: Rc<Vec<String>>,
+        base: Option<Rc<String>>,
+    },
 }
 
 #[derive(Default)]
@@ -584,24 +595,39 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
     )?;
     linker.func_wrap("net", "html", |mut c: Caller<'_, State>, rid: i32| -> i32 {
         c.data_mut().log("net::html");
-        let body = match c.data().table.get(&rid) {
+        let (body, base) = match c.data().table.get(&rid) {
             Some(Res::Request(r)) => match &r.response {
-                Some(b) => String::from_utf8_lossy(b).into_owned(),
+                Some(b) => (
+                    String::from_utf8_lossy(b).into_owned(),
+                    r.url.clone().map(Rc::new),
+                ),
                 None => return ERR_REQUEST,
             },
             _ => return ERR_REQUEST,
         };
-        c.data_mut().put(Res::Node(Rc::new(body)))
+        c.data_mut().put(Res::Node {
+            html: Rc::new(body),
+            base,
+        })
     })?;
 
     // ---- html --------------------------------------------------------------
     linker.func_wrap(
         "html",
         "parse_fragment",
-        |mut c: Caller<'_, State>, p: i32, l: i32, _bp: i32, _bl: i32| -> i32 {
+        |mut c: Caller<'_, State>, p: i32, l: i32, bp: i32, bl: i32| -> i32 {
             let s = read_str(&mut c, p, l).unwrap_or_default();
+            let base = read_str(&mut c, bp, bl).unwrap_or_default();
             c.data_mut().log("html::parse_fragment");
-            c.data_mut().put(Res::Node(Rc::new(s)))
+            let base = if base.is_empty() {
+                None
+            } else {
+                Some(Rc::new(base))
+            };
+            c.data_mut().put(Res::Node {
+                html: Rc::new(s),
+                base,
+            })
         },
     )?;
     linker.func_wrap(
@@ -610,8 +636,8 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         |mut c: Caller<'_, State>, rid: i32, p: i32, l: i32| -> i32 {
             let sel = read_str(&mut c, p, l).unwrap_or_default();
             c.data_mut().log("html::select");
-            let html = match c.data().table.get(&rid) {
-                Some(Res::Node(h)) => h.clone(),
+            let (html, base) = match c.data().table.get(&rid) {
+                Some(Res::Node { html, base }) => (html.clone(), base.clone()),
                 _ => return HTML_INVALID_DESCRIPTOR,
             };
             let Ok(parsed) = scraper::Selector::parse(&sel) else {
@@ -626,7 +652,10 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
                 .filter(|e| Some(e.id()) != root)
                 .map(|e| e.html())
                 .collect();
-            c.data_mut().put(Res::NodeList(Rc::new(hits)))
+            c.data_mut().put(Res::NodeList {
+                items: Rc::new(hits),
+                base,
+            })
         },
     )?;
     linker.func_wrap(
@@ -635,8 +664,8 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         |mut c: Caller<'_, State>, rid: i32, p: i32, l: i32| -> i32 {
             let sel = read_str(&mut c, p, l).unwrap_or_default();
             c.data_mut().log("html::select_first");
-            let html = match c.data().table.get(&rid) {
-                Some(Res::Node(h)) => h.clone(),
+            let (html, base) = match c.data().table.get(&rid) {
+                Some(Res::Node { html, base }) => (html.clone(), base.clone()),
                 _ => return HTML_INVALID_DESCRIPTOR,
             };
             let Ok(parsed) = scraper::Selector::parse(&sel) else {
@@ -649,7 +678,10 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
             match doc.select(&parsed).find(|e| Some(e.id()) != root) {
                 Some(e) => {
                     let h = e.html();
-                    c.data_mut().put(Res::Node(Rc::new(h)))
+                    c.data_mut().put(Res::Node {
+                        html: Rc::new(h),
+                        base,
+                    })
                 }
                 // A legitimate miss, not a bad query.
                 None => HTML_NO_RESULT,
@@ -662,8 +694,8 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         |mut c: Caller<'_, State>, rid: i32| -> i32 {
             c.data_mut().log("html::size");
             match c.data().table.get(&rid) {
-                Some(Res::NodeList(v)) => v.len() as i32,
-                Some(Res::Node(_)) => 1,
+                Some(Res::NodeList { items, .. }) => items.len() as i32,
+                Some(Res::Node { .. }) => 1,
                 _ => HTML_INVALID_DESCRIPTOR,
             }
         },
@@ -673,12 +705,17 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         "get",
         |mut c: Caller<'_, State>, rid: i32, idx: i32| -> i32 {
             c.data_mut().log("html::get");
-            let item = match c.data().table.get(&rid) {
-                Some(Res::NodeList(v)) => v.get(idx.max(0) as usize).cloned(),
-                _ => None,
+            let (item, base) = match c.data().table.get(&rid) {
+                Some(Res::NodeList { items, base }) => {
+                    (items.get(idx.max(0) as usize).cloned(), base.clone())
+                }
+                _ => (None, None),
             };
             match item {
-                Some(h) => c.data_mut().put(Res::Node(Rc::new(h))),
+                Some(h) => c.data_mut().put(Res::Node {
+                    html: Rc::new(h),
+                    base,
+                }),
                 None => HTML_NO_RESULT,
             }
         },
@@ -689,17 +726,34 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         |mut c: Caller<'_, State>, rid: i32, p: i32, l: i32| -> i32 {
             let key = read_str(&mut c, p, l).unwrap_or_default();
             c.data_mut().log("html::attr");
-            let html = match c.data().table.get(&rid) {
-                Some(Res::Node(h)) => h.clone(),
+            let (html, base) = match c.data().table.get(&rid) {
+                Some(Res::Node { html, base }) => (html.clone(), base.clone()),
                 _ => return HTML_INVALID_DESCRIPTOR,
+            };
+            // Jsoup's convention: an `abs:` prefix means resolve the value
+            // against the document base. A host that treats `abs:href` as a
+            // literal attribute name finds nothing, and the source silently
+            // discards the entry — which is what made every HTML-scraping
+            // source return zero results.
+            let (want_abs, key) = match key.strip_prefix("abs:") {
+                Some(rest) => (true, rest.to_string()),
+                None => (false, key),
             };
             let Some(doc) = as_element(&html) else {
                 return HTML_INVALID_DESCRIPTOR;
             };
-            let Some(val) =
+            let Some(raw) =
                 fragment_root(&doc).and_then(|e| e.value().attr(&key).map(str::to_owned))
             else {
                 return HTML_NO_RESULT;
+            };
+            let val = if want_abs {
+                match resolve(base.as_deref(), &raw) {
+                    Some(abs) => abs,
+                    None => return HTML_NO_RESULT,
+                }
+            } else {
+                raw
             };
             c.data_mut().put(Res::Buffer(val.into_bytes()))
         },
@@ -711,7 +765,7 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
             move |mut c: Caller<'_, State>, rid: i32| -> i32 {
                 c.data_mut().log(format!("html::{name}"));
                 let html = match c.data().table.get(&rid) {
-                    Some(Res::Node(h)) => h.clone(),
+                    Some(Res::Node { html, .. }) => html.clone(),
                     _ => return HTML_INVALID_DESCRIPTOR,
                 };
                 let Some(doc) = as_element(&html) else {
@@ -736,7 +790,7 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         |mut c: Caller<'_, State>, rid: i32| -> i32 {
             c.data_mut().log("html::html");
             let html = match c.data().table.get(&rid) {
-                Some(Res::Node(h)) => h.to_string(),
+                Some(Res::Node { html, .. }) => html.to_string(),
                 _ => return HTML_INVALID_DESCRIPTOR,
             };
             c.data_mut().put(Res::Buffer(html.into_bytes()))
@@ -745,9 +799,16 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
     linker.func_wrap(
         "html",
         "base_uri",
-        |mut c: Caller<'_, State>, _rid: i32| -> i32 {
+        |mut c: Caller<'_, State>, rid: i32| -> i32 {
             c.data_mut().log("html::base_uri");
-            c.data_mut().put(Res::Buffer(Vec::new()))
+            match c.data().table.get(&rid) {
+                Some(Res::Node { base: Some(b), .. }) => {
+                    let bytes = b.as_bytes().to_vec();
+                    c.data_mut().put(Res::Buffer(bytes))
+                }
+                Some(Res::Node { base: None, .. }) => HTML_NO_RESULT,
+                _ => HTML_INVALID_DESCRIPTOR,
+            }
         },
     )?;
     linker.func_wrap(
@@ -857,4 +918,19 @@ fn printable_runs(bytes: &[u8], min: usize) -> Vec<String> {
         out.push(cur);
     }
     out
+}
+
+/// Resolves a possibly-relative URL against a base, for the `abs:` prefix.
+fn resolve(base: Option<&String>, value: &str) -> Option<String> {
+    if value.is_empty() {
+        return None;
+    }
+    // Already absolute.
+    if let Ok(u) = url::Url::parse(value)
+        && (u.scheme() == "http" || u.scheme() == "https")
+    {
+        return Some(u.to_string());
+    }
+    let base = url::Url::parse(base?).ok()?;
+    base.join(value).ok().map(|u| u.to_string())
 }

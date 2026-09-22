@@ -71,6 +71,9 @@ rquickjs = { version = "0.14" }
 # Read-only, and used only by the runtime spike example to prove the ABI.
 # Not a candidate for the real `html` host import.
 scraper = "0.27"
+# Resolving `abs:` attribute values against a document base URI, which is
+# how Aidoku sources obtain absolute cover and series URLs.
+url = "2"
 
 # --- Auth (ADR-0005) ---------------------------------------------------------
 # Brings RUSTSEC-2023-0071 (rsa Marvin attack, still unpatched) into the tree.

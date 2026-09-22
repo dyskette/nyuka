@@ -17,6 +17,9 @@ use aidoku::{
 /// Fixture HTML. Shaped like a real listing page: a wrapper, repeated cards,
 /// nested titles and covers, an entry missing its cover, and an entity to
 /// decode.
+/// The document's base, as `Request::html()` would supply it.
+const BASE_URL: &str = "https://example.test/browse?page=1";
+
 const FIXTURE: &str = r#"<div id="wrap">
   <div class="grid" data-count="3">
     <a class="card" href="/series/1" title="First">
@@ -94,7 +97,9 @@ impl Source for Conformance {
     ) -> Result<MangaPageResult> {
         let mut r = Report::new();
 
-        let doc = match Html::parse_fragment(FIXTURE) {
+        // Parsed WITH a base URL, because that is how a source receives a page
+        // from `Request::html()` and it is what `abs:` resolution needs.
+        let doc = match Html::parse_fragment_with_url(FIXTURE, BASE_URL) {
             Ok(d) => d,
             Err(e) => {
                 r.check("html::parse_fragment", Some(format!("{e:?}")), Some("ok"));
@@ -204,6 +209,47 @@ impl Source for Conformance {
             doc.select_first("div.grid").and_then(|e| e.attr("data-count")),
             Some("3"),
         );
+
+        // --- base_uri and the `abs:` prefix ---------------------------------
+        // Jsoup's convention, and how sources turn relative hrefs and image
+        // srcs into absolute URLs. A host that treats `abs:href` as a literal
+        // attribute name finds nothing and the source discards the entry.
+        r.check(
+            "html::base_uri",
+            // base_uri is on Element, not Document.
+            doc.select_first("div.grid").and_then(|e| e.base_uri()),
+            Some(BASE_URL),
+        );
+
+        if let Some(first) = doc.select_first("a.card") {
+            r.check(
+                "attr abs:href resolves against base",
+                first.attr("abs:href"),
+                Some("https://example.test/series/1"),
+            );
+            r.check(
+                "attr abs: on nested img src",
+                first.select_first("img.cover").and_then(|e| e.attr("abs:src")),
+                Some("https://example.test/c1.jpg"),
+            );
+            // A plain lookup must still return the raw, unresolved value.
+            r.check(
+                "attr href stays relative without abs:",
+                first.attr("href"),
+                Some("/series/1"),
+            );
+            // abs: on a missing attribute is still a miss.
+            r.check("attr abs: on missing -> None", first.attr("abs:nope"), None);
+        }
+
+        if let Some(list) = doc.select("a.card") {
+            // Base must propagate through select -> get -> nested select_first.
+            r.check(
+                "base propagates through select->get",
+                list.get(1).and_then(|e| e.attr("abs:href")),
+                Some("https://example.test/series/2"),
+            );
+        }
 
         Ok(MangaPageResult {
             entries: r.checks,
