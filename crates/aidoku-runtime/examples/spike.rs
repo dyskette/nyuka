@@ -63,6 +63,9 @@ struct Req {
 #[derive(Default)]
 struct State {
     table: HashMap<i32, Res>,
+    /// Stands in for the per-source key-value namespace the real adapter
+    /// reads and writes through `source_kv`.
+    defaults: HashMap<String, Vec<u8>>,
     next_id: i32,
     /// Every host call, in order — the point of the spike.
     calls: Vec<String>,
@@ -101,6 +104,12 @@ fn read_str(caller: &mut Caller<'_, State>, ptr: i32, len: i32) -> Result<String
 fn main() -> Result<()> {
     if std::env::args().nth(1).as_deref() == Some("--selftest") {
         return selftest();
+    }
+    if std::env::args().nth(1).as_deref() == Some("--conformance") {
+        let aix = std::env::args()
+            .nth(2)
+            .context("usage: spike --conformance <aix>")?;
+        return conformance(&aix);
     }
     let mut args = std::env::args().skip(1);
     let aix = args.next().context("usage: spike <path.aix> [query]")?;
@@ -417,19 +426,25 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         "std",
         "parse_date",
         |mut c: Caller<'_, State>,
-         _a: i32,
-         _b: i32,
-         _d: i32,
-         _e: i32,
-         _f: i32,
-         _g: i32,
-         _h: i32,
-         _i: i32|
+         sp: i32,
+         sl: i32,
+         fp: i32,
+         fl: i32,
+         _lp: i32,
+         _ll: i32,
+         tp: i32,
+         tl: i32|
          -> f64 {
-            // Real implementation needs the source's format/locale/timezone
-            // arguments. Returning 0 keeps the listing path alive.
-            c.data_mut().log("std::parse_date (stub)");
-            0.0
+            let date = read_str(&mut c, sp, sl).unwrap_or_default();
+            let fmt = read_str(&mut c, fp, fl).unwrap_or_default();
+            let tz = read_str(&mut c, tp, tl).unwrap_or_default();
+            c.data_mut().log("std::parse_date");
+            match parse_date_icu(&date, &fmt, &tz) {
+                Some(ts) => ts as f64,
+                // The guest maps a negative result to None. Returning 0 here
+                // would date every chapter to 1970 without ever erroring.
+                None => -1.0,
+            }
         },
     )?;
     linker.func_wrap(
@@ -830,14 +845,33 @@ fn register_host_imports(linker: &mut Linker<State>) -> Result<()> {
         |mut c: Caller<'_, State>, p: i32, l: i32| -> i32 {
             let key = read_str(&mut c, p, l).unwrap_or_default();
             c.data_mut().log(format!("defaults::get({key})"));
-            ERR_MESSAGE // nothing stored: the real adapter reads source_kv
+            match c.data().defaults.get(&key).cloned() {
+                Some(bytes) => c.data_mut().put(Res::Buffer(bytes)),
+                // Unset is a miss, not an error.
+                None => ERR_MESSAGE,
+            }
         },
     )?;
     linker.func_wrap(
         "defaults",
         "set",
-        |mut c: Caller<'_, State>, _p: i32, _l: i32, _k: i32, _v: i32| -> i32 {
-            c.data_mut().log("defaults::set");
+        |mut c: Caller<'_, State>, p: i32, l: i32, _kind: i32, value: i32| -> i32 {
+            let key = read_str(&mut c, p, l).unwrap_or_default();
+            c.data_mut().log(format!("defaults::set({key})"));
+            // `value` is a POINTER INTO GUEST MEMORY, not a resource handle:
+            // defaults_set calls `encode`, which lays out the same
+            // [len, capacity, postcard payload] block a result uses. A host
+            // that looks it up in its own table finds nothing and the value is
+            // silently dropped.
+            if value == 0 {
+                // DefaultValue::Null encodes as a null pointer.
+                c.data_mut().defaults.remove(&key);
+                return 0;
+            }
+            let Some(bytes) = read_encoded(&mut c, value) else {
+                return ERR_MESSAGE;
+            };
+            c.data_mut().defaults.insert(key, bytes);
             0
         },
     )?;
@@ -933,4 +967,319 @@ fn resolve(base: Option<&String>, value: &str) -> Option<String> {
     }
     let base = url::Url::parse(base?).ok()?;
     base.join(value).ok().map(|u| u.to_string())
+}
+
+/// Parses a date using a subset of Swift `DateFormatter` (Unicode date field)
+/// patterns, which is what Aidoku sources write.
+///
+/// Real sources use this for chapter publication dates. A host that stubs it
+/// to zero dates every chapter to 1970 — wrong, and never an error, so nothing
+/// surfaces it.
+///
+/// Only the patterns seen in practice are supported; an unrecognised one
+/// yields `None` rather than a wrong timestamp.
+fn parse_date_icu(date: &str, pattern: &str, timezone: &str) -> Option<i64> {
+    // Timezones other than UTC would need a tz database; the guest's
+    // `parse_date` always passes UTC.
+    if !timezone.is_empty() && !timezone.eq_ignore_ascii_case("UTC") {
+        return None;
+    }
+    let fmt = icu_pattern_to_chrono(pattern)?;
+    // With a time component, parse as a naive datetime; otherwise as a date at
+    // midnight UTC.
+    let has_time = fmt.contains("%H") || fmt.contains("%I") || fmt.contains("%M");
+    if has_time {
+        chrono::NaiveDateTime::parse_from_str(date, &fmt)
+            .ok()
+            .map(|dt| dt.and_utc().timestamp())
+    } else {
+        chrono::NaiveDate::parse_from_str(date, &fmt)
+            .ok()
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .map(|dt| dt.and_utc().timestamp())
+    }
+}
+
+/// Translates Unicode date field symbols to chrono specifiers.
+///
+/// Longest-match first, because `MM` and `M` share a prefix.
+fn icu_pattern_to_chrono(pattern: &str) -> Option<String> {
+    const MAP: &[(&str, &str)] = &[
+        ("yyyy", "%Y"),
+        ("yy", "%y"),
+        ("MMMM", "%B"),
+        ("MMM", "%b"),
+        ("MM", "%m"),
+        ("M", "%-m"),
+        ("dd", "%d"),
+        ("d", "%-d"),
+        ("HH", "%H"),
+        ("H", "%-H"),
+        ("hh", "%I"),
+        ("mm", "%M"),
+        ("ss", "%S"),
+        ("EEEE", "%A"),
+        ("EEE", "%a"),
+        ("a", "%p"),
+    ];
+    let mut out = String::new();
+    let bytes = pattern.as_bytes();
+    let mut i = 0;
+    'outer: while i < bytes.len() {
+        for (sym, spec) in MAP {
+            if pattern[i..].starts_with(sym) {
+                out.push_str(spec);
+                i += sym.len();
+                continue 'outer;
+            }
+        }
+        let ch = pattern[i..].chars().next()?;
+        // Letters that are not in the table are pattern symbols this host does
+        // not implement. Refuse rather than silently mis-parse.
+        if ch.is_ascii_alphabetic() {
+            return None;
+        }
+        if ch == '%' {
+            out.push_str("%%");
+        } else {
+            out.push(ch);
+        }
+        i += ch.len_utf8();
+    }
+    Some(out)
+}
+
+// ---------------------------------------------------------------------------
+// Conformance mode
+// ---------------------------------------------------------------------------
+
+use nyuka_aidoku_runtime::models::{
+    Chapter, ContentRating, FilterValue, Manga, MangaPageResult, MangaStatus, Page, PageContent,
+    Viewer,
+};
+
+const PROBE_MANGA_KEY: &str = "probe-key";
+const PROBE_CHAPTER_KEY: &str = "probe-chapter";
+const PROBE_NEXT_UPDATE: i64 = 1_700_000_000;
+
+/// Builds the guest instance the conformance run drives.
+fn instantiate(aix: &str) -> Result<(Store<State>, wasmtime::Instance)> {
+    let file = std::fs::File::open(aix).with_context(|| format!("opening {aix}"))?;
+    let mut zip = zip::ZipArchive::new(file)?;
+    let wasm = {
+        let mut f = zip.by_name("Payload/main.wasm")?;
+        let mut v = Vec::new();
+        std::io::Read::read_to_end(&mut f, &mut v)?;
+        v
+    };
+
+    let mut config = wasmtime::Config::new();
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wasm)?;
+
+    let mut store = Store::new(
+        &engine,
+        State {
+            http: Some(
+                reqwest::blocking::Client::builder()
+                    .user_agent("nyuka-spike/0.1")
+                    .timeout(std::time::Duration::from_secs(30))
+                    .build()?,
+            ),
+            ..Default::default()
+        },
+    );
+    store.set_epoch_deadline(1);
+
+    let mut linker: Linker<State> = Linker::new(&engine);
+    register_host_imports(&mut linker)?;
+    let instance = linker.instantiate(&mut store, &module)?;
+    if let Some(start) = instance.get_func(&mut store, "start") {
+        let n = start.ty(&store).results().len();
+        let mut out = vec![Val::I32(0); n];
+        start.call(&mut store, &[], &mut out)?;
+    }
+    Ok((store, instance))
+}
+
+/// Encodes a value with postcard and hands the guest a descriptor for it.
+fn put_encoded<T: serde::Serialize>(store: &mut Store<State>, value: &T) -> Result<i32> {
+    let bytes = postcard::to_allocvec(value)?;
+    Ok(store.data_mut().put(Res::Buffer(bytes)))
+}
+
+/// Calls an export and decodes its postcard result.
+fn call_decoding<T: serde::de::DeserializeOwned>(
+    store: &mut Store<State>,
+    instance: &wasmtime::Instance,
+    name: &str,
+    args: &[Val],
+) -> Result<T> {
+    let f = instance
+        .get_func(&mut *store, name)
+        .with_context(|| format!("no export {name}"))?;
+    let mut out = [Val::I32(0)];
+    f.call(&mut *store, args, &mut out)?;
+    let ret = out[0].unwrap_i32();
+    if ret < 0 {
+        bail!("{name} returned error code {ret}");
+    }
+    let (_, _, payload) = read_result(store, instance, ret)?;
+    let decoded = postcard::from_bytes::<T>(&payload)
+        .with_context(|| format!("decoding {name} result ({} bytes)", payload.len()))?;
+    if let Ok(free) = instance.get_typed_func::<i32, ()>(&mut *store, "free_result") {
+        free.call(&mut *store, ret)?;
+    }
+    Ok(decoded)
+}
+
+/// Runs the fixture's three entry points and reports every check.
+///
+/// Unlike the exploratory mode, this decodes real structs in both directions,
+/// so it also proves the host's postcard mirrors agree with the guest's.
+fn conformance(aix: &str) -> Result<()> {
+    let (mut store, instance) = instantiate(aix)?;
+    let mut pass = 0usize;
+    let mut fail: Vec<String> = Vec::new();
+
+    let note = |line: &str, pass: &mut usize, fail: &mut Vec<String>| {
+        if let Some(rest) = line.strip_suffix("=PASS") {
+            let _ = rest;
+            *pass += 1;
+        } else if line.contains("=FAIL") || line.ends_with("FAIL") {
+            fail.push(line.to_string());
+        } else if line == "PASS" {
+            *pass += 1;
+        } else {
+            fail.push(line.to_string());
+        }
+    };
+
+    // --- get_search_manga_list: html, std and defaults -----------------------
+    let query = store.data_mut().put(Res::Buffer(Vec::new()));
+    let filters = put_encoded(&mut store, &Vec::<FilterValue>::new())?;
+    let result: MangaPageResult = call_decoding(
+        &mut store,
+        &instance,
+        "get_search_manga_list",
+        &[Val::I32(query), Val::I32(1), Val::I32(filters)],
+    )?;
+    println!(
+        "== get_search_manga_list ({} checks) ==",
+        result.entries.len()
+    );
+    for m in &result.entries {
+        let line = format!("{}={}", m.key, m.title);
+        if m.title == "PASS" {
+            pass += 1;
+        } else {
+            fail.push(line.clone());
+        }
+        println!(
+            "  {}  {}",
+            if m.title == "PASS" { "ok  " } else { "FAIL" },
+            m.key
+        );
+        if m.title != "PASS" {
+            println!("        {}", m.title);
+        }
+    }
+
+    // --- get_manga_update: the postcard round trip ---------------------------
+    let probe = Manga {
+        key: PROBE_MANGA_KEY.into(),
+        title: "Probe Title".into(),
+        cover: Some("https://example.test/probe.jpg".into()),
+        artists: None,
+        authors: Some(vec!["First Author".into(), "Second Author".into()]),
+        status: MangaStatus::Ongoing,
+        content_rating: ContentRating::Safe,
+        viewer: Viewer::RightToLeft,
+        next_update_time: Some(PROBE_NEXT_UPDATE),
+        chapters: Some(vec![Chapter {
+            key: PROBE_CHAPTER_KEY.into(),
+            title: Some("Probe Chapter".into()),
+            chapter_number: Some(1.5),
+            volume_number: Some(2.0),
+            date_uploaded: Some(PROBE_NEXT_UPDATE),
+            language: Some("en".into()),
+            locked: true,
+            ..Default::default()
+        }]),
+        ..Default::default()
+    };
+    let manga_rid = put_encoded(&mut store, &probe)?;
+    let updated: Manga = call_decoding(
+        &mut store,
+        &instance,
+        "get_manga_update",
+        // needs_details = true, needs_chapters = false, so the flags must
+        // arrive distinguishable.
+        &[Val::I32(manga_rid), Val::I32(1), Val::I32(0)],
+    )?;
+    let tags = updated.tags.clone().unwrap_or_default();
+    println!("\n== get_manga_update ({} checks) ==", tags.len());
+    for line in &tags {
+        note(line, &mut pass, &mut fail);
+        let ok = line.ends_with("=PASS");
+        println!("  {}  {}", if ok { "ok  " } else { "FAIL" }, line);
+    }
+
+    // --- get_page_list -------------------------------------------------------
+    let chapter = Chapter {
+        key: PROBE_CHAPTER_KEY.into(),
+        title: Some("Probe Chapter".into()),
+        chapter_number: Some(1.5),
+        scanlators: Some(vec!["Scans".into()]),
+        locked: true,
+        ..Default::default()
+    };
+    let manga_rid = put_encoded(&mut store, &probe)?;
+    let chapter_rid = put_encoded(&mut store, &chapter)?;
+    let pages: Vec<Page> = call_decoding(
+        &mut store,
+        &instance,
+        "get_page_list",
+        &[Val::I32(manga_rid), Val::I32(chapter_rid)],
+    )?;
+    println!("\n== get_page_list ({} checks) ==", pages.len());
+    for p in &pages {
+        if let PageContent::Text(line) = &p.content {
+            note(line, &mut pass, &mut fail);
+            let ok = line.ends_with("=PASS");
+            println!("  {}  {}", if ok { "ok  " } else { "FAIL" }, line);
+        }
+    }
+
+    println!("\n== {} passed, {} failed ==", pass, fail.len());
+    if !fail.is_empty() {
+        for f in &fail {
+            println!("  FAIL {f}");
+        }
+        bail!("{} conformance check(s) failed", fail.len());
+    }
+    Ok(())
+}
+
+/// Reads a guest-encoded `[len, capacity, payload]` block from guest memory.
+///
+/// Used wherever the guest hands the host a pointer rather than a handle —
+/// `defaults::set` is the one place in the required surface that does this, and
+/// it is easy to mistake for a resource id because the parameter is an `i32`.
+fn read_encoded(caller: &mut Caller<'_, State>, ptr: i32) -> Option<Vec<u8>> {
+    if ptr <= 0 {
+        return None;
+    }
+    let m = mem(caller).ok()?;
+    let mut header = [0u8; 8];
+    m.read(&mut *caller, ptr as usize, &mut header).ok()?;
+    let len = i32::from_le_bytes(header[0..4].try_into().ok()?);
+    if len < 8 {
+        return None;
+    }
+    let mut payload = vec![0u8; (len - 8) as usize];
+    m.read(&mut *caller, (ptr + 8) as usize, &mut payload)
+        .ok()?;
+    Some(payload)
 }
