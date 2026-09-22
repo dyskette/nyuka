@@ -52,6 +52,17 @@ jobs:
           cargo fmt --all --check
           cargo clippy --all-targets --all-features -- -D warnings
 
+      # The conformance fixture is a wasm guest that asserts what the host
+      # returns. Its .aix is a build artifact, and the integration test SKIPS
+      # when it is absent — so CI builds it and then asserts it exists, or a
+      # regression could hide behind a silent skip.
+      - name: Build the conformance fixture
+        run: |
+          set -euo pipefail
+          rustup target add wasm32-unknown-unknown
+          crates/aidoku-runtime/conformance/package.sh
+          test -f crates/aidoku-runtime/conformance/nyuka-conformance.aix
+
       - name: Test
         run: cargo test --workspace --all-features
 

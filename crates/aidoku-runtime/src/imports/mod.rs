@@ -27,6 +27,7 @@
 //! test for this, and fuzzing of the postcard decode path, which parses
 //! attacker-influenced bytes into host structs.
 
+pub mod bindings;
 pub mod date;
 pub mod egress;
 pub mod html;
