@@ -165,6 +165,37 @@ pub fn siblings(html: &Rc<Html>, id: NodeId) -> Vec<NodeId> {
         .collect()
 }
 
+/// The first element child, or the first entry of a selection.
+pub fn first_child(html: &Rc<Html>, id: NodeId) -> Option<NodeId> {
+    node(html, id).first_element_child().map(|n| n.id)
+}
+
+/// The last element child.
+pub fn last_child(html: &Rc<Html>, id: NodeId) -> Option<NodeId> {
+    node(html, id).element_children().last().map(|n| n.id)
+}
+
+/// Escapes text for inclusion in markup.
+pub fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Decodes entities, by parsing the text as a fragment and reading it back.
+pub fn unescape(text: &str) -> String {
+    Document::fragment(text).text().to_string()
+}
+
 pub fn tag_name(html: &Rc<Html>, id: NodeId) -> Option<String> {
     node(html, id).node_name().map(|v| v.to_string())
 }

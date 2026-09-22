@@ -511,6 +511,163 @@ fn register_html(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
     text_accessor!("html", html::outer_html);
     text_accessor!("outer_html", html::outer_html);
 
+    // Accessors returning an optional string.
+    macro_rules! opt_string_accessor {
+        ($name:literal, $f:path) => {
+            linker.func_wrap("html", $name, |mut c: Host<'_>, rid: i32| -> i32 {
+                let (doc, id) = node!(c, rid);
+                match $f(&doc, id) {
+                    Some(v) => put_bytes(&mut c, v.into_bytes()),
+                    None => html_err::NO_RESULT,
+                }
+            })?;
+        };
+    }
+    opt_string_accessor!("tag_name", html::tag_name);
+    opt_string_accessor!("id", html::element_id);
+    opt_string_accessor!("class_name", html::class_name);
+
+    // Traversal, each returning a node handle or a miss.
+    macro_rules! node_accessor {
+        ($name:literal, $f:path) => {
+            linker.func_wrap("html", $name, |mut c: Host<'_>, rid: i32| -> i32 {
+                let (doc, id) = node!(c, rid);
+                match $f(&doc, id) {
+                    Some(found) => c.data_mut().table.insert(Resource::Node {
+                        html: doc,
+                        id: found,
+                    }),
+                    None => html_err::NO_RESULT,
+                }
+            })?;
+        };
+    }
+    node_accessor!("parent", html::parent);
+    node_accessor!("next", html::next_sibling);
+    node_accessor!("previous", html::prev_sibling);
+    node_accessor!("last", html::last_child);
+
+    // `first` is the first entry of a selection, or the first element child of
+    // a node.
+    linker.func_wrap("html", "first", |mut c: Host<'_>, rid: i32| -> i32 {
+        let picked = match c.data().table.get(rid) {
+            Some(Resource::NodeList { html, ids }) => ids.first().map(|id| (html.clone(), *id)),
+            Some(Resource::Node { html, id }) => {
+                let html = html.clone();
+                html::first_child(&html, *id).map(|found| (html, found))
+            }
+            _ => return html_err::INVALID_DESCRIPTOR,
+        };
+        match picked {
+            Some((html, id)) => c.data_mut().table.insert(Resource::Node { html, id }),
+            None => html_err::NO_RESULT,
+        }
+    })?;
+
+    // Node lists.
+    macro_rules! list_accessor {
+        ($name:literal, $f:path) => {
+            linker.func_wrap("html", $name, |mut c: Host<'_>, rid: i32| -> i32 {
+                let (doc, id) = node!(c, rid);
+                let ids = $f(&doc, id);
+                c.data_mut().table.insert(Resource::NodeList {
+                    html: doc,
+                    ids: Rc::new(ids),
+                })
+            })?;
+        };
+    }
+    list_accessor!("children", html::children);
+    list_accessor!("child_nodes", html::children);
+    list_accessor!("siblings", html::siblings);
+
+    // Predicates.
+    linker.func_wrap(
+        "html",
+        "has_attr",
+        |mut c: Host<'_>, rid: i32, p: i32, l: i32| -> i32 {
+            let Some(name) = read_str(&mut c, p, l) else {
+                return html_err::INVALID_STRING;
+            };
+            let (doc, id) = node!(c, rid);
+            html::has_attr(&doc, id, &name) as i32
+        },
+    )?;
+    linker.func_wrap(
+        "html",
+        "has_class",
+        |mut c: Host<'_>, rid: i32, p: i32, l: i32| -> i32 {
+            let Some(class) = read_str(&mut c, p, l) else {
+                return html_err::INVALID_STRING;
+            };
+            let (doc, id) = node!(c, rid);
+            html::has_class(&doc, id, &class) as i32
+        },
+    )?;
+
+    // Mutation taking one string argument.
+    macro_rules! mutate_with_string {
+        ($name:literal, $f:path) => {
+            linker.func_wrap(
+                "html",
+                $name,
+                |mut c: Host<'_>, rid: i32, p: i32, l: i32| -> i32 {
+                    let Some(arg) = read_str(&mut c, p, l) else {
+                        return html_err::INVALID_STRING;
+                    };
+                    let (doc, id) = node!(c, rid);
+                    $f(&doc, id, &arg);
+                    0
+                },
+            )?;
+        };
+    }
+    mutate_with_string!("add_class", html::add_class);
+    mutate_with_string!("remove_class", html::remove_class);
+    mutate_with_string!("remove_attr", html::remove_attr);
+    mutate_with_string!("append", html::append);
+    mutate_with_string!("prepend", html::prepend);
+
+    linker.func_wrap(
+        "html",
+        "set_attr",
+        |mut c: Host<'_>, rid: i32, kp: i32, kl: i32, vp: i32, vl: i32| -> i32 {
+            let (Some(k), Some(v)) = (read_str(&mut c, kp, kl), read_str(&mut c, vp, vl)) else {
+                return html_err::INVALID_STRING;
+            };
+            let (doc, id) = node!(c, rid);
+            html::set_attr(&doc, id, &k, &v);
+            0
+        },
+    )?;
+    linker.func_wrap("html", "remove", |c: Host<'_>, rid: i32| -> i32 {
+        // Detaches the node from the shared document; the table is untouched,
+        // so the handle stays valid and simply refers to a detached subtree.
+        let (doc, id) = node!(c, rid);
+        html::remove(&doc, id);
+        0
+    })?;
+
+    // Entity helpers, which take text rather than a node.
+    linker.func_wrap("html", "escape", |mut c: Host<'_>, p: i32, l: i32| -> i32 {
+        let Some(text) = read_str(&mut c, p, l) else {
+            return html_err::INVALID_STRING;
+        };
+        let escaped = html::escape(&text);
+        put_bytes(&mut c, escaped.into_bytes())
+    })?;
+    linker.func_wrap(
+        "html",
+        "unescape",
+        |mut c: Host<'_>, p: i32, l: i32| -> i32 {
+            let Some(text) = read_str(&mut c, p, l) else {
+                return html_err::INVALID_STRING;
+            };
+            let plain = html::unescape(&text);
+            put_bytes(&mut c, plain.into_bytes())
+        },
+    )?;
+
     linker.func_wrap("html", "base_uri", |mut c: Host<'_>, rid: i32| -> i32 {
         let (doc, id) = node!(c, rid);
         match html::base_uri(&doc, id) {
