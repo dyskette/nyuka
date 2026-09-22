@@ -17,6 +17,89 @@ fn db(e: sea_orm::DbErr) -> DomainError {
     DomainError::Storage(e.to_string())
 }
 
+/// Encodes a string list for a `jsonb` column.
+fn json(values: &[String]) -> Result<serde_json::Value> {
+    serde_json::to_value(values).map_err(|e| DomainError::Internal(e.to_string()))
+}
+
+/// Decodes a `jsonb` string list, treating malformed content as empty.
+///
+/// A tag list that will not parse is not a reason to make the series
+/// unreadable, and the column is written only by this crate.
+fn json_list(raw: serde_json::Value) -> Vec<String> {
+    serde_json::from_value(raw).unwrap_or_default()
+}
+
+fn parse_cursor(cursor: Option<&Cursor>, what: &str) -> Result<Option<Uuid>> {
+    cursor
+        .map(|c| c.0.parse::<Uuid>())
+        .transpose()
+        .map_err(|_| DomainError::Invalid(format!("cursor is not a {what} id")))
+}
+
+/// Turns a fetched-one-extra row set into a page.
+///
+/// The extra row is what tells "there is more" from "exactly a full page",
+/// which a `LIMIT` alone cannot distinguish.
+fn page_of<T>(
+    mut rows: Vec<sea_orm::QueryResult>,
+    map: impl Fn(&sea_orm::QueryResult) -> Result<T>,
+    id_of: impl Fn(&T) -> Uuid,
+) -> Result<Page<T>> {
+    let has_more = rows.len() as u64 > PAGE_SIZE;
+    rows.truncate(PAGE_SIZE as usize);
+    let items: Vec<T> = rows.iter().map(map).collect::<Result<_>>()?;
+    let next = has_more
+        .then(|| items.last().map(|i| Cursor(id_of(i).to_string())))
+        .flatten();
+    Ok(Page { items, next })
+}
+
+fn row_to_manga(row: &sea_orm::QueryResult) -> Result<Manga> {
+    Ok(Manga {
+        id: MangaId(row.try_get("", "id").map_err(db)?),
+        source_id: SourceId(row.try_get("", "source_id").map_err(db)?),
+        external_key: ExternalKey(row.try_get("", "external_key").map_err(db)?),
+        title: row.try_get("", "title").map_err(db)?,
+        authors: json_list(row.try_get("", "authors").map_err(db)?),
+        artists: json_list(row.try_get("", "artists").map_err(db)?),
+        description: row.try_get("", "description").map_err(db)?,
+        tags: json_list(row.try_get("", "tags").map_err(db)?),
+        cover_url: row.try_get("", "cover_url").map_err(db)?,
+        url: row.try_get("", "url").map_err(db)?,
+        language: row.try_get("", "language").map_err(db)?,
+        status: MangaStatus::from_i16(row.try_get("", "status").map_err(db)?),
+        content_rating: ContentRating::from_i16(row.try_get("", "content_rating").map_err(db)?),
+        direction: ReadingDirection::from_i16(row.try_get("", "direction").map_err(db)?),
+        created_at: row.try_get("", "created_at").map_err(db)?,
+        updated_at: row.try_get("", "updated_at").map_err(db)?,
+    })
+}
+
+fn row_to_chapter(row: &sea_orm::QueryResult) -> Result<Chapter> {
+    Ok(Chapter {
+        id: ChapterId(row.try_get("", "id").map_err(db)?),
+        manga_id: MangaId(row.try_get("", "manga_id").map_err(db)?),
+        external_key: ExternalKey(row.try_get("", "external_key").map_err(db)?),
+        title: row.try_get("", "title").map_err(db)?,
+        number: row.try_get("", "number").map_err(db)?,
+        volume: row.try_get("", "volume").map_err(db)?,
+        language: row.try_get("", "language").map_err(db)?,
+        published_at: row.try_get("", "published_at").map_err(db)?,
+    })
+}
+
+fn row_to_follow(row: &sea_orm::QueryResult) -> Result<Follow> {
+    Ok(Follow {
+        id: FollowId(row.try_get("", "id").map_err(db)?),
+        manga_id: MangaId(row.try_get("", "manga_id").map_err(db)?),
+        check_interval_secs: row.try_get("", "check_interval_secs").map_err(db)?,
+        last_checked_at: row.try_get("", "last_checked_at").map_err(db)?,
+        auto_download: row.try_get("", "auto_download").map_err(db)?,
+        created_at: row.try_get("", "created_at").map_err(db)?,
+    })
+}
+
 /// Default page size for cursor-paginated reads.
 const PAGE_SIZE: u64 = 50;
 
@@ -28,6 +111,159 @@ pub struct Repositories {
 impl Repositories {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
+    }
+
+    // --- manga --------------------------------------------------------------
+
+    /// Reads one series.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "manga",
+        )
+    )]
+    pub async fn get_manga(&self, id: MangaId) -> Result<Manga> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM manga WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_manga(&row)
+    }
+
+    /// Finds a series by the key its source knows it as.
+    ///
+    /// The pair is what identity means here: two sources can use the same key
+    /// for different series, so neither half alone is enough.
+    #[tracing::instrument(
+        skip(self, key),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "manga",
+        )
+    )]
+    pub async fn find_manga_by_external(
+        &self,
+        source: SourceId,
+        key: &ExternalKey,
+    ) -> Result<Option<Manga>> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM manga WHERE source_id = $1 AND external_key = $2",
+                [source.0.into(), key.0.clone().into()],
+            ))
+            .await
+            .map_err(db)?;
+        row.as_ref().map(row_to_manga).transpose()
+    }
+
+    /// Inserts or updates a series, keyed on `(source_id, external_key)`.
+    ///
+    /// `created_at` is never overwritten on conflict: a metadata refresh must
+    /// not make a series look newly added, which is what the library's "recently
+    /// added" ordering reads.
+    #[tracing::instrument(
+        skip(self, manga),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "INSERT",
+            db.collection.name = "manga",
+        )
+    )]
+    pub async fn upsert_manga(&self, manga: &Manga) -> Result<MangaId> {
+        let sql = r#"
+            INSERT INTO manga (id, source_id, external_key, title, authors, artists,
+                               description, tags, cover_url, url, language, status,
+                               content_rating, direction, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
+            ON CONFLICT (source_id, external_key) DO UPDATE SET
+                title = EXCLUDED.title,
+                authors = EXCLUDED.authors,
+                artists = EXCLUDED.artists,
+                description = EXCLUDED.description,
+                tags = EXCLUDED.tags,
+                cover_url = EXCLUDED.cover_url,
+                url = EXCLUDED.url,
+                language = EXCLUDED.language,
+                status = EXCLUDED.status,
+                content_rating = EXCLUDED.content_rating,
+                direction = EXCLUDED.direction,
+                updated_at = now()
+            RETURNING id
+        "#;
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                sql,
+                [
+                    // A fresh id is only used when this is an insert; on
+                    // conflict the existing row keeps its own.
+                    Uuid::new_v4().into(),
+                    manga.source_id.0.into(),
+                    manga.external_key.0.clone().into(),
+                    manga.title.clone().into(),
+                    json(&manga.authors)?.into(),
+                    json(&manga.artists)?.into(),
+                    manga.description.clone().into(),
+                    json(&manga.tags)?.into(),
+                    manga.cover_url.clone().into(),
+                    manga.url.clone().into(),
+                    manga.language.clone().into(),
+                    manga.status.as_i16().into(),
+                    manga.content_rating.as_i16().into(),
+                    manga.direction.as_i16().into(),
+                ],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or_else(|| DomainError::Internal("upsert returned no row".into()))?;
+        Ok(MangaId(row.try_get("", "id").map_err(db)?))
+    }
+
+    /// Lists the library, newest first.
+    #[tracing::instrument(
+        skip(self, cursor),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "manga",
+        )
+    )]
+    pub async fn list_manga(&self, cursor: Option<&Cursor>) -> Result<Page<Manga>> {
+        let after = parse_cursor(cursor, "manga")?;
+        let (sql, values): (&str, Vec<Value>) = match after {
+            Some(id) => (
+                "SELECT * FROM manga WHERE (created_at, id) < \
+                 (SELECT created_at, id FROM manga WHERE id = $1) \
+                 ORDER BY created_at DESC, id DESC LIMIT $2",
+                vec![id.into(), ((PAGE_SIZE + 1) as i64).into()],
+            ),
+            None => (
+                "SELECT * FROM manga ORDER BY created_at DESC, id DESC LIMIT $1",
+                vec![((PAGE_SIZE + 1) as i64).into()],
+            ),
+        };
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                sql,
+                values,
+            ))
+            .await
+            .map_err(db)?;
+        page_of(rows, row_to_manga, |m| m.id.0)
     }
 
     // --- chapters -----------------------------------------------------------
@@ -179,21 +415,7 @@ impl Repositories {
         let has_more = rows.len() as u64 > PAGE_SIZE;
         rows.truncate(PAGE_SIZE as usize);
 
-        let items: Vec<Chapter> = rows
-            .iter()
-            .map(|r| {
-                Ok(Chapter {
-                    id: ChapterId(r.try_get("", "id").map_err(db)?),
-                    manga_id: MangaId(r.try_get("", "manga_id").map_err(db)?),
-                    external_key: ExternalKey(r.try_get("", "external_key").map_err(db)?),
-                    title: r.try_get("", "title").map_err(db)?,
-                    number: r.try_get("", "number").map_err(db)?,
-                    volume: r.try_get("", "volume").map_err(db)?,
-                    language: r.try_get("", "language").map_err(db)?,
-                    published_at: r.try_get("", "published_at").map_err(db)?,
-                })
-            })
-            .collect::<Result<_>>()?;
+        let items: Vec<Chapter> = rows.iter().map(row_to_chapter).collect::<Result<_>>()?;
 
         let next = has_more
             .then(|| items.last().map(|c| Cursor(c.id.0.to_string())))
@@ -290,6 +512,204 @@ impl Repositories {
             .await
             .map_err(db)?;
         Ok(result.rows_affected())
+    }
+
+    /// Reads one chapter.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "chapter",
+        )
+    )]
+    pub async fn get_chapter(&self, id: ChapterId) -> Result<Chapter> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM chapter WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_chapter(&row)
+    }
+
+    // --- follows ------------------------------------------------------------
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn get_follow(&self, id: FollowId) -> Result<Follow> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM follow WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_follow(&row)
+    }
+
+    #[tracing::instrument(
+        skip(self, cursor),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn list_follows(&self, cursor: Option<&Cursor>) -> Result<Page<Follow>> {
+        let after = parse_cursor(cursor, "follow")?;
+        let (sql, values): (&str, Vec<Value>) = match after {
+            Some(id) => (
+                "SELECT * FROM follow WHERE (created_at, id) < \
+                 (SELECT created_at, id FROM follow WHERE id = $1) \
+                 ORDER BY created_at DESC, id DESC LIMIT $2",
+                vec![id.into(), ((PAGE_SIZE + 1) as i64).into()],
+            ),
+            None => (
+                "SELECT * FROM follow ORDER BY created_at DESC, id DESC LIMIT $1",
+                vec![((PAGE_SIZE + 1) as i64).into()],
+            ),
+        };
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                sql,
+                values,
+            ))
+            .await
+            .map_err(db)?;
+        page_of(rows, row_to_follow, |f| f.id.0)
+    }
+
+    /// Follows whose check interval has elapsed.
+    ///
+    /// The interval is compared in SQL rather than in application code so the
+    /// database does the filtering; loading every follow to find the due ones
+    /// would scale with the library instead of with the work.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn due_follows(&self, limit: u64) -> Result<Vec<Follow>> {
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM follow \
+                 WHERE last_checked_at IS NULL \
+                    OR last_checked_at + make_interval(secs => check_interval_secs) <= now() \
+                 ORDER BY last_checked_at NULLS FIRST \
+                 LIMIT $1",
+                [(limit as i64).into()],
+            ))
+            .await
+            .map_err(db)?;
+        rows.iter().map(row_to_follow).collect()
+    }
+
+    /// Inserts or updates a follow. One follow per series, by the unique key
+    /// on `manga_id`.
+    #[tracing::instrument(
+        skip(self, follow),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "INSERT",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn upsert_follow(&self, follow: &Follow) -> Result<FollowId> {
+        let sql = r#"
+            INSERT INTO follow (id, manga_id, check_interval_secs, last_checked_at,
+                                auto_download, created_at)
+            VALUES ($1, $2, $3, $4, $5, now())
+            ON CONFLICT (manga_id) DO UPDATE SET
+                check_interval_secs = EXCLUDED.check_interval_secs,
+                auto_download = EXCLUDED.auto_download
+            RETURNING id
+        "#;
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                sql,
+                [
+                    Uuid::new_v4().into(),
+                    follow.manga_id.0.into(),
+                    follow.check_interval_secs.into(),
+                    follow
+                        .last_checked_at
+                        .map(Value::from)
+                        .unwrap_or(Value::ChronoDateTimeUtc(None)),
+                    follow.auto_download.into(),
+                ],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or_else(|| DomainError::Internal("upsert returned no row".into()))?;
+        Ok(FollowId(row.try_get("", "id").map_err(db)?))
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "DELETE",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn delete_follow(&self, id: FollowId) -> Result<()> {
+        self.db
+            .execute_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "DELETE FROM follow WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    /// Stamps a successful check.
+    ///
+    /// Only the handler calls this, and only on success: stamping on enqueue
+    /// would make a failed check wait out a whole interval before trying
+    /// again.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "UPDATE",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn mark_follow_checked(&self, id: FollowId) -> Result<()> {
+        self.db
+            .execute_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "UPDATE follow SET last_checked_at = now() WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+        Ok(())
     }
 
     // --- source key-value ---------------------------------------------------

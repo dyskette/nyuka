@@ -29,7 +29,7 @@
 //! real database rather than trusting inspection.
 
 use chrono::{DateTime, Utc};
-use nyuka_domain::model::{Job, JobId, JobKind, JobState, Page};
+use nyuka_domain::model::{Cursor, Job, JobId, JobKind, JobState, Page};
 use nyuka_domain::{DomainError, Result};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value};
 use uuid::Uuid;
@@ -370,6 +370,70 @@ impl PostgresQueue {
             .await
             .map_err(db)?;
         Ok(result.rows_affected())
+    }
+}
+
+/// The `domain::ports::JobQueue` implementation.
+///
+/// A thin bridge: the inherent methods above take the shapes that read well
+/// inside this crate, the port takes the shapes the rest of the system uses.
+#[async_trait::async_trait]
+impl nyuka_domain::ports::JobQueue for PostgresQueue {
+    async fn enqueue(
+        &self,
+        kind: JobKind,
+        payload: serde_json::Value,
+        run_at: Option<DateTime<Utc>>,
+        idempotency_key: Option<&str>,
+        priority: i16,
+        max_attempts: i32,
+    ) -> Result<JobId> {
+        PostgresQueue::enqueue(
+            self,
+            kind,
+            payload,
+            run_at,
+            idempotency_key,
+            priority,
+            max_attempts,
+        )
+        .await
+    }
+
+    async fn claim(&self, worker: &str) -> Result<Option<Job>> {
+        PostgresQueue::claim(self, worker).await
+    }
+
+    async fn complete(&self, job: JobId) -> Result<()> {
+        PostgresQueue::complete(self, job).await
+    }
+
+    async fn fail(
+        &self,
+        job: JobId,
+        error: &str,
+        retryable: bool,
+    ) -> Result<Option<DateTime<Utc>>> {
+        PostgresQueue::fail(self, job, error, retryable).await
+    }
+
+    async fn cancel(&self, job: JobId) -> Result<()> {
+        PostgresQueue::cancel(self, job).await
+    }
+
+    async fn recover_stale(&self, older_than_secs: u64) -> Result<u64> {
+        PostgresQueue::recover_stale(self, std::time::Duration::from_secs(older_than_secs)).await
+    }
+
+    async fn get(&self, job: JobId) -> Result<Job> {
+        PostgresQueue::get(self, job).await
+    }
+
+    /// The cursor is ignored: the job list is a short operational view, not a
+    /// browsable collection, and every caller so far wants the newest page.
+    /// Wire keyset pagination here when something needs the second page.
+    async fn list(&self, state: Option<JobState>, _cursor: Option<&Cursor>) -> Result<Page<Job>> {
+        PostgresQueue::list(self, state, 100).await
     }
 }
 

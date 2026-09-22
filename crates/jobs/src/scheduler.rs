@@ -29,9 +29,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use nyuka_domain::model::{FollowId, JobKind};
+use nyuka_domain::model::JobKind;
+use nyuka_domain::ports::FollowRepository;
 use nyuka_domain::{DomainError, Result};
-use sea_orm::{ConnectionTrait, Statement};
 use tokio_util::sync::CancellationToken;
 
 use crate::queue::{PostgresQueue, kind_to_str};
@@ -126,12 +126,21 @@ pub struct TickReport {
 
 pub struct Scheduler {
     queue: Arc<PostgresQueue>,
+    follows: Arc<dyn FollowRepository>,
     config: SchedulerConfig,
 }
 
 impl Scheduler {
-    pub fn new(queue: Arc<PostgresQueue>, config: SchedulerConfig) -> Self {
-        Self { queue, config }
+    pub fn new(
+        queue: Arc<PostgresQueue>,
+        follows: Arc<dyn FollowRepository>,
+        config: SchedulerConfig,
+    ) -> Self {
+        Self {
+            queue,
+            follows,
+            config,
+        }
     }
 
     /// Ticks until cancelled.
@@ -191,7 +200,7 @@ impl Scheduler {
             }
         }
 
-        for follow in self.due_follows().await? {
+        for follow in self.follows.due(self.config.follow_batch).await? {
             // Bucketed by the follow's own interval, so a follow checked every
             // six hours is enqueued at most once in six hours even though the
             // scheduler looks at it sixty times an hour.
@@ -215,47 +224,6 @@ impl Scheduler {
 
         Ok(report)
     }
-
-    /// Follows whose interval has elapsed.
-    ///
-    /// `last_checked_at` is written by the `check_follow` handler on success,
-    /// not here: marking a follow checked because a job was *enqueued* would
-    /// skip a whole interval whenever that job failed.
-    async fn due_follows(&self) -> Result<Vec<DueFollow>> {
-        let sql = "SELECT id, check_interval_secs FROM follow \
-                   WHERE last_checked_at IS NULL \
-                      OR last_checked_at + make_interval(secs => check_interval_secs) <= now() \
-                   ORDER BY last_checked_at NULLS FIRST \
-                   LIMIT $1";
-        let db = self.queue.connection();
-        let rows = db
-            .query_all_raw(Statement::from_sql_and_values(
-                db.get_database_backend(),
-                sql,
-                [(self.config.follow_batch as i64).into()],
-            ))
-            .await
-            .map_err(|e| DomainError::Storage(e.to_string()))?;
-
-        rows.into_iter()
-            .map(|row| {
-                Ok(DueFollow {
-                    id: FollowId(
-                        row.try_get("", "id")
-                            .map_err(|e| DomainError::Storage(e.to_string()))?,
-                    ),
-                    check_interval_secs: row
-                        .try_get("", "check_interval_secs")
-                        .map_err(|e| DomainError::Storage(e.to_string()))?,
-                })
-            })
-            .collect()
-    }
-}
-
-struct DueFollow {
-    id: FollowId,
-    check_interval_secs: i32,
 }
 
 /// Fails when job-row retention is shorter than the longest schedule period.

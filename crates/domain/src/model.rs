@@ -89,6 +89,58 @@ pub enum ContentRating {
     Nsfw,
 }
 
+/// Numeric mappings for the enums above.
+///
+/// > [!IMPORTANT]
+/// > These values are written to `small_integer` columns, so they are a
+/// > persisted contract, not an implementation detail. Reordering a variant
+/// > silently reinterprets every stored row — a completed series becomes
+/// > cancelled with no error anywhere. `enum_discriminants_are_pinned` exists
+/// > to make that a test failure instead.
+macro_rules! numeric_enum {
+    ($name:ident { $($variant:ident = $value:literal),+ $(,)? }) => {
+        impl $name {
+            pub fn as_i16(self) -> i16 {
+                match self {
+                    $(Self::$variant => $value,)+
+                }
+            }
+
+            /// Unknown values map to the default rather than failing: a row
+            /// written by a newer build must still be readable by an older
+            /// one, and refusing to load the library is worse than showing a
+            /// status as unknown.
+            pub fn from_i16(value: i16) -> Self {
+                match value {
+                    $($value => Self::$variant,)+
+                    _ => Self::default(),
+                }
+            }
+        }
+    };
+}
+
+numeric_enum!(MangaStatus {
+    Unknown = 0,
+    Ongoing = 1,
+    Completed = 2,
+    Cancelled = 3,
+    Hiatus = 4,
+});
+
+numeric_enum!(ContentRating {
+    Unknown = 0,
+    Safe = 1,
+    Suggestive = 2,
+    Nsfw = 3,
+});
+
+numeric_enum!(ReadingDirection {
+    Unknown = 0,
+    LeftToRight = 1,
+    RightToLeft = 2,
+});
+
 /// A series as a **source** describes it.
 ///
 /// Deliberately not [`Manga`]: a catalog result has no local identity yet. It
@@ -157,11 +209,20 @@ pub struct Manga {
     pub external_key: ExternalKey,
     pub title: String,
     pub authors: Vec<String>,
+    pub artists: Vec<String>,
     pub description: Option<String>,
-    pub genres: Vec<String>,
+    /// Named to match [`SourceManga::tags`] and the `tag` column. `ComicInfo`
+    /// calls the same thing `Genre`; the translation happens at that boundary
+    /// rather than here.
+    pub tags: Vec<String>,
     pub cover_url: Option<String>,
+    /// The series page on the source, for the "open on site" link.
+    pub url: Option<String>,
     pub language: Option<String>,
+    pub status: MangaStatus,
+    pub content_rating: ContentRating,
     pub direction: ReadingDirection,
+    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -175,6 +236,23 @@ pub struct Chapter {
     pub volume: Option<f32>,
     pub language: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
+}
+
+/// A series being watched for new chapters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Follow {
+    pub id: FollowId,
+    pub manga_id: MangaId,
+    /// How often to look for new chapters. Per-follow rather than global,
+    /// because a weekly series and a daily one do not deserve the same
+    /// request rate toward the source.
+    pub check_interval_secs: i32,
+    /// Written when a check succeeds, not when one is enqueued: marking it on
+    /// enqueue would skip a whole interval every time a check failed.
+    pub last_checked_at: Option<DateTime<Utc>>,
+    /// Whether a newly found chapter is queued for download without asking.
+    pub auto_download: bool,
+    pub created_at: DateTime<Utc>,
 }
 
 /// A chapter that has been packaged into the library.
@@ -301,4 +379,51 @@ pub enum JobEvent {
     SourceUpdated {
         source_id: SourceId,
     },
+}
+
+#[cfg(test)]
+mod enum_tests {
+    use super::*;
+
+    /// These numbers are in the database. Changing one does not fail a build,
+    /// it silently reinterprets stored rows, so they are pinned here.
+    #[test]
+    fn enum_discriminants_are_pinned() {
+        for (value, want) in [
+            (MangaStatus::Unknown, 0),
+            (MangaStatus::Ongoing, 1),
+            (MangaStatus::Completed, 2),
+            (MangaStatus::Cancelled, 3),
+            (MangaStatus::Hiatus, 4),
+        ] {
+            assert_eq!(value.as_i16(), want);
+            assert_eq!(MangaStatus::from_i16(want), value);
+        }
+        for (value, want) in [
+            (ContentRating::Unknown, 0),
+            (ContentRating::Safe, 1),
+            (ContentRating::Suggestive, 2),
+            (ContentRating::Nsfw, 3),
+        ] {
+            assert_eq!(value.as_i16(), want);
+            assert_eq!(ContentRating::from_i16(want), value);
+        }
+        for (value, want) in [
+            (ReadingDirection::Unknown, 0),
+            (ReadingDirection::LeftToRight, 1),
+            (ReadingDirection::RightToLeft, 2),
+        ] {
+            assert_eq!(value.as_i16(), want);
+            assert_eq!(ReadingDirection::from_i16(want), value);
+        }
+    }
+
+    /// A row written by a newer build must still load. Refusing would take the
+    /// whole library offline over one unrecognised status.
+    #[test]
+    fn an_unknown_discriminant_falls_back_to_the_default() {
+        assert_eq!(MangaStatus::from_i16(99), MangaStatus::Unknown);
+        assert_eq!(ContentRating::from_i16(-1), ContentRating::Unknown);
+        assert_eq!(ReadingDirection::from_i16(7), ReadingDirection::Unknown);
+    }
 }

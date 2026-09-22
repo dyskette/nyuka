@@ -159,12 +159,19 @@ pub trait JobQueue: Send + Sync {
     /// key must not enqueue twice. This is transactional with the domain
     /// writes that caused it, which is the whole reason the queue lives in
     /// Postgres rather than Redis.
+    ///
+    /// `priority` orders the claim query ascending, so a lower number runs
+    /// first. It is on the port rather than fixed by the implementation
+    /// because it is a real decision a caller makes: a download a user is
+    /// waiting on must outrank one a follow check discovered.
     async fn enqueue(
         &self,
         kind: JobKind,
         payload: serde_json::Value,
         run_at: Option<chrono::DateTime<chrono::Utc>>,
         idempotency_key: Option<&str>,
+        priority: i16,
+        max_attempts: i32,
     ) -> Result<JobId>;
 
     /// Claims one runnable job with `FOR UPDATE SKIP LOCKED`.
@@ -238,6 +245,38 @@ pub trait ChapterRepository: Send + Sync {
     ) -> Result<Vec<ChapterId>>;
     async fn downloaded(&self, id: ChapterId) -> Result<Option<DownloadedChapter>>;
     async fn record_download(&self, download: &DownloadedChapter) -> Result<()>;
+
+    /// Drops the download records for chapters whose files are gone.
+    ///
+    /// This is what `reconcile_library` does when it finds a missing file.
+    /// Deleting the file would be a no-op — it is already absent — and the
+    /// row is the thing making the UI offer a read that will fail.
+    ///
+    /// Takes a slice because a restored-from-empty library means every
+    /// chapter at once, and one statement per chapter would be thousands of
+    /// round trips.
+    async fn forget_downloads(&self, missing: &[ChapterId]) -> Result<u64>;
+}
+
+/// Follows.
+#[async_trait]
+pub trait FollowRepository: Send + Sync {
+    async fn get(&self, id: FollowId) -> Result<Follow>;
+    async fn list(&self, cursor: Option<&Cursor>) -> Result<Page<Follow>>;
+
+    /// Follows whose check interval has elapsed, oldest first.
+    ///
+    /// Bounded by `limit`: a library with thousands of follows must not turn
+    /// one scheduler tick into thousands of enqueues.
+    async fn due(&self, limit: u64) -> Result<Vec<Follow>>;
+
+    async fn upsert(&self, follow: &Follow) -> Result<FollowId>;
+    async fn delete(&self, id: FollowId) -> Result<()>;
+
+    /// Stamps `last_checked_at`. Called by the `check_follow` handler after a
+    /// successful check, which is what makes a failed check retry on the next
+    /// tick instead of waiting out the interval.
+    async fn mark_checked(&self, id: FollowId) -> Result<()>;
 }
 
 #[async_trait]

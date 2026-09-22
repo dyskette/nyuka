@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use nyuka_domain::model::{Chapter, Job, MangaId};
+use nyuka_domain::model::{Chapter, ChapterId, Job, MangaId};
 use nyuka_domain::ports::{ChapterRepository, LibraryStore, MangaRepository};
 use nyuka_domain::{DomainError, Result};
 use nyuka_persistence::session::SessionRepository;
@@ -78,6 +78,9 @@ pub struct Reconciled {
     pub checked: usize,
     /// Rows whose file is gone, so the UI must stop offering the read.
     pub missing: usize,
+    /// Download records actually deleted. Equal to `missing` unless a
+    /// concurrent writer removed one first.
+    pub forgotten: u64,
 }
 
 /// Drops `downloaded_chapter` rows whose file is no longer on disk (ADR-0007).
@@ -115,9 +118,17 @@ impl ReconcileLibrary {
         let mut cursor = None;
         loop {
             let page = self.chapters.list_for_manga(id, cursor.as_ref()).await?;
+            let mut missing = Vec::new();
             for chapter in &page.items {
-                self.reconcile_chapter(chapter, report).await?;
+                if let Some(id) = self.missing_download(chapter, report).await? {
+                    missing.push(id);
+                }
             }
+            // One statement per page rather than per chapter: a library
+            // restored from an empty volume means every chapter is missing,
+            // and that would otherwise be thousands of round trips.
+            report.forgotten += self.chapters.forget_downloads(&missing).await?;
+
             match page.next {
                 Some(next) => cursor = Some(next),
                 None => return Ok(()),
@@ -125,13 +136,18 @@ impl ReconcileLibrary {
         }
     }
 
-    async fn reconcile_chapter(&self, chapter: &Chapter, report: &mut Reconciled) -> Result<()> {
+    /// Returns the chapter's id when its packaged file is gone.
+    async fn missing_download(
+        &self,
+        chapter: &Chapter,
+        report: &mut Reconciled,
+    ) -> Result<Option<ChapterId>> {
         let Some(download) = self.chapters.downloaded(chapter.id).await? else {
-            return Ok(());
+            return Ok(None);
         };
         report.checked += 1;
         if self.library.exists(&download.relative_path).await? {
-            return Ok(());
+            return Ok(None);
         }
         report.missing += 1;
         tracing::warn!(
@@ -139,8 +155,7 @@ impl ReconcileLibrary {
             path = %download.relative_path,
             "packaged chapter is missing from the library; clearing its download record"
         );
-        self.library.delete_chapter(&download.relative_path).await?;
-        Ok(())
+        Ok(Some(chapter.id))
     }
 }
 
@@ -173,6 +188,7 @@ impl KindHandler for ReconcileLibrary {
         tracing::info!(
             checked = report.checked,
             missing = report.missing,
+            forgotten = report.forgotten,
             "reconciled the library"
         );
         Ok(())
@@ -184,8 +200,8 @@ mod tests {
     use super::*;
     use crate::handlers::testing::job;
     use nyuka_domain::model::{
-        Chapter, ChapterId, Cursor, DownloadedChapter, ExternalKey, JobKind, Manga, PageRef,
-        ReadingDirection, SourceChapter, SourceId,
+        Chapter, ChapterId, ContentRating, Cursor, DownloadedChapter, ExternalKey, JobKind, Manga,
+        MangaStatus, PageRef, ReadingDirection, SourceChapter, SourceId,
     };
     use nyuka_domain::ports::ChapterRead;
     use std::collections::HashSet;
@@ -199,11 +215,16 @@ mod tests {
             external_key: ExternalKey("k".into()),
             title: "T".into(),
             authors: vec![],
+            artists: vec![],
             description: None,
-            genres: vec![],
+            tags: vec![],
             cover_url: None,
+            url: None,
             language: None,
+            status: MangaStatus::Unknown,
+            content_rating: ContentRating::Unknown,
             direction: ReadingDirection::Unknown,
+            created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         }
     }
@@ -246,9 +267,11 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
     struct FakeChapters {
         chapters: Vec<Chapter>,
         downloads: Vec<DownloadedChapter>,
+        forgotten: Mutex<Vec<ChapterId>>,
     }
 
     #[async_trait::async_trait]
@@ -283,6 +306,13 @@ mod tests {
         }
         async fn record_download(&self, _download: &DownloadedChapter) -> Result<()> {
             Ok(())
+        }
+        async fn forget_downloads(&self, missing: &[ChapterId]) -> Result<u64> {
+            self.forgotten
+                .lock()
+                .expect("lock")
+                .extend_from_slice(missing);
+            Ok(missing.len() as u64)
         }
     }
 
@@ -332,7 +362,14 @@ mod tests {
         }
     }
 
-    fn fixture(root_readable: bool, present: &[&str]) -> (ReconcileLibrary, Arc<FakeLibrary>) {
+    struct Fixture {
+        handler: ReconcileLibrary,
+        chapters: Arc<FakeChapters>,
+        library: Arc<FakeLibrary>,
+        gone: ChapterId,
+    }
+
+    fn fixture(root_readable: bool, present: &[&str]) -> Fixture {
         let m = MangaId(Uuid::new_v4());
         let here = ChapterId(Uuid::new_v4());
         let gone = ChapterId(Uuid::new_v4());
@@ -341,30 +378,40 @@ mod tests {
             deleted: Mutex::new(vec![]),
             root_readable,
         });
-        let handler = ReconcileLibrary::new(
-            Arc::new(FakeManga(vec![manga(m)])),
-            Arc::new(FakeChapters {
-                chapters: vec![chapter(here, m), chapter(gone, m)],
-                downloads: vec![download(here, "T/here.cbz"), download(gone, "T/gone.cbz")],
-            }),
-            library.clone(),
-        );
-        (handler, library)
+        let chapters = Arc::new(FakeChapters {
+            chapters: vec![chapter(here, m), chapter(gone, m)],
+            downloads: vec![download(here, "T/here.cbz"), download(gone, "T/gone.cbz")],
+            forgotten: Mutex::new(vec![]),
+        });
+        Fixture {
+            handler: ReconcileLibrary::new(
+                Arc::new(FakeManga(vec![manga(m)])),
+                chapters.clone(),
+                library.clone(),
+            ),
+            chapters,
+            library,
+            gone,
+        }
     }
 
     #[tokio::test]
     async fn a_missing_file_clears_its_download_record_and_a_present_one_survives() {
-        let (handler, library) = fixture(true, &["T/here.cbz"]);
-        handler
+        let f = fixture(true, &["T/here.cbz"]);
+        f.handler
             .handle(&job(JobKind::ReconcileLibrary, serde_json::json!({})))
             .await
             .expect("reconciled");
 
-        let deleted = library.deleted.lock().expect("lock").clone();
         assert_eq!(
-            deleted,
-            vec!["T/gone.cbz".to_string()],
-            "only the chapter whose file is gone may be cleared"
+            *f.chapters.forgotten.lock().expect("lock"),
+            vec![f.gone],
+            "only the chapter whose file is gone may be forgotten"
+        );
+        assert!(
+            f.library.deleted.lock().expect("lock").is_empty(),
+            "the file is already absent; deleting it would be a no-op standing in \
+             for the work that matters, which is clearing the row"
         );
     }
 
@@ -373,15 +420,16 @@ mod tests {
     /// than declare the whole library missing.
     #[tokio::test]
     async fn an_unmounted_library_root_aborts_instead_of_clearing_everything() {
-        let (handler, library) = fixture(false, &[]);
-        let err = handler
+        let f = fixture(false, &[]);
+        let err = f
+            .handler
             .handle(&job(JobKind::ReconcileLibrary, serde_json::json!({})))
             .await
             .expect_err("an unreadable root must not reconcile");
 
         assert!(err.to_string().contains("unreadable"));
         assert!(
-            library.deleted.lock().expect("lock").is_empty(),
+            f.chapters.forgotten.lock().expect("lock").is_empty(),
             "not one record may be cleared while the root cannot be read"
         );
         assert!(

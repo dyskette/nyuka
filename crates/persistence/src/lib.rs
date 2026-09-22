@@ -13,6 +13,7 @@
 //! the control that makes this decision safe. See ADR-0002.
 #![forbid(unsafe_code)]
 
+pub mod adapter;
 pub mod connect;
 /// SeaORM entities.
 ///

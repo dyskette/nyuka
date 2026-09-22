@@ -254,8 +254,8 @@ mod tests {
     use super::*;
     use crate::handlers::testing::job;
     use nyuka_domain::model::{
-        ChapterId, Cursor, DownloadedChapter, ExternalKey, JobKind, MangaId, Page,
-        ReadingDirection, SourceChapter, SourceId, SourceManga,
+        ChapterId, ContentRating, Cursor, DownloadedChapter, ExternalKey, JobKind, MangaId,
+        MangaStatus, Page, ReadingDirection, SourceChapter, SourceId, SourceManga,
     };
     use nyuka_domain::ports::ChapterRead;
     use std::sync::Mutex;
@@ -288,11 +288,16 @@ mod tests {
             external_key: ExternalKey("series".into()),
             title: "Test Series".into(),
             authors: vec![],
+            artists: vec![],
             description: None,
-            genres: vec![],
+            tags: vec![],
             cover_url: None,
+            url: None,
             language: None,
+            status: MangaStatus::Unknown,
+            content_rating: ContentRating::Unknown,
             direction: ReadingDirection::RightToLeft,
+            created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         }
     }
@@ -368,6 +373,9 @@ mod tests {
         async fn record_download(&self, download: &DownloadedChapter) -> Result<()> {
             self.recorded.lock().expect("lock").push(download.clone());
             Ok(())
+        }
+        async fn forget_downloads(&self, _missing: &[ChapterId]) -> Result<u64> {
+            Ok(0)
         }
     }
 

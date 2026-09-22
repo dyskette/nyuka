@@ -1,0 +1,119 @@
+//! Port implementations over [`Repositories`].
+//!
+//! The repository struct keeps inherent methods with names that say what they
+//! touch — `upsert_manga`, `list_chapters`, `due_follows` — because that is
+//! what reads well at a call site inside this crate. The ports use short names
+//! scoped by their trait. Rather than pick one and make the other awkward,
+//! this module is the one-line-per-method bridge between them.
+//!
+//! One `Repositories` value implements every repository port, so the
+//! composition root clones it into each `Arc<dyn …>` instead of holding a
+//! separate object per port.
+
+use nyuka_domain::Result;
+use nyuka_domain::model::*;
+use nyuka_domain::ports::{ChapterRepository, FollowRepository, MangaRepository};
+
+use crate::repository::Repositories;
+
+#[async_trait::async_trait]
+impl MangaRepository for Repositories {
+    async fn get(&self, id: MangaId) -> Result<Manga> {
+        self.get_manga(id).await
+    }
+
+    async fn find_by_external(&self, source: SourceId, key: &ExternalKey) -> Result<Option<Manga>> {
+        self.find_manga_by_external(source, key).await
+    }
+
+    async fn upsert(&self, manga: &Manga) -> Result<MangaId> {
+        self.upsert_manga(manga).await
+    }
+
+    async fn list(&self, cursor: Option<&Cursor>) -> Result<Page<Manga>> {
+        self.list_manga(cursor).await
+    }
+}
+
+#[async_trait::async_trait]
+impl ChapterRepository for Repositories {
+    async fn get(&self, id: ChapterId) -> Result<Chapter> {
+        self.get_chapter(id).await
+    }
+
+    async fn list_for_manga(
+        &self,
+        manga: MangaId,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<Chapter>> {
+        self.list_chapters(manga, cursor).await
+    }
+
+    async fn upsert_many(
+        &self,
+        manga: MangaId,
+        chapters: &[SourceChapter],
+    ) -> Result<Vec<ChapterId>> {
+        self.upsert_chapters(manga, chapters).await
+    }
+
+    async fn downloaded(&self, id: ChapterId) -> Result<Option<DownloadedChapter>> {
+        Repositories::downloaded(self, id).await
+    }
+
+    async fn record_download(&self, download: &DownloadedChapter) -> Result<()> {
+        Repositories::record_download(self, download).await
+    }
+
+    async fn forget_downloads(&self, missing: &[ChapterId]) -> Result<u64> {
+        Repositories::forget_downloads(self, missing).await
+    }
+}
+
+#[async_trait::async_trait]
+impl FollowRepository for Repositories {
+    async fn get(&self, id: FollowId) -> Result<Follow> {
+        self.get_follow(id).await
+    }
+
+    async fn list(&self, cursor: Option<&Cursor>) -> Result<Page<Follow>> {
+        self.list_follows(cursor).await
+    }
+
+    async fn due(&self, limit: u64) -> Result<Vec<Follow>> {
+        self.due_follows(limit).await
+    }
+
+    async fn upsert(&self, follow: &Follow) -> Result<FollowId> {
+        self.upsert_follow(follow).await
+    }
+
+    async fn delete(&self, id: FollowId) -> Result<()> {
+        self.delete_follow(id).await
+    }
+
+    async fn mark_checked(&self, id: FollowId) -> Result<()> {
+        self.mark_follow_checked(id).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    /// The composition root hands these around as trait objects, so they have
+    /// to be object safe. A port that is not would fail here rather than in
+    /// whichever crate first tried to store one.
+    #[test]
+    fn every_repository_port_is_object_safe() {
+        fn assert_ports(repos: Repositories) {
+            let shared = Arc::new(repos);
+            let _: Arc<dyn MangaRepository> = shared.clone();
+            let _: Arc<dyn ChapterRepository> = shared.clone();
+            let _: Arc<dyn FollowRepository> = shared;
+        }
+        // Never called: this is a compile-time assertion about the types.
+        let _ = assert_ports;
+    }
+}

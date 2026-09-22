@@ -239,7 +239,9 @@ pub fn free_bytes(_path: &Path) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nyuka_domain::model::{ChapterId, ExternalKey, MangaId, ReadingDirection, SourceId};
+    use nyuka_domain::model::{
+        ChapterId, ContentRating, ExternalKey, MangaId, MangaStatus, ReadingDirection, SourceId,
+    };
     use uuid::Uuid;
 
     fn jpeg() -> Vec<u8> {
@@ -255,11 +257,16 @@ mod tests {
             external_key: ExternalKey("k".into()),
             title: title.into(),
             authors: vec![],
+            artists: vec![],
             description: None,
-            genres: vec![],
+            tags: vec![],
             cover_url: None,
+            url: None,
             language: None,
+            status: MangaStatus::Unknown,
+            content_rating: ContentRating::Unknown,
             direction: ReadingDirection::RightToLeft,
+            created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
         }
     }

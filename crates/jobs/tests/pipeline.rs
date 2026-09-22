@@ -45,6 +45,11 @@ async fn fresh_database(name: &str) -> Option<DatabaseConnection> {
     Some(db)
 }
 
+/// The follow port, over the same connection the queue uses.
+fn follows(db: &DatabaseConnection) -> Arc<dyn nyuka_domain::ports::FollowRepository> {
+    Arc::new(nyuka_persistence::repository::Repositories::new(db.clone()))
+}
+
 fn session(id: &str, expires_at: chrono::DateTime<chrono::Utc>) -> SessionRecord {
     SessionRecord {
         id: id.into(),
@@ -87,6 +92,7 @@ async fn a_scheduled_job_runs_and_its_effect_lands() {
     // job rather than whatever else a default schedule would have added.
     let scheduler = Scheduler::new(
         queue.clone(),
+        follows(&db),
         SchedulerConfig {
             schedule: vec![Periodic {
                 kind: JobKind::PruneSessions,
@@ -135,7 +141,7 @@ async fn an_unhandled_kind_fails_once_and_stops() {
     let Some(db) = fresh_database("nyuka_test_pipeline_unhandled").await else {
         return;
     };
-    let queue = Arc::new(PostgresQueue::new(db));
+    let queue = Arc::new(PostgresQueue::new(db.clone()));
     queue
         .enqueue(
             JobKind::DownloadChapter,

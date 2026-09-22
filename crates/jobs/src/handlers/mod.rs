@@ -23,6 +23,7 @@
 //! fakes for the ports it needs.
 
 pub mod download;
+pub mod follow;
 pub mod maintenance;
 
 use std::collections::HashMap;
