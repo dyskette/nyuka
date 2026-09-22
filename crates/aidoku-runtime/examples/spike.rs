@@ -254,6 +254,16 @@ fn main() -> Result<()> {
                                 .map(|b| format!("{b:02x}"))
                                 .collect();
                             println!("  payload head: {}", head.join(" "));
+                            // Printable runs, which is enough to read a
+                            // conformance report's (check, result) pairs
+                            // without mirroring the guest's structs here.
+                            let strings = printable_runs(&payload, 3);
+                            if !strings.is_empty() {
+                                println!("  strings in payload ({}):", strings.len());
+                                for s in &strings {
+                                    println!("    {s}");
+                                }
+                            }
                             // postcard encodes a Vec as a length varint first,
                             // so the leading byte is the entry count for small
                             // results. Enough to show the payload is coherent.
@@ -827,4 +837,24 @@ fn selftest() -> Result<()> {
         println!("  [{i}] href={href:?} title={title:?} cover={cover:?}");
     }
     Ok(())
+}
+
+/// Printable ASCII runs of at least `min` characters, in order.
+fn printable_runs(bytes: &[u8], min: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for &b in bytes {
+        if (0x20..0x7f).contains(&b) {
+            cur.push(b as char);
+        } else {
+            if cur.chars().count() >= min {
+                out.push(cur.clone());
+            }
+            cur.clear();
+        }
+    }
+    if cur.chars().count() >= min {
+        out.push(cur);
+    }
+    out
 }

@@ -1,5 +1,8 @@
 [workspace]
 resolver = "3"
+# The conformance fixture targets wasm32 with its own panic strategy and a
+# git-pinned dependency, so it is built separately (ADR-0004).
+exclude = ["crates/aidoku-runtime/conformance"]
 members = [
     "crates/domain",
     "crates/persistence",

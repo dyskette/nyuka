@@ -2,6 +2,11 @@
 /target
 **/*.rs.bk
 
+# The conformance fixture is its own workspace, and its .aix is a build
+# artifact — regenerate with crates/aidoku-runtime/conformance/package.sh.
+crates/aidoku-runtime/conformance/target/
+crates/aidoku-runtime/conformance/*.aix
+
 # Node / frontend
 node_modules/
 web/dist/

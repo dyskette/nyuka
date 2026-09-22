@@ -1,0 +1,35 @@
+# The conformance fixture guest (ADR-0004).
+#
+# Compiled to wasm32-unknown-unknown and packaged as a .aix, then loaded by the
+# host's own tests. It carries fixture HTML and asserts what the host returns,
+# so the `html` module can be developed against fixed input — a live site makes
+# "the host is wrong" and "the site changed" indistinguishable.
+#
+# Deliberately OUTSIDE the main workspace: different target, different panic
+# strategy, and a git dependency pinned by SHA.
+# An empty [workspace] table makes this its own workspace root, which is the
+# robust way to keep it out of the parent's (the parent also excludes it).
+[workspace]
+
+[package]
+name = "nyuka-conformance"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Pinned by commit because aidoku-rs is unpublished and untagged, so there is
+# no semver boundary. Keep this in step with ABI_SOURCE_COMMIT in the host.
+aidoku = { git = "https://github.com/Aidoku/aidoku-rs", rev = "e1320b0a2e11afb59e4dee374883a2212d325699" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+strip = true
+lto = true
