@@ -86,6 +86,10 @@ openidconnect = "4.0"
 # a prerelease.
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 quick-xml = { version = "0.42", features = ["serialize"] }
+# NFC normalization for filesystem names: two spellings of the same title
+# must not become two directories (ADR-0007).
+unicode-normalization = "0.1"
+tempfile = "3"
 
 # --- Observability (ADR-0014, ADR-0015) --------------------------------------
 # All OpenTelemetry crates stay on 0.32 even though opentelemetry itself is
