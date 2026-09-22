@@ -26,3 +26,5 @@
 //! link-local, and cloud metadata addresses. ADR-0004 requires a DNS-rebinding
 //! test for this, and fuzzing of the postcard decode path, which parses
 //! attacker-influenced bytes into host structs.
+
+pub mod html;
