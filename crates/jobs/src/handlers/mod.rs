@@ -22,6 +22,7 @@
 //! runtime still prunes sessions — and so each handler can be tested against
 //! fakes for the ports it needs.
 
+pub mod download;
 pub mod maintenance;
 
 use std::collections::HashMap;

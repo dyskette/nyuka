@@ -52,6 +52,23 @@ pub trait SourceItem: Send + Sync {
     ) -> Result<Vec<SourcePage>>;
 }
 
+/// Fetching a page image.
+///
+/// Separate from `SourceItem` because the two answer different questions.
+/// `SourceItem::pages` asks the source's WASM module *where* the images are;
+/// this fetches them, over the same egress policy the module's own requests
+/// go through. Keeping it a port is what lets the download handler be tested
+/// without a network — and what stops it from reaching for an HTTP client
+/// directly and quietly bypassing that policy.
+#[async_trait]
+pub trait PageFetcher: Send + Sync {
+    /// Fetches one page image.
+    ///
+    /// Implementations honour `PageRef::headers`: a source that requires a
+    /// referer gets a 403 without it, which looks like a dead link.
+    async fn fetch(&self, page: &PageRef) -> Result<Vec<u8>>;
+}
+
 /// Installing, updating, and removing sources.
 #[async_trait]
 pub trait SourceRegistry: Send + Sync {

@@ -201,6 +201,25 @@ pub fn build_client(
         .build()
 }
 
+/// Builds the async client the page fetcher uses.
+///
+/// Same policy as [`build_client`], same resolver type: a page image is an
+/// ordinary outbound request and must not get a weaker check than the source's
+/// own requests do. The blocking client exists only because the WASM host
+/// imports are called from synchronous guest code.
+pub fn build_async_client(
+    user_agent: &str,
+    timeout: std::time::Duration,
+    resolver: Arc<VettingResolver>,
+) -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent(user_agent)
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .dns_resolver(resolver)
+        .build()
+}
+
 /// Performs a request that the guest has finished building.
 pub fn send(client: &reqwest::blocking::Client, request: &Request) -> Result<Response, i32> {
     let url = request.url.as_deref().ok_or(err::NOT_SENT)?;
