@@ -2987,6 +2987,7 @@ dependencies = [
  "tokio",
  "tracing",
  "unicode-normalization",
+ "uuid",
  "zip",
 ]
 
