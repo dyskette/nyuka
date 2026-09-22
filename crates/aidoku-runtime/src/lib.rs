@@ -46,6 +46,7 @@ pub const ABI_SOURCE_COMMIT: &str = "UNPINNED";
 pub const HOST_ABI_VERSION: u32 = 1;
 
 pub mod engine;
+pub mod error;
 pub mod imports;
 pub mod models;
 pub mod package;

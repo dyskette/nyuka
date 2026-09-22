@@ -14,6 +14,8 @@ js = ["dep:rquickjs"]
 [dependencies]
 nyuka-domain = { path = "../domain" }
 wasmtime = { workspace = true }
+dom_query = { workspace = true }
+url = { workspace = true }
 postcard = { workspace = true }
 reqwest = { workspace = true }
 async-trait = { workspace = true }

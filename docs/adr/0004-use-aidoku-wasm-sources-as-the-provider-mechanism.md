@@ -240,7 +240,18 @@ It is also worth recording what the spike did **not** find. The throwaway `html`
 1. **Pick the target sources first.** Choose the specific `.aix` sources v1 must support, then read their required imports. That list, not the full ABI, defines the tier-1 and tier-2 scope. Doing this before writing host code is the single highest-leverage step in the project.
 2. **Record the aidoku-rs SHA and add `HOST_ABI_VERSION`** to the module cache key, in the first commit that touches the runtime.
 3. **Build the conformance `.aix`** and wire it into CI.
-4. **Choose and validate the mutable DOM** against `select`, mutation, and `outer_html` round-trips.
+4. ~~**Choose and validate the mutable DOM.**~~ **Resolved: `dom_query`.**
+
+   | Candidate | Verdict |
+   |---|---|
+   | **`dom_query` 0.28** | **Chosen.** `html5ever` 0.39, `selectors` 0.38, `cssparser` 0.37 — one minor behind current and internally coherent. |
+   | `kuchikiki` 0.8.2 | Rejected. `html5ever` 0.26, `selectors` 0.22, and `indexmap` 1.x: years behind, and it would duplicate `html5ever` against anything current. |
+   | `html5ever` + RC-DOM + `selectors` | Rejected. Assembling selector matching, mutation, and serialization by hand is most of `dom_query`. |
+   | `scraper` | Rejected. Read-only, so it cannot back `set_attr`, `set_text`, `set_html`, `append`, `prepend`, or `remove`. |
+
+   `dom_query` maps onto the ABI almost directly: `NodeId` and `NodeRef` give the stable, lifetime-free handles the resource table needs; `select` and `select_single` cover `select` and `select_first`; `text` and `immediate_text` are `text` and `own_text`; `html` and `inner_html` cover serialization; and it implements **`base_uri()` on both document and node** — the behaviour whose absence made every HTML-scraping source return zero entries.
+
+   Two things to verify while implementing, since they are not in its documented surface: sibling traversal (`next`, `prev`, which the ABI requires) and class helpers (`add_class`, `remove_class`, `has_class`, which `set_attr("class", …)` can back).
 5. **Implement install-time capability negotiation** in `SourceRegistry`, with a problem+json error naming missing capabilities, plus a `GET /sources/{id}` field exposing which capabilities a source needs.
 6. **Wire `set_rate_limit` into the job engine's semaphore** and log when a source-declared limit is stricter than the configured cap.
 7. **Fuzz the postcard decode path.** It parses attacker-influenced bytes from a source into host structs. `cargo-fuzz` on the decoder is proportionate to that exposure.
