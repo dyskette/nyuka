@@ -37,9 +37,9 @@
 
 /// The aidoku-rs commit this host's ABI is written against.
 ///
-/// TODO(scaffold): set this to a real SHA in the first commit that implements
-/// a host import, and re-pin only with a passing conformance run.
-pub const ABI_SOURCE_COMMIT: &str = "UNPINNED";
+/// The conformance fixture is built against this exact commit, so re-pinning
+/// means rebuilding it and getting a passing run — not editing this constant.
+pub const ABI_SOURCE_COMMIT: &str = "e1320b0a2e11afb59e4dee374883a2212d325699";
 
 /// Our own ABI generation. Bump on any change to the host import surface or
 /// to a postcard-encoded struct. Part of the module cache key.

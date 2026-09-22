@@ -72,9 +72,6 @@ rquickjs = { version = "0.14" }
 # kuchikiki, which is years behind on html5ever and selectors.
 dom_query = "0.28"
 
-# Read-only, and used only by the runtime spike example to prove the ABI.
-# Not a candidate for the real `html` host import.
-scraper = "0.27"
 # Resolving `abs:` attribute values against a document base URI, which is
 # how Aidoku sources obtain absolute cover and series URLs.
 url = "2"
