@@ -1,6 +1,8 @@
 //! CBZ writing, `ComicInfo.xml` generation, and library path layout.
 //!
-//! Implements `domain::ports::LibraryStore`. See ADR-0007.
+//! [`store::LibraryStore`] is plain blocking code; [`adapter::LibraryStoreAdapter`]
+//! is what implements `domain::ports::LibraryStore`, moving each call onto
+//! `spawn_blocking`. See ADR-0007.
 //!
 //! # Format
 //!
@@ -28,6 +30,7 @@
 //! directory only to break a real title collision between two sources.
 #![forbid(unsafe_code)]
 
+pub mod adapter;
 pub mod cbz;
 pub mod comicinfo;
 pub mod paths;

@@ -10,6 +10,7 @@ nyuka-domain = { path = "../domain" }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 quick-xml = { workspace = true }
+rustix = { workspace = true }
 unicode-normalization = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }

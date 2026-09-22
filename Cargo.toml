@@ -89,6 +89,9 @@ quick-xml = { version = "0.42", features = ["serialize"] }
 # NFC normalization for filesystem names: two spellings of the same title
 # must not become two directories (ADR-0007).
 unicode-normalization = "0.1"
+# Free-space reporting for the library root, via a safe statvfs binding.
+# Already in the dependency graph transitively, so this adds no new build.
+rustix = { version = "1.1", features = ["fs"] }
 tempfile = "3"
 
 # --- Observability (ADR-0014, ADR-0015) --------------------------------------

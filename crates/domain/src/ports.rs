@@ -111,11 +111,22 @@ pub trait LibraryStore: Send + Sync {
     async fn free_bytes(&self) -> Result<u64>;
 }
 
-/// A readable, seekable handle to a packaged chapter, so the download
-/// endpoint can serve `Range` requests.
+/// An open handle to a packaged chapter, so the download endpoint can serve
+/// `Range` requests without reading the whole archive into memory.
+///
+/// There is deliberately no `checksum` here. The checksum is computed once
+/// during the write and stored on the `DownloadedChapter` row, which is what
+/// the `ETag` comes from; asking an open handle for it would either recompute
+/// it on every range request or force the implementation to invent one.
+#[async_trait]
 pub trait ChapterRead: Send + Sync {
     fn size(&self) -> u64;
-    fn checksum(&self) -> &str;
+
+    /// Reads up to `len` bytes starting at `offset`.
+    ///
+    /// Returns fewer bytes at end of file rather than failing, so a caller
+    /// clamping a `Range` header does not have to be exact.
+    async fn read_at(&self, offset: u64, len: usize) -> Result<Vec<u8>>;
 }
 
 // ---------------------------------------------------------------------------
