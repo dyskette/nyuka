@@ -68,6 +68,88 @@ pub enum ReadingDirection {
     RightToLeft,
 }
 
+/// Publication status, as a source reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum MangaStatus {
+    #[default]
+    Unknown,
+    Ongoing,
+    Completed,
+    Cancelled,
+    Hiatus,
+}
+
+/// How explicit a series is, as a source reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ContentRating {
+    #[default]
+    Unknown,
+    Safe,
+    Suggestive,
+    Nsfw,
+}
+
+/// A series as a **source** describes it.
+///
+/// Deliberately not [`Manga`]: a catalog result has no local identity yet. It
+/// is keyed only by the source's own [`ExternalKey`], and acquires a
+/// [`MangaId`] when a use case adds it to the library. Returning `Manga` from
+/// a provider port would force an adapter to invent an id for something that
+/// is not in the library, which is how source data and library data start
+/// blurring together.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourceManga {
+    pub key: ExternalKey,
+    pub title: String,
+    pub cover: Option<String>,
+    pub authors: Vec<String>,
+    pub artists: Vec<String>,
+    pub description: Option<String>,
+    pub url: Option<String>,
+    pub tags: Vec<String>,
+    pub status: MangaStatus,
+    pub content_rating: ContentRating,
+    pub direction: ReadingDirection,
+    /// Present when the source returned chapters alongside the details.
+    pub chapters: Option<Vec<SourceChapter>>,
+}
+
+/// A chapter as a source describes it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourceChapter {
+    pub key: ExternalKey,
+    pub title: Option<String>,
+    pub number: Option<f32>,
+    pub volume: Option<f32>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub scanlators: Vec<String>,
+    pub url: Option<String>,
+    pub language: Option<String>,
+    pub locked: bool,
+}
+
+/// What a page holds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PageContent {
+    /// An image to fetch, with any headers the source requires.
+    Url {
+        url: String,
+        headers: Vec<(String, String)>,
+    },
+    /// Markdown, for sources that publish text chapters.
+    Text(String),
+    /// A path inside a zip archive.
+    Zip { archive: String, path: String },
+}
+
+/// One page of a chapter, as a source describes it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourcePage {
+    pub index: u32,
+    pub content: PageContent,
+    pub description: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manga {
     pub id: MangaId,

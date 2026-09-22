@@ -26,7 +26,7 @@ pub trait SourceCatalog: Send + Sync {
         query: Option<&str>,
         filters: &serde_json::Value,
         cursor: Option<&Cursor>,
-    ) -> Result<Page<Manga>>;
+    ) -> Result<Page<SourceManga>>;
 
     /// The filter schema the source declares, rendered by the frontend's
     /// `DynamicForm`.
@@ -36,11 +36,20 @@ pub trait SourceCatalog: Send + Sync {
 /// Reading one item's details, chapters, and pages.
 #[async_trait]
 pub trait SourceItem: Send + Sync {
-    async fn details(&self, source: SourceId, key: &ExternalKey) -> Result<Manga>;
+    async fn details(&self, source: SourceId, key: &ExternalKey) -> Result<SourceManga>;
 
-    async fn chapters(&self, source: SourceId, key: &ExternalKey) -> Result<Vec<Chapter>>;
+    async fn chapters(&self, source: SourceId, key: &ExternalKey) -> Result<Vec<SourceChapter>>;
 
-    async fn pages(&self, source: SourceId, chapter: &ExternalKey) -> Result<Vec<PageRef>>;
+    /// Pages for a chapter.
+    ///
+    /// Takes both keys because a source needs the series to resolve a chapter;
+    /// `get_page_list` is given a `Manga` and a `Chapter`, not a chapter alone.
+    async fn pages(
+        &self,
+        source: SourceId,
+        manga: &ExternalKey,
+        chapter: &ExternalKey,
+    ) -> Result<Vec<SourcePage>>;
 }
 
 /// Installing, updating, and removing sources.

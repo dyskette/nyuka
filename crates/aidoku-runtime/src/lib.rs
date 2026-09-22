@@ -45,6 +45,7 @@ pub const ABI_SOURCE_COMMIT: &str = "e1320b0a2e11afb59e4dee374883a2212d325699";
 /// to a postcard-encoded struct. Part of the module cache key.
 pub const HOST_ABI_VERSION: u32 = 1;
 
+pub mod adapter;
 pub mod engine;
 pub mod error;
 pub mod imports;
