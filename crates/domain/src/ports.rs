@@ -194,9 +194,20 @@ pub trait ChapterRepository: Send + Sync {
         manga: MangaId,
         cursor: Option<&Cursor>,
     ) -> Result<Page<Chapter>>;
-    /// Returns the chapters that were newly inserted, which is what drives
-    /// `chapter.new` events and the follows badge.
-    async fn upsert_many(&self, manga: MangaId, chapters: &[Chapter]) -> Result<Vec<ChapterId>>;
+    /// Inserts or updates chapters for a series.
+    ///
+    /// Takes source-shaped chapters, which carry no local id: one is assigned
+    /// on insert.
+    ///
+    /// Returns **only the chapters that were newly inserted**. That set is what
+    /// drives `chapter.new` events and the follows badge, so returning
+    /// everything would notify on every refresh and returning nothing would
+    /// notify never.
+    async fn upsert_many(
+        &self,
+        manga: MangaId,
+        chapters: &[SourceChapter],
+    ) -> Result<Vec<ChapterId>>;
     async fn downloaded(&self, id: ChapterId) -> Result<Option<DownloadedChapter>>;
     async fn record_download(&self, download: &DownloadedChapter) -> Result<()>;
 }
