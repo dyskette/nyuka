@@ -29,3 +29,8 @@ rquickjs = { workspace = true, optional = true }
 # A mutable DOM for the `html` host import. NOT chosen yet — see the note in
 # the workspace Cargo.toml and ADR-0004 follow-up 4.
 # html5ever = { workspace = true }
+
+[dev-dependencies]
+# The spike example only needs to read HTML, so `scraper` is sufficient there.
+scraper = { workspace = true }
+anyhow = { workspace = true }

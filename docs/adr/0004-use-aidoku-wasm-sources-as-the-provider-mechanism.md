@@ -105,6 +105,86 @@ The draft deferred `canvas` as "image ops if any source depends on them". The su
 
 `net::set_rate_limit(permits, period, unit)` means sources state their own limits. Feed that value into the per-source `Semaphore` from [ADR-0003](0003-run-the-job-queue-in-postgres-and-in-process.md) instead of relying only on the 2–4 default: take the stricter of the source-declared limit and the configured cap. Ignoring a declared limit is the fastest route to an IP ban.
 
+## Spike results
+
+A throwaway host (`crates/aidoku-runtime/examples/spike.rs`) was built against real `.aix` packages from [Aidoku-Community/sources](https://github.com/Aidoku-Community/sources) before committing to this decision. It establishes the following as fact rather than expectation.
+
+### The package format and the call ABI
+
+```
+ar.aasq-v2.aix
+  Payload/source.json     manifest: { info: {id, name, version, url, contentRating, languages, minAppVersion}, listings?, config? }
+  Payload/icon.png
+  Payload/filters.json
+  Payload/settings.json   optional
+  Payload/main.wasm
+```
+
+Exports: `start`, `get_search_manga_list`, `get_manga_update`, `get_page_list`, `get_image_request`, `handle_deep_link`, `handle_key_migration`, `free_result`, plus `memory`.
+
+```
+get_search_manga_list(query_descriptor: i32, page: i32, filters_descriptor: i32) -> i32
+  query   = raw UTF-8 bytes behind the descriptor
+  filters = POSTCARD-encoded Vec<FilterValue>
+```
+
+A non-negative return is a **pointer into guest memory**, not a handle: `[0..4]` total length including the header, `[4..8]` capacity, `[8..]` postcard payload — released with `free_result(ptr)`.
+
+### The required surface is far smaller than the ABI
+
+Parsing the wasm import sections of three real sources gives **32 host functions across 5 modules**, against roughly 90 in the full ABI:
+
+| Module | Functions needed |
+|---|---|
+| `env` | `abort`, `print`, `send_partial_result` |
+| `std` | `abort`, `buffer_len`, `current_date`, `destroy`, `parse_date`, `print`, `read_buffer` |
+| `net` | `data_len`, `html`, `init`, `read_data`, `send`, `set_body`, `set_header`, `set_rate_limit`, `set_url` |
+| `html` | `attr`, `base_uri`, `get`, `html`, `own_text`, `parse_fragment`, `select`, `select_first`, `set_text`, `size`, `text` |
+| `defaults` | `get`, `set` |
+
+> [!NOTE]
+> `env` was not in the module list this ADR originally gave. Those three functions land there because the corresponding `extern` block in aidoku-rs declares no explicit wasm import module. Any host that registers only the named modules will fail to instantiate.
+
+### Two ABI landmines
+
+Both produced silent, misattributable failures, and both are exactly what the conformance suite exists to catch:
+
+1. **`std::read_buffer` and `net::read_data` must return `0` on success**, not the byte count. The guest does `if error != 0 { return None }`, so returning the length makes every successful read look like a failure. The visible symptom was `get_search_manga_list` returning `-1` as though the filters were malformed.
+2. **`html` has its own error code space**, not `AidokuError`'s: `-1` InvalidDescriptor, `-2` InvalidString, `-3` InvalidHtml, `-4` InvalidQuery, **`-5` NoResult**, `-6` SwiftSoupError. Returning a generic error for a legitimate miss makes an absent element look like a malformed selector.
+
+### Capability tiers, measured against the real catalog
+
+Scanning all 136 community sources, folding in the 17 shared templates they build on:
+
+| Requirement | Sources | Share |
+|---|---|---|
+| `net` | 134 | 98.5% |
+| `std` | 121 | 89.0% |
+| `html` | 111 | 81.6% |
+| `defaults` | 30 | 22.1% |
+| `canvas` (tier 3) | 22 | 16.2% |
+| `js` context (tier 2) | 3 | 2.2% |
+| `js` webview (tier 3) | 3 | 2.2% |
+
+**108 of 136 sources (79%) need only tier-1 imports.** Tier 2 adds two (`zh.copymanga`, `zh.dm5`). The 24 that touch tier 3 are concentrated in Japanese and Vietnamese sources plus `multi.mangaplus` and `en.mangago`, which use `canvas::ImageRef` for page descrambling — so deferring `canvas` costs about 16% of the catalog, more than this ADR first assumed, and those sources fail by producing unreadable pages rather than degrading gracefully. The install-time capability refusal is what makes that safe.
+
+Three templates need `canvas` (`mangareader`, `wpcomics`, `gigaviewer`), so it is not only a standalone-source concern.
+
+### Source-declared rate limits are real
+
+`en.asurascans` called `net::set_rate_limit(2, 2, 0)` during `start`. This confirms the interaction with ADR-0003: take the stricter of the declared limit and the configured cap.
+
+### What works, and what remains open
+
+Working end to end, with correct data: **JSON-API sources.** `en.dankefurslesen` returned 20 entries (4,057-byte payload) in 13 host calls, `en.hivescans` 18 entries in 11 calls, `en.guya` 6 entries in 13 calls. Every import they needed was satisfied; none reached a stub.
+
+**Not working: HTML-scraping sources.** `ar.aasq`, `en.asurascans`, `en.flamecomics`, and `en.weebcentral` all instantiate, fetch, parse, make hundreds to thousands of `html::*` calls, and return a well-formed result containing **zero entries**. The spike's `html` module represents nodes as re-parsed outer-HTML strings, which is adequate for a simple fixture — a selftest confirms `select` → `get` → `attr` → nested `select_first` all return correct values — but does not reproduce Jsoup's behaviour on real pages. Correcting two semantics (a missing attribute must be `NoResult` rather than an empty string; `select` must exclude the element itself) reduced the call volume substantially without producing entries.
+
+> [!IMPORTANT]
+> This is the spike's most useful negative result: **a host implementation cannot be developed against live sites.** With a live page you cannot distinguish "my `html` module is wrong" from "the site changed its markup" — and ADR-0004 already expects the latter to happen routinely. The conformance `.aix` with **fixed fixture HTML** is therefore not a regression test to add afterwards; it is the only way to build the `html` module at all. Follow-up 3 moves ahead of the host implementation work, not after it.
+
+`html::set_text` was never reached on the listing path by any of the seven sources. Mutation is still in the required import surface, so it must be implemented, but it is not on the critical path for catalog browsing — which lowers the urgency of the mutable-DOM choice in follow-up 4 without removing it.
+
 ## Consequences
 
 ### What you gain

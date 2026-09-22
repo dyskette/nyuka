@@ -64,6 +64,10 @@ rquickjs = { version = "0.14" }
 # html5ever = "0.40"
 # markup5ever_rcdom = "0.39"
 # selectors = "0.40"
+#
+# Read-only, and used only by the runtime spike example to prove the ABI.
+# Not a candidate for the real `html` host import.
+scraper = "0.27"
 
 # --- Auth (ADR-0005) ---------------------------------------------------------
 # Brings RUSTSEC-2023-0071 (rsa Marvin attack, still unpatched) into the tree.
@@ -101,6 +105,9 @@ reqwest = { version = "0.13", default-features = false, features = [
     "rustls", "cookies", "json", "stream", "http2",
     # Manga sites are not reliably UTF-8; charset handles the rest.
     "charset",
+    # ADR-0004: WASM invocations are synchronous and run on spawn_blocking, so
+    # host HTTP inside them uses the blocking client to keep the ABI simple.
+    "blocking",
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
