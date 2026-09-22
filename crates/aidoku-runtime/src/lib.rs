@@ -47,5 +47,6 @@ pub const HOST_ABI_VERSION: u32 = 1;
 
 pub mod engine;
 pub mod imports;
+pub mod models;
 pub mod package;
 pub mod resource;
