@@ -1,0 +1,11 @@
+# Pinned so the workspace, CI, and the Docker build all agree; bump
+# deliberately.
+#
+# The floor is not edition 2024 (1.85) — it is the dependency graph:
+#   vergen 10   -> 1.96   (highest)
+#   wasmtime 48 -> 1.95
+#   sqlx 0.9    -> 1.94   (via sea-orm 2.0)
+[toolchain]
+channel = "1.98"
+components = ["rustfmt", "clippy"]
+profile = "default"

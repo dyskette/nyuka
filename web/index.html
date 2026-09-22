@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nyuka</title>
+    <!-- Set before first paint so there is no flash of the wrong theme.
+         localStorage can throw in a private window or with site data blocked,
+         so this is wrapped and degrades to the system preference. -->
+    <script>
+      (() => {
+        var t, d
+        try {
+          t = localStorage.getItem('theme')
+          d = localStorage.getItem('density')
+        } catch (_) {
+          /* private window, or site data blocked: fall through to defaults */
+        }
+        if (t !== 'light' && t !== 'dark') {
+          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.dataset.theme = t
+        if (d === 'compact' || d === 'comfortable') {
+          document.documentElement.dataset.density = d
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

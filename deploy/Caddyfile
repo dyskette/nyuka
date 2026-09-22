@@ -1,0 +1,16 @@
+# TLS termination and HTTP/2, which SSE depends on (ADR-0010).
+{$NYUKA_DOMAIN:localhost} {
+	encode zstd gzip {
+		# Never compress the event stream: a compressor accumulates input
+		# before emitting, so it holds events even when flushing is correct.
+		match {
+			not header Content-Type text/event-stream*
+		}
+	}
+
+	reverse_proxy api:8080 {
+		# Caddy recognises text/event-stream and flushes immediately; this is
+		# belt and braces, and also covers any other streaming response.
+		flush_interval -1
+	}
+}

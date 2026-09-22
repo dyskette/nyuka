@@ -1,0 +1,18 @@
+[package]
+name = "nyuka-packaging"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+nyuka-domain = { path = "../domain" }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+quick-xml = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+zip = { workspace = true }

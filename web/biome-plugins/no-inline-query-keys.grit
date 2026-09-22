@@ -1,0 +1,20 @@
+// ADR-0009 / ADR-0012: query keys must come from a feature's key factory.
+//
+// An inline key that differs from the factory's by one segment creates a
+// second cache entry that SSE updates never reach. The symptom appears months
+// later as a view that silently stopped refreshing, with nothing to point at.
+// This is the guardrail that makes ADR-0009's central invariant enforceable
+// rather than merely remembered.
+//
+// It needs no path exemption: key factories declare arrays under their own
+// property names (`all:`, `detail:`), not under `queryKey:`, so this pattern
+// does not match them.
+//
+// Verified to fire on `queryKey: ['jobs']` and not on
+// `queryKey: jobsKeys.lists()`.
+language js
+
+`queryKey: $key` where {
+  $key <: `[$...]`,
+  register_diagnostic(span=$key, message="Inline query key. Use the feature's key factory from features/*/api — an inline key creates a cache entry SSE updates will never reach (ADR-0009).", severity="error")
+}

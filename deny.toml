@@ -1,0 +1,59 @@
+# cargo-deny configuration. Runs in CI as part of the SAST/SCA stage.
+
+[graph]
+targets = [{ triple = "x86_64-unknown-linux-gnu" }]
+
+[advisories]
+version = 2
+yanked = "deny"
+
+# ---------------------------------------------------------------------------
+# RUSTSEC-2023-0071 — "Marvin Attack: potential key recovery through timing
+# sidechannels" in the `rsa` crate.
+#
+# Reaches this tree through: openidconnect 4.0 -> rsa ^0.9
+# Status upstream: UNPATCHED as of 2026-09-12. Both rsa 0.9.10 (latest stable)
+# and rsa 0.10.0-rc.18 are affected; constant-time work is in progress.
+#
+# Why this is accepted here (see ADR-0005 for the full analysis):
+#   The advisory concerns RSA PRIVATE-KEY operations. This service is an OIDC
+#   relying party: it VERIFIES ID token signatures using the provider's PUBLIC
+#   key, which does not exercise the vulnerable code path.
+#
+# The two configurations that WOULD exercise it are therefore forbidden:
+#   1. `private_key_jwt` client authentication (signs with our private key)
+#      -> we use client_secret_basic / client_secret_post.
+#   2. Encrypted ID tokens (JWE with RSA key wrapping; decrypts with our
+#      private key) -> we do not enable them.
+# Prefer an IdP signing algorithm of ES256 where the provider supports it.
+#
+# Owner:       dyskette
+# Review by:   2026-12-21   <- re-check whether rsa has shipped a fix
+# Remove when: RUSTSEC-2023-0071 is patched upstream. Dropping this exception
+#              also lifts the constraint on client-authentication method.
+# ---------------------------------------------------------------------------
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "openidconnect -> rsa; RP verifies with public keys only. private_key_jwt and encrypted ID tokens are disabled. See ADR-0005. Review 2026-12-21." },
+]
+
+[licenses]
+version = 2
+allow = [
+    "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause",
+    "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib", "MPL-2.0", "CC0-1.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# If a second sqlx or a second opentelemetry ever appears here, something has
+# gone wrong — that is the exact failure ADR-0003 and ADR-0005 avoid.
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# aidoku-rs is unpublished and untagged (ADR-0004): it is consumed by git
+# dependency pinned to a commit SHA, and this is the allow-list entry for it.
+allow-git = ["https://github.com/Aidoku/aidoku-rs"]

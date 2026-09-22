@@ -1,0 +1,31 @@
+[package]
+name = "nyuka-aidoku-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+# Tier 2 (ADR-0004): the `js::context_*` host imports. Enable when a target
+# source needs them.
+js = ["dep:rquickjs"]
+
+[dependencies]
+nyuka-domain = { path = "../domain" }
+wasmtime = { workspace = true }
+postcard = { workspace = true }
+reqwest = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+zip = { workspace = true }
+rquickjs = { workspace = true, optional = true }
+
+# A mutable DOM for the `html` host import. NOT chosen yet — see the note in
+# the workspace Cargo.toml and ADR-0004 follow-up 4.
+# html5ever = { workspace = true }

@@ -1,0 +1,30 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+web/dist/
+web/.vite/
+*.tsbuildinfo
+
+# Generated, but COMMITTED on purpose (CI checks these for staleness):
+#   web/openapi.json          <- cargo xtask openapi
+#   web/src/shared/api/schema.d.ts
+#   web/src/routeTree.gen.ts
+# Do not add them here.
+
+# Local config and secrets
+.env
+.env.local
+*.pem
+
+# Local data
+/library/
+/pgdata/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

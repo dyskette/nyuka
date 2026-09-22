@@ -1,0 +1,180 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ---------------------------------------------------------------------------
+   Design tokens — see spec-design.md and ADR-0016.
+
+   Authored per theme, not derived: a dark theme produced by inversion gives
+   muddy grays and inverts contrast relationships tuned for light.
+
+   Four values here differ from the original spec table because measuring them
+   against the WCAG 2.2 AA targets the spec commits to found failures. Each is
+   marked CORRECTED with the measured ratio.
+
+   Two standing caveats:
+
+   1. OKLCH lightness is NOT WCAG luminance. Equal L across hues gives unequal
+      contrast — the three semantic hues at 55% L measured 4.46, 4.95 and 5.38
+      against white. Never infer a contrast ratio from an L value.
+
+   2. Five of these fall outside sRGB and are gamut-mapped by the browser, so
+      the rendered colour is not the specified one and its contrast is not the
+      computed one. Verify against RENDERED output. That is what makes the
+      axe-core checks authoritative and these comments a first pass.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", monospace;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 300ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-panel: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root {
+  color-scheme: light;
+
+  --background: oklch(99% 0 0);
+  --surface: oklch(100% 0 0);
+  --surface-raised: oklch(97.5% 0 0);
+
+  /* Decorative hairline at 1.27:1. WCAG 1.4.11 exempts purely decorative
+     visual information, so this is fine — on one condition: --border must
+     NEVER be the only thing distinguishing a component or a state. */
+  --border: oklch(92% 0 0);
+
+  /* CORRECTED (ADR-0016). Originally also assigned to focused inputs, but at
+     1.63:1 it cannot carry a state indicator, which needs 3:1. Focus is now
+     carried by --ring alone; this is for dividers that must read. If a border
+     ever must indicate state, darken to oklch(66% 0 0) (3.11:1). */
+  --border-strong: oklch(84% 0 0);
+
+  --foreground: oklch(20% 0 0); /* 17.59:1 on background */
+  --muted-foreground: oklch(50% 0 0); /*  5.83:1 on background */
+
+  --accent: oklch(55% 0.18 262); /*  4.86:1 on background, 5.00:1 on surface */
+  --accent-foreground: oklch(100% 0 0); /*  5.00:1 on accent */
+  --accent-soft: oklch(95% 0.03 262); /* 15.60:1 with --foreground. Gamut-mapped. */
+
+  /* CORRECTED (ADR-0016): 53%, not 55%. At 55% L this measured 4.46:1 on
+     white and failed the 4.5:1 required of text. 53% gives 4.82:1. */
+  --success: oklch(53% 0.13 165);
+  --warning: oklch(55% 0.13 75); /*  4.95:1. Gamut-mapped. */
+  --danger: oklch(55% 0.2 25); /*  5.38:1 */
+
+  /* CORRECTED (ADR-0016): OPAQUE, not accent at 60% alpha.
+     At 60% alpha over a light surface this measured 1.92:1, well under the
+     3:1 WCAG 1.4.11 requires of a focus indicator — while measuring 4.63:1 in
+     dark mode, which is exactly how the defect would have shipped unnoticed.
+     Opaque gives 5.00:1 in light and 7.03:1 in dark. */
+  --ring: var(--accent);
+
+  --row-h: 40px;
+  --cell-px: 12px;
+  --panel-p: 16px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: oklch(14% 0.005 260);
+  --surface: oklch(17% 0.005 260);
+  --surface-raised: oklch(20% 0.005 260);
+  --border: oklch(26% 0.005 260);
+  --border-strong: oklch(34% 0.005 260);
+
+  --foreground: oklch(93% 0 0); /* 16.20:1 on background */
+  --muted-foreground: oklch(65% 0 0); /*  6.15:1 on background */
+
+  --accent: oklch(70% 0.16 262); /*  7.32:1 on background. Gamut-mapped. */
+  --accent-foreground: oklch(14% 0.005 260);
+  --accent-soft: oklch(25% 0.06 262);
+
+  --success: oklch(70% 0.13 165); /*  7.60:1 on surface */
+  --warning: oklch(70% 0.13 75); /*  7.02:1 on surface */
+  --danger: oklch(70% 0.2 25); /*  6.40:1 on surface. Gamut-mapped. */
+
+  --ring: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    /* Mirrors [data-theme="dark"]. Kept as a separate block so an explicit
+       data-theme always wins over the system preference. */
+  }
+}
+
+/* Density remaps three variables and nothing else (spec-design.md).
+   Hit areas stay >= 24x24 even in compact — WCAG 2.5.8 applies regardless of
+   density, so this must not shrink targets, only text and row height. */
+:root[data-density="compact"] {
+  --row-h: 32px;
+  --cell-px: 8px;
+  --panel-p: 12px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Live counters must not reflow as digits change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus is never removed without replacement. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ADR-0018: all durations collapse EXCEPT progress, which is information
+   rather than decoration. The pulse becomes a static dot. Losing the progress
+   exemption in a refactor is the specific regression to test for. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    /* --dur-slow deliberately NOT zeroed: it drives progress width. */
+  }
+
+  /* Reversing the cascade is the point here. A user asking for reduced motion
+     must win over every component-level transition, so these four !important
+     declarations are an accessibility guarantee (WCAG 2.3.3), not a style
+     preference. Removing them would silently break it. */
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank component transitions */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank component transitions */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank component transitions */
+    transition-duration: 0.01ms !important;
+  }
+
+  /* The one exemption the design spec calls for: progress is information, not
+     decoration, so it keeps animating even under reduced motion. This must in
+     turn outrank the blanket override above. */
+  [data-progress-bar] {
+    /* biome-ignore lint/complexity/noImportantStyles: must outrank the blanket override above */
+    transition-duration: var(--dur-slow) !important;
+  }
+}
+
+/* Borders and focus must survive forced-colors, which is why elevation is
+   border + background step rather than shadow. */
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid CanvasText;
+  }
+}

@@ -1,0 +1,67 @@
+[package]
+name = "nyuka-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+default-run = "nyuka-api"
+
+[[bin]]
+name = "nyuka-api"
+path = "src/main.rs"
+
+[features]
+default = []
+# ADR-0014: when built with `otlp` AND `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
+# spans export to a collector and POST /telemetry forwards instead of logging.
+# The frontend never changes.
+otlp = ["dep:opentelemetry-otlp"]
+
+[dependencies]
+nyuka-domain = { path = "../domain" }
+nyuka-persistence = { path = "../persistence" }
+nyuka-jobs = { path = "../jobs" }
+nyuka-aidoku-runtime = { path = "../aidoku-runtime" }
+nyuka-packaging = { path = "../packaging" }
+
+axum = { workspace = true }
+axum-extra = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tower_governor = { workspace = true }
+tower-sessions = { workspace = true }
+http = { workspace = true }
+hyper = { workspace = true }
+
+openidconnect = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
+opentelemetry-proto = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-error = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+axum-tracing-opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+figment = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
+
+[build-dependencies]
+vergen = { workspace = true }

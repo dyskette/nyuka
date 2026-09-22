@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Compiled Lingui catalogs; the .po sources are committed.
+src/shared/i18n/catalogs/**/*.js

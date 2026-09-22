@@ -1,0 +1,126 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/domain",
+    "crates/persistence",
+    "crates/jobs",
+    "crates/aidoku-runtime",
+    "crates/packaging",
+    "crates/api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"   # see rust-toolchain.toml for what sets this floor
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/dyskette/nyuka"
+
+# Dependency versions live here and nowhere else. Several are pinned for reasons
+# recorded in docs/adr/ — the comments below say which record and why, because
+# "upgrade everything" is the wrong instinct for four of these.
+[workspace.dependencies]
+
+# --- Web framework (ADR-0001) ------------------------------------------------
+# Pinned to 0.8: axum 0.9 carries breaking changes to `serve`'s future type and
+# graceful shutdown, which is exactly where SIGTERM draining lives.
+axum = { version = "0.8", features = ["macros", "http2"] }
+axum-extra = { version = "0.10", features = ["typed-header", "cookie"] }
+tower = { version = "0.5.3", features = ["util", "timeout"] }
+tower-http = { version = "0.7.1", features = [
+    "trace", "compression-gzip", "compression-br", "set-header", "request-id", "limit",
+] }
+tower_governor = "0.8.0"
+tower-sessions = "0.15.0"
+hyper = "1"
+http = "1"
+
+# --- Persistence (ADR-0002) --------------------------------------------------
+# SeaORM 2.x rides SQLx 0.9. This is load-bearing: it is why the job queue
+# (ADR-0003) and the session store (ADR-0005) are hand-written — every
+# off-the-shelf crate for both is still on SQLx 0.8 and would not unify.
+sea-orm = { version = "2.0", default-features = false, features = [
+    "sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono", "with-json", "with-uuid",
+] }
+sea-orm-migration = { version = "2.0", default-features = false, features = [
+    "sqlx-postgres", "runtime-tokio-rustls", "with-chrono", "with-json", "with-uuid",
+] }
+
+# --- WASM runtime (ADR-0004) -------------------------------------------------
+# Pinned to the 48 LTS line, not the monthly majors. Wasmtime ships a new major
+# every month; releases divisible by 12 are LTS with 24 months of support and
+# guaranteed security backports. 49+ would mean an upgrade every month for a
+# sandbox that needs no new features.
+wasmtime = { version = "48", features = ["cranelift", "cache", "pooling-allocator"] }
+postcard = { version = "1.1.3", features = ["alloc"] }
+rquickjs = { version = "0.14" }
+
+# The `html` host import needs a MUTABLE DOM (set_attr/set_text/set_html/
+# append/remove). `scraper` is read-only and cannot back it — see ADR-0004.
+# Deliberately NOT pinned yet: `kuchikiki` stable is 0.8.2 against an old
+# html5ever, which may not unify with html5ever 0.40 / selectors 0.40.
+# ADR-0004 follow-up 4 is to validate a candidate against select + mutation +
+# outer_html round-tripping before committing. Do that before uncommenting.
+# html5ever = "0.40"
+# markup5ever_rcdom = "0.39"
+# selectors = "0.40"
+
+# --- Auth (ADR-0005) ---------------------------------------------------------
+# Brings RUSTSEC-2023-0071 (rsa Marvin attack, still unpatched) into the tree.
+# See deny.toml for the exception and the reasoning that makes it safe here.
+openidconnect = "4.0"
+
+# --- Packaging (ADR-0007) ----------------------------------------------------
+# 8.6 stable, not the 9.0.0-pre line. The library writer is not a place to run
+# a prerelease.
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+quick-xml = { version = "0.42", features = ["serialize"] }
+
+# --- Observability (ADR-0014, ADR-0015) --------------------------------------
+# All OpenTelemetry crates stay on 0.32 even though opentelemetry itself is
+# published at 0.33: tracing-opentelemetry 0.33 and axum-tracing-opentelemetry
+# 0.39 both require `opentelemetry ^0.32`. Upgrade these five as one group.
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-semantic-conventions = "0.32"
+opentelemetry-proto = { version = "0.32", features = ["gen-tonic-messages", "with-serde"] }
+tracing-opentelemetry = "0.33"
+axum-tracing-opentelemetry = "0.39"
+# Only needed if the `otlp` feature is built (ADR-0014).
+opentelemetry-otlp = { version = "0.32" }
+
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json", "fmt"] }
+tracing-error = "0.2.1"
+
+# --- Shared ------------------------------------------------------------------
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "signal", "fs", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures = "0.3"
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls", "cookies", "json", "stream", "http2",
+    # Manga sites are not reliably UTF-8; charset handles the rest.
+    "charset",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+anyhow = "1.0"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.26", features = ["v4", "v7", "serde"] }
+sha2 = "0.11"
+figment = { version = "0.10", features = ["env", "toml"] }
+utoipa = { version = "5.5", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-axum = "0.2"
+rust-embed = { version = "8.12", features = ["axum-ex", "mime-guess"] }
+mime_guess = "2.0"
+
+[workspace.dependencies.vergen]
+version = "10.0"
+features = ["build", "cargo"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

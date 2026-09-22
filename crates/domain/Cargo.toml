@@ -1,0 +1,18 @@
+[package]
+name = "nyuka-domain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# The dependency rule (ADR-0001, ADR-0002): everything points inward to
+# `domain`, and `domain` has NO I/O dependencies. No axum, no sea-orm, no
+# reqwest, no wasmtime, no tokio runtime. CI enforces this — see
+# .github/workflows/ci.yml.
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }

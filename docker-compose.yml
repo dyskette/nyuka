@@ -1,0 +1,61 @@
+services:
+  api:
+    build: .
+    depends_on:
+      postgres: { condition: service_healthy }
+    env_file: [.env]
+    volumes:
+      - library:/library
+    healthcheck:
+      test: ["CMD", "/nyuka-api", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # ADR-0014: history is bounded by this rotation policy. Measure log volume
+    # during a large download before trusting the window, and note that
+    # frontend telemetry ingest competes for it (ADR-0013).
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "10" }
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: nyuka
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: nyuka
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nyuka -d nyuka"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    environment:
+      LOG_LEVEL: info
+    restart: unless-stopped
+
+  # Recommended, not optional — see the runbook. Without TLS the browser
+  # speaks HTTP/1.1, and an SSE stream then consumes one of six connections
+  # per origin (ADR-0010).
+  caddy:
+    image: caddy:2-alpine
+    depends_on: [api]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  library:
+  pgdata:
+  caddy_data:
+  caddy_config:
