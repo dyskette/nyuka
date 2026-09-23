@@ -160,7 +160,10 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 - [ ] Command palette (`cmdk`), from the mockup
 - [ ] The reader
 - [ ] Virtualized list for large libraries (TanStack Virtual)
-- [ ] SSE provider and the reconnect invalidation set
+- [x] SSE provider and the reconnect invalidation set — one `EventSource` at
+      the root, an invalidation table per event, and invalidate-on-connect for
+      both first connections and reconnects. The status bar reads the stream
+      rather than always claiming "Live".
 - [ ] Playwright stack with a stub OIDC container
 - [ ] **Server-side sort, filter and search.** All three are applied to the
       loaded keyset page, so they describe what is on screen rather than the
@@ -189,6 +192,12 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 
 These are deliberate, documented, and not scheduled. Listed so they are not
 rediscovered as bugs.
+
+- **`JobEvent::SourceUpdated` is never published.** The SSE layer names it and
+  the client listens for it; nothing emits it. The sibling `JobState` had the
+  same shape of bug and was only found by driving the real stream with `curl`
+  — a variant existing is not a variant being sent. It belongs in the source
+  refresh path, and the Sources screen is what will need it.
 
 - `package_chapter` has no handler. Packaging happens inside
   `download_chapter` because `write_chapter` takes page bytes in memory; a
