@@ -102,11 +102,15 @@ for.
 - [ ] **Validate a generated CBZ against a real reader's rules** — the
       ComicInfo v2.0 schema plus the filename conventions Komga and Kavita
       document (ADR-0007 follow-up 4).
-- [ ] **Auth negative paths needing a provider** — mismatched `state`,
-      replayed `nonce`, bad PKCE verifier, expired code, a subject absent from
-      the allow-list. These belong to the Playwright stack against a stub OIDC
-      container; `crates/api/tests/auth.rs` records why they are not unit
-      tests.
+- [x] **Auth negative paths needing a provider** — mismatched `state`, a
+      subject absent from the allow-list, a callback with no flow, a replayed
+      code, sign-out with and without CSRF, and the rate limit. In
+      `web/e2e/auth.spec.ts`.
+- [ ] **Three paths a configurable stub cannot reach** — a replayed `nonce`, a
+      mismatched PKCE verifier, an expired authorization code. Each needs a
+      provider that can be driven into misbehaving rather than configured, so
+      closing them means writing one. `crates/api/tests/auth.rs` says so
+      precisely rather than implying the stack covered everything.
 - [x] **Log-injection resistance** — a span name with newlines, quotes and
       ANSI escapes must serialize to one valid JSON line `jq` parses
       (ADR-0013 follow-up 4).
@@ -190,7 +194,9 @@ has been removed.
       the root, an invalidation table per event, and invalidate-on-connect for
       both first connections and reconnects. The status bar reads the stream
       rather than always claiming "Live".
-- [ ] Playwright stack with a stub OIDC container
+- [x] **Playwright stack** with the stub OIDC container — seven auth paths,
+      each verified by breaking the control it guards. Three API instances,
+      because the sign-in rate limiter is per process.
 - [x] **Server-side sort, filter and search** — `GET /manga` takes `q`,
       `status`, `source_id`, `sort` and `dir`, with the keyset built on the
       chosen sort column. The client orders and filters nothing.
