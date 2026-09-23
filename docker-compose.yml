@@ -4,8 +4,14 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
     env_file: [.env]
+    # Two volumes, deliberately (ADR-0021). `library` is the irreplaceable one
+    # — back it up, and it is the one a reader like Komga can be pointed at.
+    # `data` holds the server's own state, today the installed source
+    # packages: losing it costs a reinstall, and restoring an older `library`
+    # over a current `data` must not roll the sources back with it.
     volumes:
       - library:/library
+      - data:/data
     healthcheck:
       test: ["CMD", "/nyuka-api", "--healthcheck"]
       interval: 30s
@@ -56,6 +62,7 @@ services:
 
 volumes:
   library:
+  data:
   pgdata:
   caddy_data:
   caddy_config:

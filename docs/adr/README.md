@@ -34,6 +34,7 @@ Records are numbered in the order decisions were made, not in dependency order. 
 | [0018](0018-keep-motion-in-css.md) | Keep motion in CSS | Accepted | No animation library: `@starting-style` and `allow-discrete` cover enter and exit. Use `tw-animate-css`; `tailwindcss-animate` is deprecated. |
 | [0019](0019-define-the-two-service-level-objectives.md) | Define the two service level objectives | Accepted | 99.9% service-attributable job success; 95% of user-requested downloads readable within 60s. Source faults excluded and counted separately. Settles `NOTIFY` as unnecessary and keeps `vector`/Loki unbuilt. |
 | [0020](0020-return-read-models-from-list-endpoints.md) | Return read models from list endpoints | Accepted | Four screens rendered lists of foreign keys. List endpoints return projections carrying their joined values; entity DTOs stay honest. Never cast an untrusted value in SQL — `AND` does not guard it. |
+| [0021](0021-separate-the-server-data-directory-from-the-library.md) | Separate the server's data directory from the library | Accepted | `DATA_DIR` is required and may not overlap `LIBRARY_ROOT`. Holds installed source packages, so a restart does not leave every source listed and unusable. Backups and syncs must not carry third-party executable code. |
 
 ## Reading order
 
@@ -54,6 +55,7 @@ Several records depend on the same assumptions. Changing any of these means revi
 | Assumption | Records that depend on it |
 |---|---|
 | **Exactly one API instance.** The per-source semaphore, the SSE broadcast channel, and stale-lock recovery all require it. | 0003, 0010, 0014 |
+| **Two writable volumes.** The library is what an operator backs up and syncs; the server's own state must not travel with it. | 0007, 0021 |
 | **SQLx 0.9, via SeaORM 2.x.** This is why the job queue and the session store are hand-written: every off-the-shelf crate is on SQLx 0.8. | 0002, 0003, 0005 |
 | **Same origin, cookie authentication.** Follows from `EventSource` being unable to send headers. | 0005, 0006, 0010 |
 | **No data leaves the deployment.** Telemetry describes reading habits, so hosted backends and error-tracking SaaS are the operator's choice, not the project's default. | 0013, 0014, 0015 |
@@ -73,3 +75,4 @@ These are the checks without which the corresponding decision is unsafe rather t
 - **0016** — a contrast test over *rendered* colors, in both themes, including the focus ring.
 - **0019** — the hourly `nyuka_metrics` snapshot line, which is the only thing that makes the objectives evaluable after log rotation.
 - **0020** — a database test per read model asserting its aggregates against a known fixture, *including the zero case*. An `INNER JOIN` written where a `LEFT JOIN` was meant passes every test that has a non-zero answer.
+- **0021** — `tests/restart.rs`: a package saved by one runtime must load into a fresh one, and `install` must register under the id the database returned. Both bugs were invisible to tests that install and read in the same process, which is what every existing test did.
