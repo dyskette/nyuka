@@ -1,0 +1,66 @@
+# The stub identity provider, and nothing else.
+#
+# PostgreSQL is deliberately absent: every test in this repository takes its
+# database from `DATABASE_URL` — the Rust integration tests create and drop
+# their own databases on it, and CI provides one as a service. A second
+# PostgreSQL here would be a second thing to keep in step for no gain.
+#
+# Separate from the deployment `docker-compose.yml`: that describes how nyuka
+# is run, this describes what a test run needs standing in front of it.
+# Sharing one file would put a test port and a stub identity provider in the
+# file an operator copies.
+#
+# Works with `podman compose` as well as `docker compose`.
+name: nyuka-e2e
+
+services:
+  # The stub ADR-0005 specifies, for the negative paths that need a real token
+  # exchange.
+  #
+  # `interactiveLogin` stays off — the tests drive the flow, and a login form
+  # to fill would make every one of them depend on the stub's own markup.
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    environment:
+      # Non-interactive: `/authorize` redirects straight back with a code
+      # instead of serving a login form. The tests drive the flow, and a form
+      # to fill would make every one of them depend on the stub's own markup.
+      # Two things, both necessary.
+      #
+      # `interactiveLogin: false` makes `/authorize` redirect straight back
+      # with a code instead of serving a login form. The tests drive the flow,
+      # and a form to fill would make every one of them depend on the stub's
+      # own markup.
+      #
+      # The token callback fixes the subject. By default the stub issues a
+      # fresh uuid per sign-in, which no allow-list can name — so the happy
+      # path could not be told from the denial.
+      #
+      # It matches on `grant_type`, and that is not arbitrary. `requestParam`
+      # is matched against the *token* request's form body, and
+      # `openidconnect` authenticates with HTTP Basic — so `client_id` is in
+      # the `Authorization` header and not in the body at all. A mapping on
+      # `client_id` therefore never fires, and an unmatched callback does not
+      # fall back to the default claims: it emits a token with no `sub`, which
+      # surfaces as `Failed to parse server response` from a token endpoint
+      # whose response is perfectly well-formed JSON.
+      JSON_CONFIG: >-
+        {"interactiveLogin":false,
+         "tokenCallbacks":[{"issuerId":"default","tokenExpiry":3600,
+          "requestMappings":[{"requestParam":"grant_type","match":"authorization_code",
+           "claims":{"sub":"tester","email":"tester@example.test","name":"Test Reader"}}]}]}
+
+    # No `SERVER_HOSTNAME`. It sets the *bind* address inside the container, so
+    # pinning it to 127.0.0.1 makes the server unreachable from outside the
+    # container's namespace — the port is published and nothing answers. The
+    # issuer it advertises already follows the Host header of the request that
+    # asked for the discovery document, which is what makes the address below
+    # the issuer the API discovers.
+    ports: ["18091:8080"]
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "-O", "/dev/null",
+         "http://127.0.0.1:8080/default/.well-known/openid-configuration"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

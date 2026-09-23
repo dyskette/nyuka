@@ -233,19 +233,35 @@ async fn ordinary_routes_are_not_rate_limited() {
 
 /// Not covered here, recorded so the gap is not mistaken for coverage.
 ///
-/// These need a token exchange, which needs a provider. They belong to the
-/// Playwright stack against the stub OIDC container that ADR-0005 specifies:
+/// These need a token exchange, which needs a provider. The Playwright stack
+/// in `web/e2e/auth.spec.ts` now runs against the stub ADR-0005 specifies, so
+/// this list is shorter than it was — and precise about what is left.
+///
+/// **Covered there:**
 ///
 /// - a mismatched `state` between the session and the callback
-/// - a replayed `nonce`
-/// - a PKCE verifier that does not match the challenge
-/// - an expired authorization code
-/// - a subject absent from the allow-list
-/// - an empty allow-list denying everyone
+/// - a subject absent from the allow-list, which is what shows the callback
+///   consults `AuthConfig::permits` rather than merely being configured with it
+/// - a callback arriving with no flow in progress
+/// - an authorization code replayed after it was spent
+/// - sign-out, with and without the CSRF header
+/// - the sign-in rate limit (follow-up 6)
 ///
-/// The last two are covered as unit tests on `AuthConfig::permits`; what is
-/// untested is that the callback consults it, which only an end-to-end run can
-/// show.
+/// **Still not covered anywhere:**
+///
+/// - a replayed `nonce`. The nonce is generated per flow and held in the
+///   session; replaying one means presenting a second token carrying the
+///   first's nonce, which the stub offers no way to mint.
+/// - a PKCE verifier that does not match its challenge. The verifier never
+///   leaves the server, so no client can vary it — showing this needs a
+///   provider that can be told to accept a wrong one.
+/// - an expired authorization code. `tokenExpiry` in the stub's configuration
+///   governs the *token*, not the code, and nothing there expires a code on
+///   demand.
+///
+/// All three need a provider that can be driven into misbehaving, which the
+/// stub is not. Reaching them means a hand-written provider rather than a
+/// configured one, and that is the trade to weigh before claiming them.
 #[test]
 fn the_uncovered_negative_paths_are_written_down() {}
 

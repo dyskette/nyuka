@@ -167,3 +167,72 @@ jobs:
 
       - name: Dead exports
         run: npx knip
+
+  # The OIDC negative paths ADR-0005 lists, which need a real token exchange
+  # and therefore a real provider. Its own job because it is the only one that
+  # needs a browser, a stub identity provider and a built binary at once.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nyuka_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      # The stub. `interactiveLogin: false` makes /authorize redirect straight
+      # back with a code; the token callback fixes the subject so the allow-list
+      # has something to name. It matches on `grant_type` because
+      # `openidconnect` authenticates with HTTP Basic, which keeps `client_id`
+      # out of the token request's body entirely.
+      oidc:
+        image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+        env:
+          JSON_CONFIG: >-
+            {"interactiveLogin":false,
+             "tokenCallbacks":[{"issuerId":"default","tokenExpiry":3600,
+              "requestMappings":[{"requestParam":"grant_type","match":"authorization_code",
+               "claims":{"sub":"tester","email":"tester@example.test","name":"Test Reader"}}]}]}
+        ports: ["18091:8080"]
+    env:
+      # The run creates its own databases on this server, one per instance.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/nyuka_e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+
+      - name: Install the client for the database setup
+        run: sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - run: npm ci
+        working-directory: web
+
+      # The API serves the built frontend (ADR-0006), so a run exercises the
+      # real static-file routes and the real same-origin cookie.
+      - name: Build the frontend
+        run: npm run build
+        working-directory: web
+
+      - name: Build the API
+        run: cargo build -p nyuka-api
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: End-to-end
+        run: npx playwright test
+        working-directory: web
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: web/test-results/
+          retention-days: 7
