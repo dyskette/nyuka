@@ -31,8 +31,10 @@
 //!
 //! [`VettingResolver`]: nyuka_aidoku_runtime::imports::net::VettingResolver
 
+pub mod guard;
 mod routes;
 
+pub use guard::{CurrentUser, require_session};
 pub use routes::{callback, login, logout, me};
 
 use openidconnect::core::{

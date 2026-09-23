@@ -72,6 +72,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+futures = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }
 url = { workspace = true }

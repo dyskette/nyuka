@@ -54,6 +54,7 @@ use nyuka_persistence::repository::Repositories;
 use nyuka_persistence::session::SessionRepository;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
+use tower_http::compression::CompressionLayer;
 
 use crate::config::Config;
 use crate::session_store::PostgresSessionStore;
@@ -282,6 +283,22 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The response compression layer.
+///
+/// A function rather than an inline `CompressionLayer::new()` so the test that
+/// guards it exercises the configuration this router actually uses. Written
+/// inline, a later change here would not be covered by anything.
+///
+/// `DefaultPredicate` excludes `text/event-stream`, and that exclusion is
+/// load-bearing rather than incidental: a compressor accumulates input before
+/// emitting, so compressing an SSE response holds events even when every proxy
+/// in front is configured correctly. ADR-0010 calls replacing this predicate
+/// the failure most likely to be reintroduced, and
+/// `sse_responses_are_never_compressed` is what catches it.
+pub fn compression_layer() -> CompressionLayer {
+    CompressionLayer::new()
+}
+
 /// Builds the router.
 ///
 /// Layer order is load-bearing and reads bottom-up in `.layer()` terms: the
@@ -308,11 +325,19 @@ pub fn router(state: Arc<AppState>) -> Router {
         // and why changing it logs everyone out.
         .with_signed(Key::from(state.config.auth.session_key.expose().as_bytes()));
 
+    // Everything that needs a signed-in user. The auth endpoints are
+    // deliberately not here: a login route behind a login check cannot let
+    // anyone in.
+    let protected = Router::new()
+        .route("/events", get(sse::events))
+        .layer(axum::middleware::from_fn(auth::require_session));
+
     let api = Router::new()
         .route("/auth/login", get(auth::login))
         .route("/auth/callback", get(auth::callback))
         .route("/auth/logout", post(auth::logout))
         .route("/me", get(auth::me))
+        .merge(protected)
         // Applied to `/api/v1` only. The health probes below are outside it,
         // and an orchestrator's probe cannot set a header.
         .layer(axum::middleware::from_fn(csrf::require_csrf_header));
@@ -325,5 +350,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/healthz", get(routes::health::healthz))
         .route("/readyz", get(routes::health::readyz))
         .layer(session_layer)
+        .layer(compression_layer())
         .with_state(state)
 }
