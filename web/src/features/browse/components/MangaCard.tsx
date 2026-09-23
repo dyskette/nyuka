@@ -22,7 +22,7 @@ export function MangaCard({ manga }: { manga: Manga }) {
       className="group flex flex-col gap-2 rounded-lg outline-offset-2 focus-visible:outline-2"
       activeProps={{ 'aria-current': 'page' }}
     >
-      <div className="bg-muted aspect-[2/3] overflow-hidden rounded-lg">
+      <div className="bg-surface-raised aspect-[2/3] overflow-hidden rounded-lg">
         {manga.cover_url ? (
           <img
             src={manga.cover_url}

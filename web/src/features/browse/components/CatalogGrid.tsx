@@ -5,13 +5,18 @@ import { MangaCard } from './MangaCard'
 type Manga = components['schemas']['MangaDto']
 
 /**
- * The library grid.
+ * The cover grid.
+ *
+ * This is the Browse shape — a source's catalog, where the cover is the
+ * primary way a reader recognises a series. The library uses a dense table
+ * instead, because there the useful columns are progress and recency, and a
+ * grid of covers hides both.
  *
  * Presentational: it takes what it renders rather than fetching, so the route
  * decides what is loaded and this can be exercised without a query client
  * (ADR-0008).
  */
-export function LibraryGrid({ items }: { items: Manga[] }) {
+export function CatalogGrid({ items }: { items: Manga[] }) {
   if (items.length === 0) return <EmptyLibrary />
 
   return (

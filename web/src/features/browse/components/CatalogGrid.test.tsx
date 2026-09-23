@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { components } from '@/shared/api/schema'
 import { renderWithProviders } from '@/test/render'
-import { LibraryGrid } from './LibraryGrid'
+import { CatalogGrid } from './CatalogGrid'
 
 type Manga = components['schemas']['MangaDto']
 
@@ -24,10 +24,10 @@ function manga(overrides: Partial<Manga> = {}): Manga {
   }
 }
 
-describe('LibraryGrid', () => {
+describe('CatalogGrid', () => {
   it('renders one link per series', async () => {
     await renderWithProviders(
-      <LibraryGrid
+      <CatalogGrid
         items={[
           manga({ id: '11111111-1111-4111-8111-111111111111', title: 'Alpha' }),
           manga({ id: '33333333-3333-4333-8333-333333333333', title: 'Beta' }),
@@ -46,7 +46,7 @@ describe('LibraryGrid', () => {
    * a refactor toward an onClick handler.
    */
   it('makes each card a real link', async () => {
-    await renderWithProviders(<LibraryGrid items={[manga({ title: 'Alpha' })]} />)
+    await renderWithProviders(<CatalogGrid items={[manga({ title: 'Alpha' })]} />)
 
     const link = screen.getByRole('link', { name: /Alpha/ })
     expect(link.tagName).toBe('A')
@@ -59,7 +59,7 @@ describe('LibraryGrid', () => {
    */
   it('leaves the cover image decorative', async () => {
     await renderWithProviders(
-      <LibraryGrid items={[manga({ cover_url: 'https://example.test/c.jpg' })]} />,
+      <CatalogGrid items={[manga({ cover_url: 'https://example.test/c.jpg' })]} />,
     )
 
     const image = document.querySelector('img')
@@ -68,7 +68,7 @@ describe('LibraryGrid', () => {
   })
 
   it('shows a placeholder when a series has no cover', async () => {
-    await renderWithProviders(<LibraryGrid items={[manga({ title: 'Alpha' })]} />)
+    await renderWithProviders(<CatalogGrid items={[manga({ title: 'Alpha' })]} />)
 
     const link = screen.getByRole('link', { name: /Alpha/ })
     expect(within(link).getByText('No cover')).toBeTruthy()
@@ -77,12 +77,12 @@ describe('LibraryGrid', () => {
 
   it('lists authors when there are any, and omits the line when there are none', async () => {
     const { unmount } = await renderWithProviders(
-      <LibraryGrid items={[manga({ authors: ['Ada', 'Grace'] })]} />,
+      <CatalogGrid items={[manga({ authors: ['Ada', 'Grace'] })]} />,
     )
     expect(screen.getByText('Ada, Grace')).toBeTruthy()
     unmount()
 
-    await renderWithProviders(<LibraryGrid items={[manga({ authors: [] })]} />)
+    await renderWithProviders(<CatalogGrid items={[manga({ authors: [] })]} />)
     expect(screen.queryByText(/,/)).toBeNull()
   })
 
@@ -91,7 +91,7 @@ describe('LibraryGrid', () => {
    * and it is the one moment where the next action is genuinely unobvious.
    */
   it('says what to do next when the library is empty', async () => {
-    await renderWithProviders(<LibraryGrid items={[]} />)
+    await renderWithProviders(<CatalogGrid items={[]} />)
 
     expect(screen.getByText('Your library is empty')).toBeTruthy()
     expect(screen.getByText(/Add a source/)).toBeTruthy()
