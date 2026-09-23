@@ -148,6 +148,12 @@ for.
 
 In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 
+This list tracks screens, and that is not the same as tracking the API. Three
+operations were served with nothing reaching them and no entry here saying so,
+because every *resource* had a screen — checking
+`openapi.json` against `web/src` is what found them, and is worth repeating
+before claiming the frontend is complete.
+
 Every item below traces to an ADR, the mockup in `docs/design/`, or a gap in
 code that already exists. Nothing goes on this list because it seemed like a
 thing a manga server would have — an in-browser reader was listed that way and
@@ -178,7 +184,7 @@ and the "14 new" badges were read as scope once, and were not.
 - [x] **Settings** — repositories and the sources installed from them: add,
       refresh, remove, install, update, uninstall.
 - [x] **Follows** — the schedule table: missing-chapter count, interval,
-      auto-download, check-now and unfollow. Every API surface now has a UI.
+      auto-download, check-now and unfollow.
 - [x] **Per-source settings** — rendered from the package's own declaration,
       with a postcard codec held to the Rust serializer by printed vectors.
       Five control types cover 95 of the 136 declared across community
@@ -186,6 +192,18 @@ and the "14 new" badges were read as scope once, and were not.
 - [x] **Source filters** — `GET /sources/{id}/catalog?filters=<JSON>` reaches
       the WASM module, and Browse renders the declaration. Five control types
       cover 516 of the 534 declared across community sources.
+- [ ] **Browse detail panel.** `GET /sources/{id}/catalog/{key}` and its
+      `/chapters` are served and unreached: a catalog card offers add-or-open
+      and nothing shows a description or a chapter list before adding. The
+      mockup has this panel.
+- [ ] **Downloads detail panel.** `GET /jobs/{id}` is served and unreached.
+      The mockup shows a job's pages, worker, output path and event log; the
+      queue row shows state and progress only.
+- [ ] **Retrieving a chapter file.** `GET /downloads/{chapter_id}/file` is
+      served, ranged and ETagged, and nothing in the UI links to it — a
+      chapter can be downloaded to the server and not to the person who asked
+      for it. Interoperability (ADR-0007) covers pointing another reader at
+      the volume; it does not cover getting one file out.
 - [ ] **A `Range` filter value on the host.** 18 of 534 declared filters are
       `range` and `FilterValue` has no variant for one, so the client names
       them as unavailable rather than rendering a control the server would
