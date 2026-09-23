@@ -13,18 +13,122 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/features/library/components/LibraryGrid.tsx
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "{shown} of {total}"
+msgstr "{shown} of {total}"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "{total} titles"
+msgstr "{total} titles"
+
+#: src/shared/components/AppShell.tsx
+msgid "⌘K"
+msgstr "⌘K"
+
+#: src/features/browse/components/CatalogGrid.tsx
+#: src/features/library/components/LibraryTable.tsx
 msgid "Add a source, then browse its catalog to add a series. Everything you add appears here."
 msgstr "Add a source, then browse its catalog to add a series. Everything you add appears here."
 
-#: src/features/library/components/MangaCard.tsx
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "All"
+msgstr "All"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Any"
+msgstr "Any"
+
+#: src/shared/components/AppShell.tsx
+msgid "Browse"
+msgstr "Browse"
+
+#: src/routes/browse.tsx
+msgid "Browse is not built yet."
+msgstr "Browse is not built yet."
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Chapters"
+msgstr "Chapters"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Downloaded"
+msgstr "Downloaded"
+
+#: src/shared/components/AppShell.tsx
+msgid "Downloads"
+msgstr "Downloads"
+
+#: src/routes/downloads.tsx
+msgid "Downloads is not built yet."
+msgstr "Downloads is not built yet."
+
+#: src/shared/components/AppShell.tsx
+msgid "Follows"
+msgstr "Follows"
+
+#: src/routes/follows.tsx
+msgid "Follows is not built yet."
+msgstr "Follows is not built yet."
+
+#: src/shared/components/AppShell.tsx
+msgid "Library"
+msgstr "Library"
+
+#: src/shared/components/AppShell.tsx
+msgid "Live"
+msgstr "Live"
+
+#: src/features/browse/components/MangaCard.tsx
 msgid "No cover"
 msgstr "No cover"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Search {total} titles"
+msgstr "Search {total} titles"
+
+#. placeholder {0}: manga.title
+#: src/features/library/components/LibraryTable.tsx
+msgid "Select {0}"
+msgstr "Select {0}"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Select every series on this page"
+msgstr "Select every series on this page"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Series in your library"
+msgstr "Series in your library"
+
+#: src/shared/components/AppShell.tsx
+msgid "Settings"
+msgstr "Settings"
+
+#: src/routes/settings.tsx
+msgid "Settings is not built yet."
+msgstr "Settings is not built yet."
+
+#: src/features/library/components/LibraryTable.tsx
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Source"
+msgstr "Source"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Status"
+msgstr "Status"
 
 #: src/routes/library.tsx
 msgid "The library could not be loaded."
 msgstr "The library could not be loaded."
 
-#: src/features/library/components/LibraryGrid.tsx
+#: src/features/library/components/LibraryTable.tsx
+msgid "Title"
+msgstr "Title"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Updated"
+msgstr "Updated"
+
+#: src/features/browse/components/CatalogGrid.tsx
+#: src/features/library/components/LibraryTable.tsx
 msgid "Your library is empty"
 msgstr "Your library is empty"

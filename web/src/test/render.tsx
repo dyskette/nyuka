@@ -9,7 +9,21 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { createContext, type ReactNode, use } from 'react'
+
+/**
+ * Carries the component under test down to the index route.
+ *
+ * Not captured in the route's own component closure: the router is built once
+ * per call, so a closed-over node is frozen at the first render and a
+ * `rerender` with new props would change nothing — the test would pass or
+ * fail against the original props while appearing to test the new ones.
+ */
+const UnderTest = createContext<ReactNode>(null)
+
+function RenderUnderTest() {
+  return <>{use(UnderTest)}</>
+}
 
 /**
  * Renders a component inside the providers it expects.
@@ -32,7 +46,7 @@ export async function renderWithProviders(ui: ReactNode) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <>{ui}</>,
+    component: RenderUnderTest,
   })
   // Declared so `Link to="/library/$mangaId"` resolves. Its component is
   // never rendered; what matters is that the route exists to link to.
@@ -42,8 +56,16 @@ export async function renderWithProviders(ui: ReactNode) {
     component: () => null,
   })
 
+  // Same, for `Link to="/library"` — the sortable column headers. A route
+  // that does not exist makes `Link` throw, so this is not decoration.
+  const listRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/library',
+    component: () => null,
+  })
+
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, detailRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, listRoute, detailRoute]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
 
@@ -53,14 +75,28 @@ export async function renderWithProviders(ui: ReactNode) {
   // looked too early.
   await router.load()
 
-  return render(
+  const wrap = (node: ReactNode) => (
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
-        {/* The router's types describe the real route tree; this one is a
-            stand-in, so the mismatch is asserted away rather than pretended
-            not to exist. */}
-        <RouterProvider router={router as never} />
+        <UnderTest value={node}>
+          {/* The router's types describe the real route tree; this one is a
+              stand-in, so the mismatch is asserted away rather than pretended
+              not to exist. */}
+          <RouterProvider router={router as never} />
+        </UnderTest>
       </QueryClientProvider>
-    </I18nProvider>,
+    </I18nProvider>
   )
+
+  const result = render(wrap(ui))
+
+  return {
+    ...result,
+    // Overridden, because React Testing Library's own `rerender` replaces the
+    // whole tree with exactly what it is handed — so a component rerendered
+    // through it loses every provider and fails with "useLingui was used
+    // without I18nProvider". Re-wrapping here keeps a rerender a prop change
+    // rather than a different test.
+    rerender: (next: ReactNode) => result.rerender(wrap(next)),
+  }
 }

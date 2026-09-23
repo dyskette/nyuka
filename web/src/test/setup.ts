@@ -1,4 +1,9 @@
 import { i18n } from '@lingui/core'
+// Registers the DOM matchers (`toBeInTheDocument`, `toHaveAttribute`,
+// `toHaveStyle`) on Vitest's `expect`. Imported for the side effect: without
+// it those matchers do not exist, and using one fails with "Invalid Chai
+// property" rather than with the assertion it was meant to make.
+import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeAll } from 'vitest'
 

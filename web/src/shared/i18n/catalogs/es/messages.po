@@ -13,18 +13,122 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/features/library/components/LibraryGrid.tsx
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "{shown} of {total}"
+msgstr "{shown} de {total}"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "{total} titles"
+msgstr "{total} títulos"
+
+#: src/shared/components/AppShell.tsx
+msgid "⌘K"
+msgstr "⌘K"
+
+#: src/features/browse/components/CatalogGrid.tsx
+#: src/features/library/components/LibraryTable.tsx
 msgid "Add a source, then browse its catalog to add a series. Everything you add appears here."
 msgstr "Añade una fuente y explora su catálogo para añadir una serie. Todo lo que añadas aparecerá aquí."
 
-#: src/features/library/components/MangaCard.tsx
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "All"
+msgstr "Todas"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Any"
+msgstr "Cualquiera"
+
+#: src/shared/components/AppShell.tsx
+msgid "Browse"
+msgstr "Explorar"
+
+#: src/routes/browse.tsx
+msgid "Browse is not built yet."
+msgstr "Explorar todavía no está construido."
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Chapters"
+msgstr "Capítulos"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Downloaded"
+msgstr "Descargados"
+
+#: src/shared/components/AppShell.tsx
+msgid "Downloads"
+msgstr "Descargas"
+
+#: src/routes/downloads.tsx
+msgid "Downloads is not built yet."
+msgstr "Descargas todavía no está construido."
+
+#: src/shared/components/AppShell.tsx
+msgid "Follows"
+msgstr "Seguimientos"
+
+#: src/routes/follows.tsx
+msgid "Follows is not built yet."
+msgstr "Seguimientos todavía no está construido."
+
+#: src/shared/components/AppShell.tsx
+msgid "Library"
+msgstr "Biblioteca"
+
+#: src/shared/components/AppShell.tsx
+msgid "Live"
+msgstr "En vivo"
+
+#: src/features/browse/components/MangaCard.tsx
 msgid "No cover"
 msgstr "Sin portada"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Search {total} titles"
+msgstr "Buscar en {total} títulos"
+
+#. placeholder {0}: manga.title
+#: src/features/library/components/LibraryTable.tsx
+msgid "Select {0}"
+msgstr "Seleccionar {0}"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Select every series on this page"
+msgstr "Seleccionar todas las series de esta página"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Series in your library"
+msgstr "Series de tu biblioteca"
+
+#: src/shared/components/AppShell.tsx
+msgid "Settings"
+msgstr "Ajustes"
+
+#: src/routes/settings.tsx
+msgid "Settings is not built yet."
+msgstr "Ajustes todavía no está construido."
+
+#: src/features/library/components/LibraryTable.tsx
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Source"
+msgstr "Fuente"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Status"
+msgstr "Estado"
 
 #: src/routes/library.tsx
 msgid "The library could not be loaded."
 msgstr "No se pudo cargar la biblioteca."
 
-#: src/features/library/components/LibraryGrid.tsx
+#: src/features/library/components/LibraryTable.tsx
+msgid "Title"
+msgstr "Título"
+
+#: src/features/library/components/LibraryTable.tsx
+msgid "Updated"
+msgstr "Actualizado"
+
+#: src/features/browse/components/CatalogGrid.tsx
+#: src/features/library/components/LibraryTable.tsx
 msgid "Your library is empty"
 msgstr "Tu biblioteca está vacía"
