@@ -12,3 +12,4 @@ pub mod session;
 pub mod source;
 pub mod source_kv;
 pub mod source_repo;
+pub mod source_repo_entry;

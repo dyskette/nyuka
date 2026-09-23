@@ -119,6 +119,18 @@ impl SourceRepository for Repositories {
         self.list_source_repos().await
     }
 
+    async fn list_entries(&self, repo: SourceRepoId) -> Result<Vec<SourceEntry>> {
+        self.list_repo_entries(repo).await
+    }
+
+    async fn get_entry(&self, repo: SourceRepoId, external: &ExternalKey) -> Result<SourceEntry> {
+        self.get_repo_entry(repo, external).await
+    }
+
+    async fn replace_entries(&self, repo: SourceRepoId, entries: &[SourceEntry]) -> Result<u64> {
+        self.replace_repo_entries(repo, entries).await
+    }
+
     async fn get_repo(&self, id: SourceRepoId) -> Result<SourceRepo> {
         self.get_source_repo(id).await
     }

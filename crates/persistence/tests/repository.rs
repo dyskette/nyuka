@@ -688,3 +688,171 @@ async fn deleting_a_source_removes_its_series() {
         Err(DomainError::NotFound)
     ));
 }
+
+fn entry(repo: SourceRepoId, external: &str, version: u32) -> SourceEntry {
+    SourceEntry {
+        repo_id: repo,
+        external_id: ExternalKey(external.into()),
+        name: format!("Source {external}"),
+        version,
+        icon_url: Some(format!("https://example.test/{external}.png")),
+        download_url: format!("https://example.test/{external}.aix"),
+        languages: vec!["en".into()],
+        content_rating: ContentRating::Safe,
+        base_url: Some("https://example.test".into()),
+        min_app_version: Some("0.7.1".into()),
+    }
+}
+
+async fn a_repo(repos: &Repositories, url: &str) -> SourceRepoId {
+    repos
+        .upsert_source_repo(&SourceRepo {
+            id: SourceRepoId(Uuid::nil()),
+            name: "R".into(),
+            url: url.into(),
+            last_refreshed_at: None,
+            created_at: Utc::now(),
+        })
+        .await
+        .expect("repo")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn repository_entries_round_trip() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_entries").await else {
+        return;
+    };
+    let repo = a_repo(&repos, "https://example.test/i.json").await;
+    repos
+        .replace_repo_entries(repo, &[entry(repo, "en.one", 3)])
+        .await
+        .expect("replace");
+
+    let read = repos
+        .get_repo_entry(repo, &ExternalKey("en.one".into()))
+        .await
+        .expect("get");
+    assert_eq!(read.name, "Source en.one");
+    assert_eq!(read.version, 3);
+    assert_eq!(read.download_url, "https://example.test/en.one.aix");
+    assert_eq!(read.languages, vec!["en".to_string()]);
+    assert_eq!(read.content_rating, ContentRating::Safe);
+    assert_eq!(read.min_app_version.as_deref(), Some("0.7.1"));
+}
+
+/// The property the whole table depends on: a refresh replaces the catalog
+/// rather than merging into it. A source dropped upstream must disappear, or
+/// it lingers as an entry whose download URL now 404s.
+#[tokio::test(flavor = "multi_thread")]
+async fn replacing_entries_drops_the_ones_no_longer_published() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_entries_replace").await else {
+        return;
+    };
+    let repo = a_repo(&repos, "https://example.test/i.json").await;
+    repos
+        .replace_repo_entries(repo, &[entry(repo, "en.one", 1), entry(repo, "en.two", 1)])
+        .await
+        .expect("first refresh");
+    assert_eq!(repos.list_repo_entries(repo).await.expect("list").len(), 2);
+
+    // The second index no longer publishes en.two, and bumps en.one.
+    repos
+        .replace_repo_entries(repo, &[entry(repo, "en.one", 2)])
+        .await
+        .expect("second refresh");
+
+    let listed = repos.list_repo_entries(repo).await.expect("list");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].external_id.0, "en.one");
+    assert_eq!(listed[0].version, 2, "the surviving entry must be updated");
+    assert!(matches!(
+        repos
+            .get_repo_entry(repo, &ExternalKey("en.two".into()))
+            .await,
+        Err(DomainError::NotFound)
+    ));
+}
+
+/// Two repositories may publish the same source id, and an operator may have
+/// both configured.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_same_source_id_can_come_from_two_repositories() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_entries_two").await else {
+        return;
+    };
+    let one = a_repo(&repos, "https://a.test/i.json").await;
+    let two = a_repo(&repos, "https://b.test/i.json").await;
+
+    repos
+        .replace_repo_entries(one, &[entry(one, "en.shared", 1)])
+        .await
+        .expect("one");
+    repos
+        .replace_repo_entries(two, &[entry(two, "en.shared", 9)])
+        .await
+        .expect("two");
+
+    assert_eq!(
+        repos
+            .get_repo_entry(one, &ExternalKey("en.shared".into()))
+            .await
+            .expect("get")
+            .version,
+        1
+    );
+    assert_eq!(
+        repos
+            .get_repo_entry(two, &ExternalKey("en.shared".into()))
+            .await
+            .expect("get")
+            .version,
+        9,
+        "refreshing one repository must not touch another's catalog"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_repository_removes_what_it_offered() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_entries_cascade").await else {
+        return;
+    };
+    let repo = a_repo(&repos, "https://example.test/i.json").await;
+    repos
+        .replace_repo_entries(repo, &[entry(repo, "en.one", 1)])
+        .await
+        .expect("replace");
+
+    repos.delete_source_repo(repo).await.expect("delete");
+    assert!(
+        repos
+            .list_repo_entries(repo)
+            .await
+            .expect("list")
+            .is_empty(),
+        "entries from an index nobody refreshes must not stay installable"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_empty_index_clears_the_catalog() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_entries_empty").await else {
+        return;
+    };
+    let repo = a_repo(&repos, "https://example.test/i.json").await;
+    repos
+        .replace_repo_entries(repo, &[entry(repo, "en.one", 1)])
+        .await
+        .expect("replace");
+
+    assert_eq!(
+        repos.replace_repo_entries(repo, &[]).await.expect("empty"),
+        0
+    );
+    assert!(
+        repos
+            .list_repo_entries(repo)
+            .await
+            .expect("list")
+            .is_empty()
+    );
+}

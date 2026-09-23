@@ -10,3 +10,4 @@ pub use super::session::Entity as Session;
 pub use super::source::Entity as Source;
 pub use super::source_kv::Entity as SourceKv;
 pub use super::source_repo::Entity as SourceRepo;
+pub use super::source_repo_entry::Entity as SourceRepoEntry;

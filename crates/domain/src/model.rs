@@ -298,6 +298,31 @@ pub struct SourceRepo {
     pub created_at: DateTime<Utc>,
 }
 
+/// One source a repository offers, as its index describes it.
+///
+/// Deliberately not [`InstalledSource`]: an index entry has no local identity
+/// and no required-capability list, because those are read from the `.aix`
+/// package at install time rather than declared in the index. Returning an
+/// `InstalledSource` here would mean fabricating both.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SourceEntry {
+    pub repo_id: SourceRepoId,
+    /// The source's own id, such as `en.guya`.
+    pub external_id: ExternalKey,
+    pub name: String,
+    pub version: u32,
+    pub icon_url: Option<String>,
+    /// Already resolved against the index URL, so nothing downstream needs to
+    /// know where the index came from.
+    pub download_url: String,
+    pub languages: Vec<String>,
+    pub content_rating: ContentRating,
+    /// The site the source reads, for display. Not used for egress decisions
+    /// — those are made per request against the real destination (ADR-0004).
+    pub base_url: Option<String>,
+    pub min_app_version: Option<String>,
+}
+
 /// Host capabilities a source requires. `SourceRegistry` refuses installation
 /// when any required capability is unimplemented (ADR-0004).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

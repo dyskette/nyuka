@@ -52,6 +52,7 @@ pub mod fetcher;
 pub mod imports;
 pub mod models;
 pub mod package;
+pub mod registry;
 pub mod resource;
 pub mod source;
 pub mod state;

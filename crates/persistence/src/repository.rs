@@ -114,6 +114,22 @@ fn row_to_source(row: &sea_orm::QueryResult) -> Result<InstalledSource> {
     })
 }
 
+fn row_to_source_entry(row: &sea_orm::QueryResult) -> Result<SourceEntry> {
+    let version: i32 = row.try_get("", "version").map_err(db)?;
+    Ok(SourceEntry {
+        repo_id: SourceRepoId(row.try_get("", "repo_id").map_err(db)?),
+        external_id: ExternalKey(row.try_get("", "external_id").map_err(db)?),
+        name: row.try_get("", "name").map_err(db)?,
+        version: version.max(0) as u32,
+        icon_url: row.try_get("", "icon_url").map_err(db)?,
+        download_url: row.try_get("", "download_url").map_err(db)?,
+        languages: json_list(row.try_get("", "languages").map_err(db)?),
+        content_rating: ContentRating::from_i16(row.try_get("", "content_rating").map_err(db)?),
+        base_url: row.try_get("", "base_url").map_err(db)?,
+        min_app_version: row.try_get("", "min_app_version").map_err(db)?,
+    })
+}
+
 fn row_to_source_repo(row: &sea_orm::QueryResult) -> Result<SourceRepo> {
     Ok(SourceRepo {
         id: SourceRepoId(row.try_get("", "id").map_err(db)?),
@@ -992,6 +1008,113 @@ impl Repositories {
             .await
             .map_err(db)?;
         Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source_repo_entry",
+        )
+    )]
+    pub async fn list_repo_entries(&self, repo: SourceRepoId) -> Result<Vec<SourceEntry>> {
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM source_repo_entry WHERE repo_id = $1 ORDER BY name",
+                [repo.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+        rows.iter().map(row_to_source_entry).collect()
+    }
+
+    #[tracing::instrument(
+        skip(self, external),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source_repo_entry",
+        )
+    )]
+    pub async fn get_repo_entry(
+        &self,
+        repo: SourceRepoId,
+        external: &ExternalKey,
+    ) -> Result<SourceEntry> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM source_repo_entry WHERE repo_id = $1 AND external_id = $2",
+                [repo.0.into(), external.0.clone().into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_source_entry(&row)
+    }
+
+    /// Replaces a repository's catalog in one transaction.
+    ///
+    /// Delete-then-insert rather than upsert-and-prune: an index is a document
+    /// that is either current or not, and reconciling row by row would leave
+    /// the catalog mixed if the pass failed partway. The transaction is what
+    /// makes "either the old index or the new one, never half of each" true.
+    #[tracing::instrument(
+        skip(self, entries),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "INSERT",
+            db.collection.name = "source_repo_entry",
+            entry.count = entries.len(),
+        )
+    )]
+    pub async fn replace_repo_entries(
+        &self,
+        repo: SourceRepoId,
+        entries: &[SourceEntry],
+    ) -> Result<u64> {
+        use sea_orm::TransactionTrait;
+
+        let backend = self.db.get_database_backend();
+        let txn = self.db.begin().await.map_err(db)?;
+
+        txn.execute_raw(Statement::from_sql_and_values(
+            backend,
+            "DELETE FROM source_repo_entry WHERE repo_id = $1",
+            [repo.0.into()],
+        ))
+        .await
+        .map_err(db)?;
+
+        for entry in entries {
+            txn.execute_raw(Statement::from_sql_and_values(
+                backend,
+                "INSERT INTO source_repo_entry (repo_id, external_id, name, version, icon_url, \
+                 download_url, languages, content_rating, base_url, min_app_version, fetched_at) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())",
+                [
+                    repo.0.into(),
+                    entry.external_id.0.clone().into(),
+                    entry.name.clone().into(),
+                    (entry.version as i32).into(),
+                    entry.icon_url.clone().into(),
+                    entry.download_url.clone().into(),
+                    json(&entry.languages)?.into(),
+                    entry.content_rating.as_i16().into(),
+                    entry.base_url.clone().into(),
+                    entry.min_app_version.clone().into(),
+                ],
+            ))
+            .await
+            .map_err(db)?;
+        }
+
+        txn.commit().await.map_err(db)?;
+        Ok(entries.len() as u64)
     }
 
     // --- source key-value ---------------------------------------------------

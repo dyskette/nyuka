@@ -58,6 +58,19 @@ impl SourceRuntime {
         }
     }
 
+    /// Drops a compiled module.
+    ///
+    /// Returning `Ok` when the source was not loaded is deliberate: uninstall
+    /// must succeed after a restart, when nothing has been compiled yet but
+    /// the database row is still there.
+    pub fn remove(&self, id: SourceId) -> Result<()> {
+        self.sources
+            .write()
+            .map_err(|_| DomainError::Internal("source registry poisoned".into()))?
+            .remove(&id);
+        Ok(())
+    }
+
     /// Compiles and registers a package, refusing it if this host cannot run
     /// it.
     pub fn install(

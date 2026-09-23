@@ -288,6 +288,18 @@ pub trait SourceRepository: Send + Sync {
 
     /// The configured repositories, which is what `update_sources` walks.
     async fn list_repos(&self) -> Result<Vec<SourceRepo>>;
+
+    /// What a repository offers, for the browse-and-install view.
+    async fn list_entries(&self, repo: SourceRepoId) -> Result<Vec<SourceEntry>>;
+
+    async fn get_entry(&self, repo: SourceRepoId, external: &ExternalKey) -> Result<SourceEntry>;
+
+    /// Replaces a repository's entries wholesale.
+    ///
+    /// Wholesale, not merged: a source dropped upstream must disappear rather
+    /// than linger as an entry whose download URL now 404s. One transaction,
+    /// so a failed refresh cannot leave the catalog half-replaced.
+    async fn replace_entries(&self, repo: SourceRepoId, entries: &[SourceEntry]) -> Result<u64>;
     async fn get_repo(&self, id: SourceRepoId) -> Result<SourceRepo>;
     async fn upsert_repo(&self, repo: &SourceRepo) -> Result<SourceRepoId>;
     async fn remove_repo(&self, id: SourceRepoId) -> Result<()>;

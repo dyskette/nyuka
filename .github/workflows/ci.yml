@@ -71,10 +71,6 @@ jobs:
 
       # ADR-0002: SeaORM type-checks against ENTITY definitions, not the live
       # schema, so a migration that outpaces its entity compiles and fails at
-      # runtime. This converts that class of bug into a build failure and is
-      # the control that makes ADR-0002 safe rather than merely convenient.
-      # ADR-0002: SeaORM type-checks against ENTITY definitions, not the live
-      # schema, so a migration that outpaces its entity compiles and fails at
       # runtime. Regenerating and diffing turns that into a build failure, and
       # is the control that makes ADR-0002 safe rather than merely convenient.
       - name: Schema drift check

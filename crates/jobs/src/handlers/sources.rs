@@ -106,7 +106,8 @@ mod tests {
     use super::*;
     use crate::handlers::testing::job;
     use nyuka_domain::model::{
-        Capability, ExternalKey, InstalledSource, JobKind, SourceId, SourceRepo, SourceRepoId,
+        Capability, ExternalKey, InstalledSource, JobKind, SourceEntry, SourceId, SourceRepo,
+        SourceRepoId,
     };
     use std::collections::HashSet;
     use std::sync::Mutex;
@@ -158,6 +159,23 @@ mod tests {
         }
         async fn list_repos(&self) -> Result<Vec<SourceRepo>> {
             Ok(self.repos.clone())
+        }
+        async fn list_entries(&self, _repo: SourceRepoId) -> Result<Vec<SourceEntry>> {
+            Ok(vec![])
+        }
+        async fn get_entry(
+            &self,
+            _repo: SourceRepoId,
+            _external: &ExternalKey,
+        ) -> Result<SourceEntry> {
+            Err(DomainError::NotFound)
+        }
+        async fn replace_entries(
+            &self,
+            _repo: SourceRepoId,
+            entries: &[SourceEntry],
+        ) -> Result<u64> {
+            Ok(entries.len() as u64)
         }
         async fn get_repo(&self, _id: SourceRepoId) -> Result<SourceRepo> {
             Err(DomainError::NotFound)
