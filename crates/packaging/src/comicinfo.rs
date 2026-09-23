@@ -88,7 +88,18 @@ impl ComicInfo {
         if let Some(n) = self.number {
             element(&mut out, "Number", &format_number(n));
         }
-        if let Some(v) = self.volume {
+        // `Volume` is `xs:int` in the v2.0 schema — unlike `Number`, which is
+        // `xs:string` and takes 10.5 happily. A source that reports a half
+        // volume (a side-story v1.5 is a real thing) would put `3.5` into an
+        // integer element, and the whole document then fails validation: a
+        // reader that cannot parse `ComicInfo.xml` drops *every* field in it
+        // and falls back to guessing from the filename.
+        //
+        // Omitted rather than truncated. Rounding 3.5 to 3 files the chapter
+        // under the wrong volume, which is the guess ADR-0007 says not to
+        // make. The filename still carries `v03.5`, which is where both Komga
+        // and Kavita read a decimal volume from anyway.
+        if let Some(v) = self.volume.filter(|v| v.fract().abs() < f32::EPSILON) {
             element(&mut out, "Volume", &format_number(v));
         }
         element(&mut out, "Summary", self.summary.as_deref().unwrap_or(""));

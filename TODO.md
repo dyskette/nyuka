@@ -99,9 +99,11 @@ for.
       not what the code branches on. `cargo-fuzz` needs nightly for its
       sanitizers and this workspace pins a stable toolchain, so this needs a
       separate nightly job rather than a line in the main CI run.
-- [ ] **Validate a generated CBZ against a real reader's rules** — the
-      ComicInfo v2.0 schema plus the filename conventions Komga and Kavita
-      document (ADR-0007 follow-up 4).
+- [x] **Validate a generated CBZ against a real reader's rules** — the vendored
+      ComicInfo v2.0 schema via `xmllint`, plus the filename conventions Komga
+      and Kavita document (ADR-0007 follow-up 4). Found a real defect: a
+      fractional volume emitted `3.5` into an `xs:int` element and invalidated
+      the whole document.
 - [x] **Auth negative paths needing a provider** — mismatched `state`, a
       subject absent from the allow-list, a callback with no flow, a replayed
       code, sign-out with and without CSRF, and the rate limit. In

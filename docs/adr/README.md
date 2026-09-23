@@ -69,7 +69,7 @@ These are the checks without which the corresponding decision is unsafe rather t
 - **0003** — a concurrency test asserting each job row is claimed exactly once, plus stale-lock recovery.
 - **0004** — a conformance `.aix` built at the pinned aidoku-rs SHA, exercising every implemented host import.
 - **0005** — a documented `cargo-deny` exception for RUSTSEC-2023-0071 with reasoning, owner, and review date.
-- **0007** — the temp directory inside the library root, asserted by test.
+- **0007** — the temp directory inside the library root, asserted by test; and `crates/packaging/tests/comicinfo_schema.rs`, which validates a generated `ComicInfo.xml` against the vendored v2.0 schema. Interoperability is the reason the format was chosen, so a document other readers reject makes the decision worthless — and element order alone is enough to cause that, since v2.0 declares an `xs:sequence`.
 - **0009** and **0012** — the GritQL rule banning inline query-key arrays.
 - **0010** — a test asserting `text/event-stream` responses are never compressed.
 - **0016** — a contrast test over *rendered* colors, in both themes, including the focus ring. **Done**, in `web/e2e/contrast.spec.ts`. It measures by painting each token to a canvas and reading the pixel back, which is the sRGB the browser produces after gamut mapping; compositing a token over its *own background* rather than over black is what makes an alpha value measure as it looks. It found a live failure the token table could not: the sidebar's shortcut hints were `--muted-foreground` under `opacity-60`, at 2.54:1.
