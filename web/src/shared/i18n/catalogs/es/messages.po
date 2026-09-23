@@ -32,9 +32,17 @@ msgstr "{shown} de {total}"
 msgid "{total} titles"
 msgstr "{total} títulos"
 
+#: src/features/palette/components/CommandPalette.tsx
+msgid "↑↓ navigate"
+msgstr "↑↓ moverse"
+
+#: src/features/palette/components/CommandPalette.tsx
+msgid "↵ open"
+msgstr "↵ abrir"
+
 #: src/shared/components/AppShell.tsx
-msgid "⌘K"
-msgstr "⌘K"
+#~ msgid "⌘K"
+#~ msgstr "⌘K"
 
 #: src/features/sources/components/RepoList.tsx
 msgid "A repository is a list of sources this server can install from. Add one above."
@@ -44,6 +52,11 @@ msgstr "Un repositorio es una lista de fuentes que este servidor puede instalar.
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Actions"
 msgstr "Acciones"
+
+#. placeholder {0}: active.title
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Actions on {0}"
+msgstr "Acciones sobre {0}"
 
 #: src/features/browse/components/CatalogCard.tsx
 msgid "Add"
@@ -92,6 +105,11 @@ msgstr "Trabajos en segundo plano"
 msgid "Browse"
 msgstr "Explorar"
 
+#. placeholder {0}: active.source_name
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Browse {0}"
+msgstr "Explorar {0}"
+
 #: src/routes/browse.tsx
 msgid "Browse could not be loaded."
 msgstr "No se pudo cargar Explorar."
@@ -131,6 +149,10 @@ msgstr "Comprobar ahora"
 msgid "Close"
 msgstr "Cerrar"
 
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Command palette"
+msgstr "Paleta de comandos"
+
 #: src/shared/components/AppShell.tsx
 msgid "Connecting"
 msgstr "Conectando"
@@ -161,9 +183,17 @@ msgstr "Las descargas y el trabajo programado aparecen aquí mientras se ejecuta
 #~ msgid "Downloads is not built yet."
 #~ msgstr "Descargas todavía no está construido."
 
+#: src/features/palette/components/CommandPalette.tsx
+msgid "esc close"
+msgstr "esc cerrar"
+
 #: src/features/follows/components/FollowTable.tsx
 msgid "Every"
 msgstr "Cada"
+
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Follow this series"
+msgstr "Seguir esta serie"
 
 #: src/features/follows/components/FollowTable.tsx
 msgid "Following a series checks it on a schedule and can download new chapters as they appear. Open a series in your library to follow it."
@@ -181,6 +211,10 @@ msgstr "No se pudieron cargar los seguimientos."
 #: src/routes/follows.tsx
 #~ msgid "Follows is not built yet."
 #~ msgstr "Seguimientos todavía no está construido."
+
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Go to"
+msgstr "Ir a"
 
 #: src/routes/browse.tsx
 msgid "Go to Settings"
@@ -208,6 +242,7 @@ msgid "Last checked"
 msgstr "Última comprobación"
 
 #: src/features/browse/components/CatalogCard.tsx
+#: src/features/palette/components/CommandPalette.tsx
 #: src/shared/components/AppShell.tsx
 msgid "Library"
 msgstr "Biblioteca"
@@ -215,6 +250,10 @@ msgstr "Biblioteca"
 #: src/shared/components/AppShell.tsx
 msgid "Live"
 msgstr "En vivo"
+
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Maintenance"
+msgstr "Mantenimiento"
 
 #: src/features/follows/components/FollowTable.tsx
 msgid "Missing"
@@ -260,6 +299,10 @@ msgstr "No hay nada aquí"
 msgid "Nothing in the queue"
 msgstr "No hay nada en la cola"
 
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Nothing matches that."
+msgstr "No hay nada que coincida."
+
 #: src/shared/components/AppShell.tsx
 msgid "Offline"
 msgstr "Sin conexión"
@@ -268,9 +311,17 @@ msgstr "Sin conexión"
 msgid "Open at the source"
 msgstr "Abrir en la fuente"
 
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Open chapters"
+msgstr "Abrir capítulos"
+
 #: src/features/browse/components/CatalogCard.tsx
 msgid "Open in library"
 msgstr "Abrir en la biblioteca"
+
+#: src/shared/components/AppShell.tsx
+msgid "Open the command palette"
+msgstr "Abrir la paleta de comandos"
 
 #: src/routes/library.$mangaId.tsx
 msgid "Overview"
@@ -331,13 +382,26 @@ msgstr "Reintentar este trabajo"
 msgid "Search"
 msgstr "Buscar"
 
+#. placeholder {0}: query.trim()
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Search “{0}” in Browse"
+msgstr "Buscar «{0}» en Explorar"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Search {total} titles"
 msgstr "Buscar en {total} títulos"
 
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Search sources"
+msgstr "Buscar en las fuentes"
+
 #: src/routes/browse.tsx
 msgid "Search this source"
 msgstr "Buscar en esta fuente"
+
+#: src/features/palette/components/CommandPalette.tsx
+msgid "Search your library, or type a command"
+msgstr "Busca en tu biblioteca o escribe un comando"
 
 #. placeholder {0}: manga.title
 #: src/features/library/components/LibraryTable.tsx

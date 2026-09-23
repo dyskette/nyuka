@@ -1,4 +1,4 @@
-import { Trans } from '@lingui/react/macro'
+import { Trans, useLingui } from '@lingui/react/macro'
 import { Link } from '@tanstack/react-router'
 import { BookMarked, Compass, Download, Library, type LucideIcon, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -13,12 +13,18 @@ import { useLiveStatus } from '@/shared/sse/LiveProvider'
  * and what the download queue is doing — so a user never has to navigate to
  * Downloads to find out that nothing is progressing.
  */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  onOpenPalette,
+}: {
+  children: ReactNode
+  onOpenPalette?: (() => void) | undefined
+}) {
   return (
     <div className="grid h-dvh grid-cols-[13rem_1fr] grid-rows-[1fr_auto]">
       <Sidebar />
       <div className="min-w-0 overflow-hidden">{children}</div>
-      <StatusBar />
+      <StatusBar onOpenPalette={onOpenPalette} />
     </div>
   )
 }
@@ -104,13 +110,27 @@ function SidebarLink({ item }: { item: NavItem }) {
  * number that jitters while it counts is harder to read than one that does
  * not, and this one updates continuously during a download.
  */
-function StatusBar() {
+function StatusBar({ onOpenPalette }: { onOpenPalette?: (() => void) | undefined }) {
+  const { t } = useLingui()
+
   return (
     <footer className="border-border text-muted-foreground col-span-1 flex items-center gap-4 border-t px-3 py-1.5 text-xs">
       <LiveIndicator />
-      <span className="ml-auto tabular">
-        <Trans>⌘K</Trans>
-      </span>
+      {/*
+        A button, not a label. The shortcut is the fast path, but advertising
+        one without offering a way to press it leaves the palette unreachable
+        to anyone who cannot make that chord — and to a touch device, which
+        has no keyboard at all (WCAG 2.5.1).
+      */}
+      <button
+        type="button"
+        onClick={onOpenPalette}
+        aria-label={t`Open the command palette`}
+        aria-keyshortcuts="Meta+K Control+K"
+        className="hover:text-foreground tabular ml-auto rounded-sm"
+      >
+        ⌘K
+      </button>
     </footer>
   )
 }

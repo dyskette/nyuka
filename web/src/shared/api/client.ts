@@ -53,6 +53,13 @@ export const api = createClient<paths>({
   // explicit — and the Vite dev proxy keeps `changeOrigin` false precisely so
   // this stays same-origin in development too (ADR-0005, ADR-0006).
   credentials: 'same-origin',
+
+  // Resolved per call rather than captured. `openapi-fetch` otherwise reads
+  // `globalThis.fetch` once, here, when this module is first imported — so a
+  // test harness that installs an interceptor afterwards holds a reference
+  // nothing reads, and its requests go to the real network instead. One extra
+  // property access per request buys that back.
+  fetch: (request) => globalThis.fetch(request),
 })
 
 api.use(csrf)
