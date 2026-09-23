@@ -286,6 +286,45 @@ pub struct RateLimit {
     pub period_seconds: u32,
 }
 
+impl RateLimit {
+    pub fn period(self) -> std::time::Duration {
+        std::time::Duration::from_secs(u64::from(self.period_seconds))
+    }
+
+    /// Builds a limit from the `net::set_rate_limit` wire triple.
+    ///
+    /// `unit` follows the guest: 0 seconds, 1 minutes, 2 hours. A
+    /// non-positive permit count or an unknown unit is ignored rather than
+    /// guessed at — a wrong limit is worse than none, because it is the thing
+    /// standing between the source and an IP ban (ADR-0004).
+    pub fn from_wire(permits: i32, period: i32, unit: i32) -> Option<Self> {
+        if permits <= 0 || period <= 0 {
+            return None;
+        }
+        let seconds = match unit {
+            0 => 1u32,
+            1 => 60,
+            2 => 3600,
+            _ => return None,
+        };
+        Some(Self {
+            permits: permits as u32,
+            period_seconds: seconds.checked_mul(period as u32)?,
+        })
+    }
+
+    /// The stricter of a source's declared limit and the configured cap.
+    ///
+    /// ADR-0004: a source declaring a tighter budget than the operator's
+    /// default must win, because exceeding it is what gets the deployment
+    /// banned from the site.
+    pub fn stricter(self, cap: Self) -> Self {
+        let mine = f64::from(self.permits) / f64::from(self.period_seconds.max(1));
+        let theirs = f64::from(cap.permits) / f64::from(cap.period_seconds.max(1));
+        if mine <= theirs { self } else { cap }
+    }
+}
+
 /// A configured index of installable sources.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceRepo {
@@ -458,6 +497,54 @@ mod enum_tests {
             assert_eq!(value.as_i16(), want);
             assert_eq!(ReadingDirection::from_i16(want), value);
         }
+    }
+
+    #[test]
+    fn a_rate_limit_decodes_each_wire_unit() {
+        assert_eq!(
+            RateLimit::from_wire(2, 2, 0),
+            Some(RateLimit {
+                permits: 2,
+                period_seconds: 2
+            }),
+            "the value en.asurascans actually declares"
+        );
+        assert_eq!(
+            RateLimit::from_wire(30, 1, 1).expect("minutes").period(),
+            std::time::Duration::from_secs(60)
+        );
+        assert_eq!(
+            RateLimit::from_wire(5, 1, 2).expect("hours").period(),
+            std::time::Duration::from_secs(3600)
+        );
+    }
+
+    /// A wrong limit is worse than none: it is the thing standing between the
+    /// source and an IP ban.
+    #[test]
+    fn a_nonsensical_rate_limit_is_ignored_not_guessed() {
+        assert_eq!(RateLimit::from_wire(0, 1, 0), None);
+        assert_eq!(RateLimit::from_wire(1, 0, 0), None);
+        assert_eq!(RateLimit::from_wire(1, 1, 7), None, "unknown unit");
+        assert_eq!(
+            RateLimit::from_wire(1, i32::MAX, 2),
+            None,
+            "a period that overflows must be refused, not wrapped to something tiny"
+        );
+    }
+
+    #[test]
+    fn the_stricter_rate_limit_wins() {
+        let source = RateLimit {
+            permits: 1,
+            period_seconds: 2,
+        };
+        let cap = RateLimit {
+            permits: 4,
+            period_seconds: 1,
+        };
+        assert_eq!(source.stricter(cap), source, "source is tighter");
+        assert_eq!(cap.stricter(source), source, "order must not matter");
     }
 
     /// A row written by a newer build must still load. Refusing would take the

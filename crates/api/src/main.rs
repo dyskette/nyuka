@@ -14,18 +14,34 @@
 //! 4. Recover stale job locks (ADR-0003).
 //! 5. Start the worker pool and the scheduler.
 //! 6. Serve, with graceful shutdown on `SIGTERM`.
+//!
+//! # Why configuration is validated before the subscriber exists
+//!
+//! Step 1 runs before step 2, so a configuration failure is printed to stderr
+//! rather than logged. That is deliberate: the subscriber's own settings come
+//! from the configuration being validated, so logging the failure would mean
+//! using the thing that is broken to report that it is broken.
 
 #![forbid(unsafe_code)]
 
-mod config;
-mod error;
-mod openapi;
-mod routes;
-mod sse;
-mod static_files;
-mod telemetry;
+use anyhow::Context;
+use nyuka_api::config::RawConfig;
 
 fn main() -> anyhow::Result<()> {
-    // TODO(scaffold): the startup sequence above.
-    Ok(())
+    // Step 1, before any of the runtime exists. A configuration error here is
+    // the single most common startup failure and it must read plainly.
+    let raw = RawConfig::load().context("reading configuration")?;
+    let config = match raw.validate() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(2);
+        }
+    };
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("building the tokio runtime")?
+        .block_on(nyuka_api::run(config))
 }

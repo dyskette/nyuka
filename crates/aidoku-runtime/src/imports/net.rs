@@ -58,47 +58,13 @@ impl Method {
     }
 }
 
-/// A source's declared request budget, from `net::set_rate_limit`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RateLimit {
-    pub permits: u32,
-    pub period: std::time::Duration,
-}
-
-impl RateLimit {
-    /// Builds a limit from the wire triple.
-    ///
-    /// `unit` follows the guest: 0 seconds, 1 minutes, 2 hours. A
-    /// non-positive permit count or an unknown unit is ignored rather than
-    /// guessed at — a wrong limit is worse than none, because it is the thing
-    /// standing between the source and an IP ban.
-    pub fn from_wire(permits: i32, period: i32, unit: i32) -> Option<Self> {
-        if permits <= 0 || period <= 0 {
-            return None;
-        }
-        let seconds = match unit {
-            0 => 1u64,
-            1 => 60,
-            2 => 3600,
-            _ => return None,
-        };
-        Some(Self {
-            permits: permits as u32,
-            period: std::time::Duration::from_secs(seconds * period as u64),
-        })
-    }
-
-    /// The stricter of a source's declared limit and the configured cap.
-    ///
-    /// ADR-0004: a source declaring a tighter budget than the operator's
-    /// default must win, because exceeding it is what gets the deployment
-    /// banned from the site.
-    pub fn stricter(self, cap: Self) -> Self {
-        let mine = self.permits as f64 / self.period.as_secs_f64();
-        let theirs = cap.permits as f64 / cap.period.as_secs_f64();
-        if mine <= theirs { self } else { cap }
-    }
-}
+/// The declared-budget type lives in `domain`.
+///
+/// It was duplicated here once, with `Duration` instead of seconds and its own
+/// copy of `from_wire` and `stricter`. Two structs meaning the same thing in
+/// two crates is a drift waiting to happen, and the persisted shape has to win
+/// because it is the one a stored row has to keep matching.
+pub use nyuka_domain::model::RateLimit;
 
 /// A `reqwest` resolver that applies the egress policy.
 pub struct VettingResolver {
@@ -286,47 +252,6 @@ mod tests {
             "defaulting to GET would turn a mutation into a read"
         );
         assert_eq!(Method::from_wire(-1), None);
-    }
-
-    #[test]
-    fn rate_limit_units() {
-        assert_eq!(
-            RateLimit::from_wire(2, 2, 0),
-            Some(RateLimit {
-                permits: 2,
-                period: Duration::from_secs(2)
-            }),
-            "the value en.asurascans actually declares"
-        );
-        assert_eq!(
-            RateLimit::from_wire(30, 1, 1).unwrap().period,
-            Duration::from_secs(60)
-        );
-        assert_eq!(
-            RateLimit::from_wire(5, 1, 2).unwrap().period,
-            Duration::from_secs(3600)
-        );
-    }
-
-    #[test]
-    fn a_nonsensical_rate_limit_is_ignored_not_guessed() {
-        assert_eq!(RateLimit::from_wire(0, 1, 0), None);
-        assert_eq!(RateLimit::from_wire(1, 0, 0), None);
-        assert_eq!(RateLimit::from_wire(1, 1, 7), None, "unknown unit");
-    }
-
-    #[test]
-    fn the_stricter_limit_wins() {
-        let source = RateLimit {
-            permits: 1,
-            period: Duration::from_secs(2),
-        };
-        let cap = RateLimit {
-            permits: 4,
-            period: Duration::from_secs(1),
-        };
-        assert_eq!(source.stricter(cap), source, "source is tighter");
-        assert_eq!(cap.stricter(source), source, "order must not matter");
     }
 
     #[test]

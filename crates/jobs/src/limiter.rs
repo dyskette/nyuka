@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use nyuka_aidoku_runtime::imports::net::RateLimit;
+use nyuka_domain::model::RateLimit;
 use nyuka_domain::model::SourceId;
 use tokio::sync::{Mutex, Semaphore};
 
@@ -95,7 +95,7 @@ mod tests {
                 s,
                 Some(RateLimit {
                     permits: 2,
-                    period: Duration::from_secs(2),
+                    period_seconds: 2,
                 }),
             )
             .await;
@@ -111,7 +111,7 @@ mod tests {
                 s,
                 Some(RateLimit {
                     permits: 50,
-                    period: Duration::from_secs(1),
+                    period_seconds: 1,
                 }),
             )
             .await;
