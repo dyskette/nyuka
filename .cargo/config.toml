@@ -1,0 +1,8 @@
+# `cargo xtask <task>` runs the repository's task binary.
+#
+# The alias rather than a shell script: writing the OpenAPI document means
+# calling the router's own schema builder, so the task has to be able to
+# import the crate. A script would have to reimplement it, and a
+# reimplementation is exactly what the freshness check exists to catch.
+[alias]
+xtask = "run --quiet --package xtask --"

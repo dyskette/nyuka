@@ -1,0 +1,1885 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "nyuka",
+    "description": "A self-hosted manga library server.",
+    "license": {
+      "name": "AGPL-3.0-or-later"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/chapters/{id}": {
+      "get": {
+        "tags": [
+          "library"
+        ],
+        "summary": "`GET /api/v1/chapters/{id}`",
+        "operationId": "chapter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Chapter id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChapterDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such chapter"
+          }
+        }
+      }
+    },
+    "/downloads": {
+      "post": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "`POST /api/v1/downloads`",
+        "description": "Returns `202` with a `Location` pointing at the job. The work is a series\nof requests to a third-party site; doing it inline would hold a connection\nopen for minutes.\n\nIdempotent on the chapter, so a double-click queues one download. An\n`Idempotency-Key` header is accepted and narrows that further, which is\nwhat makes a retried request from a flaky network safe.",
+        "operationId": "request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Queued; `Location` names the job"
+          },
+          "404": {
+            "description": "No such chapter"
+          },
+          "409": {
+            "description": "Already in the library"
+          }
+        }
+      }
+    },
+    "/downloads/{chapter_id}/file": {
+      "get": {
+        "tags": [
+          "downloads"
+        ],
+        "summary": "`GET /api/v1/downloads/{chapter_id}/file`",
+        "operationId": "file",
+        "parameters": [
+          {
+            "name": "chapter_id",
+            "in": "path",
+            "description": "Chapter id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The CBZ",
+            "content": {
+              "application/vnd.comicbook+zip": {}
+            }
+          },
+          "206": {
+            "description": "The requested range"
+          },
+          "304": {
+            "description": "The ETag matched"
+          },
+          "404": {
+            "description": "Not downloaded"
+          },
+          "416": {
+            "description": "The range is outside the file"
+          }
+        }
+      }
+    },
+    "/follows": {
+      "get": {
+        "tags": [
+          "follows"
+        ],
+        "summary": "`GET /api/v1/follows`",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next_cursor` from a previous page.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paged_FollowDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "follows"
+        ],
+        "summary": "`PUT /api/v1/follows` — follow a series, or change how it is followed.",
+        "description": "`PUT` rather than `POST` because the operation is keyed on `manga_id` and\nis idempotent: following an already-followed series updates it instead of\ncreating a second follow, which is what a user pressing the button twice\nexpects.",
+        "operationId": "upsert",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid interval"
+          },
+          "404": {
+            "description": "No such series"
+          }
+        }
+      }
+    },
+    "/follows/{id}": {
+      "get": {
+        "tags": [
+          "follows"
+        ],
+        "summary": "`GET /api/v1/follows/{id}`",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Follow id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such follow"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "follows"
+        ],
+        "summary": "`DELETE /api/v1/follows/{id}`",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Follow id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed, or already absent"
+          }
+        }
+      }
+    },
+    "/follows/{id}/check-now": {
+      "post": {
+        "tags": [
+          "follows"
+        ],
+        "summary": "`POST /api/v1/follows/{id}/check-now`",
+        "operationId": "check_now",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Follow id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "A check was queued"
+          },
+          "404": {
+            "description": "No such follow"
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "`GET /api/v1/jobs`",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "description": "One of `queued`, `running`, `succeeded`, `failed`, `cancelled`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paged_JobDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown state filter"
+          }
+        }
+      }
+    },
+    "/jobs/{id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "`GET /api/v1/jobs/{id}`",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such job"
+          }
+        }
+      }
+    },
+    "/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "`POST /api/v1/jobs/{id}/cancel`",
+        "description": "Cancelling a `running` job stops it from being retried; it does not\ninterrupt the attempt in flight. That is an honest limit rather than an\noversight — see ADR-0003's open question on cancellation semantics.",
+        "operationId": "cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such job"
+          },
+          "409": {
+            "description": "The job has already finished"
+          }
+        }
+      }
+    },
+    "/jobs/{id}/retry": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "`POST /api/v1/jobs/{id}/retry`",
+        "operationId": "retry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Queued again"
+          },
+          "404": {
+            "description": "No such job"
+          },
+          "409": {
+            "description": "The job has not finished"
+          }
+        }
+      }
+    },
+    "/manga": {
+      "get": {
+        "tags": [
+          "library"
+        ],
+        "summary": "`GET /api/v1/manga`",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next_cursor` from a previous page.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paged_MangaDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "`POST /api/v1/manga` — add a catalog entry to the library.",
+        "description": "The body names a source and a key, not a series: the metadata comes from\nthe source, never from the client. Accepting a client's version would let\nanyone write any title into the library.",
+        "operationId": "add",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Added, or already present",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MangaDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such source or series"
+          },
+          "502": {
+            "description": "The source could not be reached"
+          }
+        }
+      }
+    },
+    "/manga/{id}": {
+      "get": {
+        "tags": [
+          "library"
+        ],
+        "summary": "`GET /api/v1/manga/{id}`",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MangaDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such series"
+          }
+        }
+      }
+    },
+    "/manga/{id}/chapters": {
+      "get": {
+        "tags": [
+          "library"
+        ],
+        "summary": "`GET /api/v1/manga/{id}/chapters`",
+        "operationId": "chapters",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Series id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The `next_cursor` from a previous page.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paged_ChapterDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such series"
+          }
+        }
+      }
+    },
+    "/source-repos": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`GET /api/v1/source-repos`",
+        "operationId": "list_repos",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceRepoDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`POST /api/v1/source-repos`",
+        "operationId": "add_repo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceRepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceRepoDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL"
+          }
+        }
+      }
+    },
+    "/source-repos/{id}": {
+      "delete": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`DELETE /api/v1/source-repos/{id}`",
+        "operationId": "delete_repo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed, or already absent"
+          }
+        }
+      }
+    },
+    "/source-repos/{id}/available": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`GET /api/v1/source-repos/{id}/available`",
+        "operationId": "available",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceEntryDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such repository"
+          }
+        }
+      }
+    },
+    "/source-repos/{id}/refresh": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`POST /api/v1/source-repos/{id}/refresh`",
+        "operationId": "refresh_repo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Repository id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "A refresh was queued"
+          },
+          "404": {
+            "description": "No such repository"
+          }
+        }
+      }
+    },
+    "/sources": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`GET /api/v1/sources`",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InstalledSourceDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{id}": {
+      "delete": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`DELETE /api/v1/sources/{id}`",
+        "description": "> [!WARNING]\n> This cascades. Every series from this source and everything hanging off\n> them is removed from the database. Packaged files in the library are left\n> alone — they are the user's — but nothing will know how to find them\n> again.",
+        "operationId": "uninstall",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed, or already absent"
+          }
+        }
+      }
+    },
+    "/sources/{id}/catalog": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "`GET /api/v1/sources/{id}/catalog`",
+        "operationId": "browse",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Free-text search. Absent means the source's default listing.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such source"
+          },
+          "502": {
+            "description": "The source could not be reached"
+          }
+        }
+      }
+    },
+    "/sources/{id}/catalog/{key}": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "`GET /api/v1/sources/{id}/catalog/{key}`",
+        "operationId": "details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "description": "The source's own key for the series",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogItemDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such source or series"
+          },
+          "502": {
+            "description": "The source could not be reached"
+          }
+        }
+      }
+    },
+    "/sources/{id}/catalog/{key}/chapters": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "`GET /api/v1/sources/{id}/catalog/{key}/chapters`",
+        "operationId": "chapters",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "description": "The source's own key for the series",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChapterDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such source or series"
+          },
+          "502": {
+            "description": "The source could not be reached"
+          }
+        }
+      }
+    },
+    "/sources/{id}/filters": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`GET /api/v1/sources/{id}/filters`",
+        "operationId": "filters",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The source's filter definitions",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "No such source"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddRequest": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "external_key"
+        ],
+        "properties": {
+          "external_key": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CatalogItemDto": {
+        "type": "object",
+        "description": "A catalog result, which has no local identity.",
+        "required": [
+          "external_key",
+          "title",
+          "authors",
+          "artists",
+          "tags",
+          "status",
+          "content_rating",
+          "reading_direction"
+        ],
+        "properties": {
+          "artists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "content_rating": {
+            "type": "string"
+          },
+          "cover_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_key": {
+            "type": "string",
+            "description": "The source's own key. This, plus the source id, is how it is added."
+          },
+          "manga_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Set when this series is already in the library, so the UI can offer\n\"open\" rather than \"add\"."
+          },
+          "reading_direction": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CatalogPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogItemDto"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ChapterDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "manga_id",
+          "external_key"
+        ],
+        "properties": {
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manga_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          }
+        }
+      },
+      "DownloadRequest": {
+        "type": "object",
+        "required": [
+          "chapter_id"
+        ],
+        "properties": {
+          "chapter_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "FollowDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "manga_id",
+          "check_interval_secs",
+          "auto_download",
+          "created_at"
+        ],
+        "properties": {
+          "auto_download": {
+            "type": "boolean"
+          },
+          "check_interval_secs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_checked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "manga_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "FollowRequest": {
+        "type": "object",
+        "required": [
+          "manga_id"
+        ],
+        "properties": {
+          "auto_download": {
+            "type": "boolean"
+          },
+          "check_interval_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Defaults to six hours when absent."
+          },
+          "manga_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "InstalledSourceDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "repo_id",
+          "external_id",
+          "name",
+          "version",
+          "languages",
+          "required_capabilities"
+        ],
+        "properties": {
+          "declared_rate_limit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RateLimitDto",
+                "description": "Requests per period the source asked for, if it has declared one."
+              }
+            ]
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "repo_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "required_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "JobDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "priority",
+          "run_at",
+          "attempts",
+          "max_attempts",
+          "created_at"
+        ],
+        "properties": {
+          "attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "max_attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "priority": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "run_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "MangaDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "source_id",
+          "external_key",
+          "title",
+          "authors",
+          "artists",
+          "tags",
+          "status",
+          "content_rating",
+          "reading_direction",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "artists": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "content_rating": {
+            "type": "string"
+          },
+          "cover_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_direction": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Paged_ChapterDto": {
+        "type": "object",
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "manga_id",
+                "external_key"
+              ],
+              "properties": {
+                "external_key": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "language": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "manga_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "number": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float"
+                },
+                "published_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "volume": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "float"
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Paged_FollowDto": {
+        "type": "object",
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "manga_id",
+                "check_interval_secs",
+                "auto_download",
+                "created_at"
+              ],
+              "properties": {
+                "auto_download": {
+                  "type": "boolean"
+                },
+                "check_interval_secs": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "last_checked_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "manga_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Paged_JobDto": {
+        "type": "object",
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "kind",
+                "state",
+                "priority",
+                "run_at",
+                "attempts",
+                "max_attempts",
+                "created_at"
+              ],
+              "properties": {
+                "attempts": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "last_error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "max_attempts": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "priority": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "run_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "state": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Paged_MangaDto": {
+        "type": "object",
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "source_id",
+                "external_key",
+                "title",
+                "authors",
+                "artists",
+                "tags",
+                "status",
+                "content_rating",
+                "reading_direction",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "artists": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "authors": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "content_rating": {
+                  "type": "string"
+                },
+                "cover_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "external_key": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "language": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reading_direction": {
+                  "type": "string"
+                },
+                "source_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "title": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "RateLimitDto": {
+        "type": "object",
+        "required": [
+          "permits",
+          "period_seconds"
+        ],
+        "properties": {
+          "period_seconds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "permits": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "SourceEntryDto": {
+        "type": "object",
+        "required": [
+          "repo_id",
+          "external_id",
+          "name",
+          "version",
+          "languages",
+          "content_rating"
+        ],
+        "properties": {
+          "base_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_rating": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "icon_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installed_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Absent when the entry is not installed.",
+            "minimum": 0
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "repo_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "SourceRepoDto": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "url",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_refreshed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "SourceRepoRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The index URL, such as `https://example.test/index.min.json`."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "id",
+        "description": "An opaque, signed, HttpOnly session cookie issued by `GET /api/v1/auth/callback`. There is no bearer token: tokens from the identity provider never reach the browser."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "library",
+      "description": "Series and chapters already in the library"
+    },
+    {
+      "name": "follows",
+      "description": "Series watched for new chapters"
+    },
+    {
+      "name": "jobs",
+      "description": "Background work"
+    }
+  ]
+}

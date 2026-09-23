@@ -96,7 +96,11 @@ jobs:
       - name: OpenAPI freshness
         run: |
           set -euo pipefail
-          echo "TODO(scaffold): cargo xtask openapi && git diff --exit-code web/openapi.json"
+          cargo xtask openapi
+          # A stale schema means the generated TypeScript client describes a
+          # server that no longer exists. The diff is the whole check.
+          git diff --exit-code --stat -- web/openapi.json \
+            || { echo "::error::web/openapi.json is stale; run 'cargo xtask openapi' and commit the result"; exit 1; }
 
   security:
     runs-on: ubuntu-latest

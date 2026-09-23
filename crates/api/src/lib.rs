@@ -295,6 +295,62 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Every route that appears in the OpenAPI document.
+///
+/// One list, two consumers: `router` mounts it, and `openapi_document` reads
+/// the schema out of it. A second list would be a second thing to keep in
+/// step, which is the drift the generated client exists downstream of.
+///
+/// `OpenApiRouter` rather than `Router`, so registering a handler and
+/// describing it are the same call.
+fn documented_routes() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::with_openapi(openapi::ApiDoc::openapi())
+        .routes(utoipa_axum::routes!(routes::library::list))
+        .routes(utoipa_axum::routes!(routes::library::get))
+        .routes(utoipa_axum::routes!(routes::library::chapters))
+        .routes(utoipa_axum::routes!(routes::library::chapter))
+        .routes(utoipa_axum::routes!(
+            routes::follows::list,
+            routes::follows::upsert
+        ))
+        .routes(utoipa_axum::routes!(
+            routes::follows::get,
+            routes::follows::delete
+        ))
+        .routes(utoipa_axum::routes!(routes::follows::check_now))
+        .routes(utoipa_axum::routes!(routes::jobs::list))
+        .routes(utoipa_axum::routes!(routes::jobs::get))
+        .routes(utoipa_axum::routes!(routes::jobs::cancel))
+        .routes(utoipa_axum::routes!(routes::jobs::retry))
+        .routes(utoipa_axum::routes!(
+            routes::sources::list_repos,
+            routes::sources::add_repo
+        ))
+        .routes(utoipa_axum::routes!(routes::sources::delete_repo))
+        .routes(utoipa_axum::routes!(routes::sources::refresh_repo))
+        .routes(utoipa_axum::routes!(routes::sources::available))
+        .routes(utoipa_axum::routes!(routes::sources::list))
+        // `POST /manga` sits with the catalog rather than with the library
+        // routes because it is how a catalog entry becomes a library entry.
+        .routes(utoipa_axum::routes!(routes::catalog::add))
+        .routes(utoipa_axum::routes!(routes::sources::uninstall))
+        .routes(utoipa_axum::routes!(routes::sources::filters))
+        .routes(utoipa_axum::routes!(routes::catalog::browse))
+        .routes(utoipa_axum::routes!(routes::catalog::details))
+        .routes(utoipa_axum::routes!(routes::catalog::chapters))
+        .routes(utoipa_axum::routes!(routes::downloads::request))
+        .routes(utoipa_axum::routes!(routes::downloads::file))
+}
+
+/// The OpenAPI document, built without needing application state.
+///
+/// `cargo xtask openapi` writes this to `web/openapi.json`, and CI fails when
+/// the committed copy is stale. Building it from `documented_routes` rather
+/// than from a hand-maintained list is what makes that check mean something.
+pub fn openapi_document() -> utoipa::openapi::OpenApi {
+    documented_routes().split_for_parts().1
+}
+
 /// The response compression layer.
 ///
 /// A function rather than an inline `CompressionLayer::new()` so the test that
@@ -365,43 +421,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     // `OpenApiRouter` rather than `Router`, so registering a handler and
     // describing it are the same call — the drift this guards against is a
     // schema that says one thing while the server does another.
-    let (protected, api_doc) = OpenApiRouter::with_openapi(openapi::ApiDoc::openapi())
-        .routes(utoipa_axum::routes!(routes::library::list))
-        .routes(utoipa_axum::routes!(routes::library::get))
-        .routes(utoipa_axum::routes!(routes::library::chapters))
-        .routes(utoipa_axum::routes!(routes::library::chapter))
-        .routes(utoipa_axum::routes!(
-            routes::follows::list,
-            routes::follows::upsert
-        ))
-        .routes(utoipa_axum::routes!(
-            routes::follows::get,
-            routes::follows::delete
-        ))
-        .routes(utoipa_axum::routes!(routes::follows::check_now))
-        .routes(utoipa_axum::routes!(routes::jobs::list))
-        .routes(utoipa_axum::routes!(routes::jobs::get))
-        .routes(utoipa_axum::routes!(routes::jobs::cancel))
-        .routes(utoipa_axum::routes!(routes::jobs::retry))
-        .routes(utoipa_axum::routes!(
-            routes::sources::list_repos,
-            routes::sources::add_repo
-        ))
-        .routes(utoipa_axum::routes!(routes::sources::delete_repo))
-        .routes(utoipa_axum::routes!(routes::sources::refresh_repo))
-        .routes(utoipa_axum::routes!(routes::sources::available))
-        .routes(utoipa_axum::routes!(routes::sources::list))
-        // `POST /manga` sits with the catalog rather than with the library
-        // routes because it is how a catalog entry becomes a library entry.
-        .routes(utoipa_axum::routes!(routes::catalog::add))
-        .routes(utoipa_axum::routes!(routes::sources::uninstall))
-        .routes(utoipa_axum::routes!(routes::sources::filters))
-        .routes(utoipa_axum::routes!(routes::catalog::browse))
-        .routes(utoipa_axum::routes!(routes::catalog::details))
-        .routes(utoipa_axum::routes!(routes::catalog::chapters))
-        .routes(utoipa_axum::routes!(routes::downloads::request))
-        .routes(utoipa_axum::routes!(routes::downloads::file))
-        .split_for_parts();
+    let (protected, api_doc) = documented_routes().split_for_parts();
 
     let protected = protected
         // SSE is not in the OpenAPI document: it is not a request/response

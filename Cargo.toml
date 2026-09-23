@@ -10,6 +10,7 @@ members = [
     "crates/aidoku-runtime",
     "crates/packaging",
     "crates/api",
+    "xtask",
 ]
 
 [workspace.package]

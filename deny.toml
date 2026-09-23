@@ -45,11 +45,36 @@ allow = [
 confidence-threshold = 0.9
 
 [bans]
+# `warn` rather than `deny`: a tree this size legitimately carries dozens of
+# duplicate leaf crates, and a blanket deny would be a skip list nobody
+# maintains. The versions that actually matter are denied individually below.
 multiple-versions = "warn"
 wildcards = "deny"
-# If a second sqlx or a second opentelemetry ever appears here, something has
-# gone wrong — that is the exact failure ADR-0003 and ADR-0005 avoid.
-deny = []
+
+# A second `sqlx` is the failure ADR-0002, ADR-0003 and ADR-0005 are all
+# arranged to avoid: it means a second connection pool in the process, and it
+# is why the job queue and the session store are hand-written instead of taken
+# off the shelf. This was a comment saying so; it is a check now.
+[[bans.deny]]
+crate = "sqlx"
+deny-multiple-versions = true
+
+# Two OpenTelemetry versions means two global tracer providers, and spans
+# recorded through one are invisible to the other — the silent correlation
+# loss ADR-0014 calls the failure that makes the design worthless.
+[[bans.deny]]
+crate = "opentelemetry"
+deny-multiple-versions = true
+
+[[bans.deny]]
+crate = "opentelemetry_sdk"
+deny-multiple-versions = true
+
+# One wasmtime. Two would mean two engines with different sandbox settings,
+# and a source compiled under the wrong limits (ADR-0004).
+[[bans.deny]]
+crate = "wasmtime"
+deny-multiple-versions = true
 
 [sources]
 unknown-registry = "deny"

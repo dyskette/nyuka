@@ -330,6 +330,35 @@ async fn every_documented_path_is_actually_routed() {
     );
 }
 
+/// The served document and the committed one must be the same document.
+///
+/// CI regenerates and diffs, which catches a schema changed without
+/// regenerating. This catches the other direction — a committed file edited
+/// by hand, which the diff would accept if the edit happened to match what
+/// the generator produces on that run but not on the next.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_served_document_matches_the_committed_one() {
+    let Some(h) = support::harness("nyuka_test_routes_schema_committed").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (_, served) = h.send(get("/api/v1/openapi.json")).await;
+
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../web/openapi.json");
+    let Ok(committed) = std::fs::read_to_string(path) else {
+        panic!("web/openapi.json is missing; run `cargo xtask openapi`");
+    };
+    let committed: serde_json::Value =
+        serde_json::from_str(&committed).expect("committed schema is json");
+
+    assert_eq!(
+        served, committed,
+        "the committed schema does not match what the server serves; run \
+         `cargo xtask openapi` and commit the result"
+    );
+}
+
 /// And the control for the control: a path that is definitely not routed must
 /// answer with the distinct `no-such-endpoint` problem the test above keys on.
 /// Without this, a change to that problem type would make the check pass for

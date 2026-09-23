@@ -97,12 +97,13 @@ for.
 
 ## Build and release
 
-- [ ] **`cargo xtask openapi`** writing `web/openapi.json`, and the CI
+- [x] **`cargo xtask openapi`** writing `web/openapi.json`, and the CI
       freshness check that fails when it is stale (ADR-0008, ADR-0009)
-- [ ] **`cargo-deny` exception for RUSTSEC-2023-0071** with the reasoning from
-      ADR-0005, an owner, and a review date. An advisory exception with a
-      written rationale is a security control; one without is a hole with a
-      comment next to it.
+- [x] **`cargo-deny` exception for RUSTSEC-2023-0071** with the reasoning from
+      ADR-0005, an owner, and a review date (`deny.toml`, review by
+      2026-12-21). `bans` now denies a second `sqlx`, `opentelemetry`,
+      `opentelemetry_sdk` or `wasmtime` outright — that was a comment saying
+      it would be a problem, and is a check now.
 - [ ] **Pin the OTel crates in one Renovate group** with `tracing-opentelemetry`
       and `axum-tracing-opentelemetry`, so an upgrade is one reviewed change
       (ADR-0014 follow-up 2)
