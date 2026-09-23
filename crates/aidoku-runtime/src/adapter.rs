@@ -30,6 +30,28 @@ use crate::source::{Invocation, RunError, invoke};
 use crate::state::Defaults;
 
 /// A source that has been installed and compiled.
+/// Reads the filter values a client sent into what the guest expects.
+///
+/// The wire form is a JSON array of `FilterValue`, which serde already knows
+/// how to read — this exists for the error, not the parsing. `serde_json`
+/// reports "unknown variant" against a type the client has never heard of, and
+/// the message a caller gets should name what it may send.
+///
+/// `Null` and an absent value both mean no filters, because that is what a
+/// request without the parameter carries.
+fn parse_filters(value: &serde_json::Value) -> Result<Vec<models::FilterValue>> {
+    if value.is_null() {
+        return Ok(Vec::new());
+    }
+
+    serde_json::from_value(value.clone()).map_err(|e| {
+        DomainError::Invalid(format!(
+            "filters must be a JSON array of filter values \
+             (Text, Sort, Check, Select, MultiSelect): {e}"
+        ))
+    })
+}
+
 /// A package parsed and compiled, not yet bound to an id.
 pub struct PreparedSource {
     pub external_id: nyuka_domain::model::ExternalKey,
@@ -244,7 +266,7 @@ impl SourceCatalog for SourceRuntime {
         &self,
         source: SourceId,
         query: Option<&str>,
-        _filters: &serde_json::Value,
+        filters: &serde_json::Value,
         cursor: Option<&Cursor>,
     ) -> Result<Page<SourceManga>> {
         // Sources page by number, so the cursor carries one. A cursor that is
@@ -257,8 +279,16 @@ impl SourceCatalog for SourceRuntime {
         };
         let query = query.map(str::to_owned);
 
+        // A malformed filter is the client's error, not the source's: the
+        // source never sees it. Refused rather than dropped, because a filter
+        // silently ignored returns an unfiltered catalog that looks like a
+        // source with nothing matching.
+        let filters = parse_filters(filters)?;
+
         let result = self
-            .run(source, move |inv| inv.search(query.as_deref(), page, &[]))
+            .run(source, move |inv| {
+                inv.search(query.as_deref(), page, &filters)
+            })
             .await?;
 
         Ok(Page {
@@ -470,6 +500,74 @@ fn map_run_error(e: RunError) -> DomainError {
             message: format!("source trapped: {e}"),
             retryable: false,
         },
+    }
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+
+    fn parse(json: &str) -> Result<Vec<models::FilterValue>> {
+        parse_filters(&serde_json::from_str(json).expect("the test's own json"))
+    }
+
+    /// A request with no `filters` parameter carries `Null`, not an empty
+    /// array, and must mean the source's default listing.
+    #[test]
+    fn nothing_means_no_filters() {
+        assert_eq!(
+            parse_filters(&serde_json::Value::Null).expect("null"),
+            Vec::new()
+        );
+        assert_eq!(parse("[]").expect("empty"), Vec::new());
+    }
+
+    #[test]
+    fn every_variant_reads() {
+        let values = parse(
+            r#"[
+                {"Text": {"id": "author", "value": "Mori"}},
+                {"Sort": {"id": "sort", "index": 1, "ascending": false}},
+                {"Check": {"id": "completed", "value": 1}},
+                {"Select": {"id": "status", "value": "ongoing"}},
+                {"MultiSelect": {"id": "genre", "included": ["action"], "excluded": ["horror"]}}
+            ]"#,
+        )
+        .expect("every variant");
+
+        assert_eq!(values.len(), 5);
+        assert!(matches!(
+            &values[4],
+            models::FilterValue::MultiSelect { id, included, excluded }
+                if id == "genre" && included == &["action"] && excluded == &["horror"]
+        ));
+    }
+
+    /// A filter this host does not know is refused, not dropped. Dropping it
+    /// returns an unfiltered catalog, which looks like a source with nothing
+    /// matching rather than a request that was not understood.
+    #[test]
+    fn an_unknown_filter_is_refused() {
+        let error = parse(r#"[{"Range": {"id": "year", "from": 2000, "to": 2010}}]"#)
+            .expect_err("Range is not a variant this host knows");
+
+        let message = error.to_string();
+        assert!(
+            message.contains("MultiSelect"),
+            "the refusal must name what may be sent, got: {message}"
+        );
+    }
+
+    /// The value is a client's, so nothing here may panic on a shape it did
+    /// not expect.
+    #[test]
+    fn a_shape_that_is_not_a_filter_list_is_refused() {
+        for json in [r#"{"not": "an array"}"#, r#"["bare string"]"#, "42", "true"] {
+            assert!(
+                parse(json).is_err(),
+                "{json} is not a list of filter values"
+            );
+        }
     }
 }
 

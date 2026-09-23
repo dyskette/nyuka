@@ -1932,6 +1932,18 @@
             }
           },
           {
+            "description": "The source's own filters, as a JSON array of filter values.\n\nOne parameter carrying JSON rather than a parameter per filter. A\nsource declares its own filters — 121 of the 136 community sources do\n— so flattening them into the query string would make the shape of a\nrequest depend on whichever source it was about, and multi-select\ncarries separate included and excluded lists that no flat encoding\nholds without inventing a convention.\n\nIt stays a `GET` so a filtered catalog is a link, which is how every\nscreen in this application already keeps its state.\n\nEach value is one of:\n\n```json\n[\n  {\"Text\":        {\"id\": \"author\", \"value\": \"Mori\"}},\n  {\"Sort\":        {\"id\": \"sort\", \"index\": 1, \"ascending\": false}},\n  {\"Check\":       {\"id\": \"completed\", \"value\": 1}},\n  {\"Select\":      {\"id\": \"status\", \"value\": \"ongoing\"}},\n  {\"MultiSelect\": {\"id\": \"genre\", \"included\": [\"action\"], \"excluded\": [\"horror\"]}}\n]\n```",
+            "in": "query",
+            "name": "filters",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
             "in": "query",
             "name": "cursor",
             "required": false,

@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult, Problem};
 use crate::routes::dto::{ChapterDto, MangaDto, direction_name, rating_name, status_name};
 use crate::routes::library::not_found;
 use crate::state::AppState;
@@ -75,7 +75,53 @@ pub struct CatalogPage {
 pub struct CatalogQuery {
     /// Free-text search. Absent means the source's default listing.
     pub q: Option<String>,
+
+    /// The source's own filters, as a JSON array of filter values.
+    ///
+    /// One parameter carrying JSON rather than a parameter per filter. A
+    /// source declares its own filters — 121 of the 136 community sources do
+    /// — so flattening them into the query string would make the shape of a
+    /// request depend on whichever source it was about, and multi-select
+    /// carries separate included and excluded lists that no flat encoding
+    /// holds without inventing a convention.
+    ///
+    /// It stays a `GET` so a filtered catalog is a link, which is how every
+    /// screen in this application already keeps its state.
+    ///
+    /// Each value is one of:
+    ///
+    /// ```json
+    /// [
+    ///   {"Text":        {"id": "author", "value": "Mori"}},
+    ///   {"Sort":        {"id": "sort", "index": 1, "ascending": false}},
+    ///   {"Check":       {"id": "completed", "value": 1}},
+    ///   {"Select":      {"id": "status", "value": "ongoing"}},
+    ///   {"MultiSelect": {"id": "genre", "included": ["action"], "excluded": ["horror"]}}
+    /// ]
+    /// ```
+    pub filters: Option<String>,
+
     pub cursor: Option<String>,
+}
+
+impl CatalogQuery {
+    /// Reads the `filters` parameter.
+    ///
+    /// Absent is `Null`, which the runtime reads as no filters. A value that
+    /// is not JSON is refused here rather than passed on: the source would
+    /// never see it, so reporting it as a source failure would send someone
+    /// to check a third-party site over their own request.
+    fn filters(&self) -> ApiResult<serde_json::Value> {
+        let Some(raw) = self.filters.as_deref() else {
+            return Ok(serde_json::Value::Null);
+        };
+
+        serde_json::from_str(raw).map_err(|e| {
+            ApiError(Box::new(Problem::invalid(format!(
+                "`filters` is not valid JSON: {e}"
+            ))))
+        })
+    }
 }
 
 /// `GET /api/v1/sources/{id}/catalog`
@@ -101,11 +147,7 @@ pub async fn browse(
         .list(
             SourceId(id),
             query.q.as_deref(),
-            // Filters are a separate concern from search and are not wired
-            // through the query string: they are a source-defined structure,
-            // and flattening one into query parameters would make the shape
-            // depend on whichever source the client last asked about.
-            &serde_json::Value::Null,
+            &query.filters()?,
             query.cursor.map(Cursor).as_ref(),
         )
         .await

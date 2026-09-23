@@ -1575,6 +1575,32 @@ export interface operations {
             query?: {
                 /** @description Free-text search. Absent means the source's default listing. */
                 q?: string | null;
+                /**
+                 * @description The source's own filters, as a JSON array of filter values.
+                 *
+                 *     One parameter carrying JSON rather than a parameter per filter. A
+                 *     source declares its own filters — 121 of the 136 community sources do
+                 *     — so flattening them into the query string would make the shape of a
+                 *     request depend on whichever source it was about, and multi-select
+                 *     carries separate included and excluded lists that no flat encoding
+                 *     holds without inventing a convention.
+                 *
+                 *     It stays a `GET` so a filtered catalog is a link, which is how every
+                 *     screen in this application already keeps its state.
+                 *
+                 *     Each value is one of:
+                 *
+                 *     ```json
+                 *     [
+                 *       {"Text":        {"id": "author", "value": "Mori"}},
+                 *       {"Sort":        {"id": "sort", "index": 1, "ascending": false}},
+                 *       {"Check":       {"id": "completed", "value": 1}},
+                 *       {"Select":      {"id": "status", "value": "ongoing"}},
+                 *       {"MultiSelect": {"id": "genre", "included": ["action"], "excluded": ["horror"]}}
+                 *     ]
+                 *     ```
+                 */
+                filters?: string | null;
                 cursor?: string | null;
             };
             header?: never;
