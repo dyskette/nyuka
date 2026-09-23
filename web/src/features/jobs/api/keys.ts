@@ -1,16 +1,17 @@
 /**
- * Query keys for the jobs feature.
+ * Query keys for the jobs feature (ADR-0009).
  *
- * Resource-first and hierarchical, so `invalidateQueries({ queryKey:
- * jobsKeys.all })` reaches every cached jobs query through prefix matching —
- * including ones produced by different endpoints (ADR-0009).
- *
- * This is the public interface of the feature's data layer. SSE handlers,
- * route loaders, and components address the cache only through it.
+ * Separate from the library's tree: a job finishing invalidates both, and one
+ * shared root would make "invalidate the library" also throw away the queue
+ * on every chapter that lands.
  */
-export const jobsKeys = {
+export const jobKeys = {
   all: ['jobs'] as const,
-  lists: () => [...jobsKeys.all, 'list'] as const,
-  list: (state?: string) => [...jobsKeys.lists(), { state: state ?? null }] as const,
-  detail: (id: string) => [...jobsKeys.all, 'detail', id] as const,
+
+  lists: () => [...jobKeys.all, 'list'] as const,
+  /** Keyed on the state filter, because each filter is its own server query. */
+  list: (state?: string) => [...jobKeys.lists(), { state: state ?? null }] as const,
+
+  details: () => [...jobKeys.all, 'detail'] as const,
+  detail: (jobId: string) => [...jobKeys.details(), jobId] as const,
 }

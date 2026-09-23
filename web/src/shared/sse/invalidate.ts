@@ -1,6 +1,17 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { jobKeys } from '@/features/jobs/api/keys'
 import { libraryKeys } from '@/features/library/api/keys'
-import type { EventName, EventPayloads } from './events'
+import type { EventName, EventPayloads, JobProgress, JobStateChanged } from './events'
+import { clearProgress, recordProgress } from './progress'
+
+/**
+ * Job states a job does not come back from.
+ *
+ * The server sends these capitalised, as Rust names them — `"Succeeded"`, not
+ * `"succeeded"`. A lowercase comparison here would match nothing and the
+ * progress bars would never be cleared.
+ */
+const TERMINAL = new Set(['Succeeded', 'Failed', 'Cancelled'])
 
 /**
  * What each event makes stale.
@@ -26,18 +37,19 @@ export const INVALIDATES: {
   // whole library.
   'chapter.downloaded': (p) => [libraryKeys.detail(p.manga_id), libraryKeys.lists()],
 
-  // A job's progress is job state, not library state. Invalidating the
-  // library on every progress tick would refetch it once per downloaded page.
+  // A progress tick invalidates nothing: it is emitted once per downloaded
+  // page, and refetching on each is the traffic ADR-0010 chose SSE to avoid.
+  // The numbers go to the progress store instead — see `applyEvent`.
   'job.progress': () => [],
 
   // A finished job may have changed anything the job did, and the event does
   // not say what. The list is refetched; the series is not, because a job
   // that touched one already emitted a chapter event for it.
-  'job.state': () => [libraryKeys.lists()],
+  'job.state': () => [libraryKeys.lists(), jobKeys.all],
 
   // A source's metadata changed, which is what the library list renders as a
   // source name.
-  'source.updated': () => [libraryKeys.lists()],
+  'source.updated': () => [libraryKeys.lists(), jobKeys.all],
 }
 
 /**
@@ -52,6 +64,19 @@ export function applyEvent<N extends EventName>(
   name: N,
   payload: EventPayloads[N],
 ): void {
+  // Progress is not cache state — it has no endpoint to refetch from — so it
+  // goes to its own store rather than through an invalidation.
+  if (name === 'job.progress') {
+    recordProgress(payload as JobProgress)
+    return
+  }
+
+  // A job that reached a terminal state has no progress left to show, and its
+  // last bar would otherwise stay on screen for the life of the tab.
+  if (name === 'job.state' && TERMINAL.has((payload as JobStateChanged).state)) {
+    clearProgress((payload as JobStateChanged).job_id)
+  }
+
   const keys = INVALIDATES[name]?.(payload) ?? []
   for (const queryKey of keys) {
     void queryClient.invalidateQueries({ queryKey })
@@ -68,4 +93,5 @@ export function applyEvent<N extends EventName>(
  */
 export function invalidateEverything(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: libraryKeys.all })
+  void queryClient.invalidateQueries({ queryKey: jobKeys.all })
 }

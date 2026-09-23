@@ -208,6 +208,17 @@ pub trait JobQueue: Send + Sync {
     async fn get(&self, job: JobId) -> Result<Job>;
 
     async fn list(&self, state: Option<JobState>, cursor: Option<&Cursor>) -> Result<Page<Job>>;
+
+    /// The same list, with each download job's subject resolved.
+    ///
+    /// A queue of uuids answers nothing an operator asks of it, so the list
+    /// view uses this and the plain `list` stays for callers that only need
+    /// the rows.
+    async fn list_summaries(
+        &self,
+        state: Option<JobState>,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<JobSummary>>;
 }
 
 /// Publishes job events to subscribers. Backed by `tokio::sync::broadcast`

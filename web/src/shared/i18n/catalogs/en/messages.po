@@ -13,6 +13,12 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. placeholder {0}: progress.done
+#. placeholder {1}: progress.total
+#: src/features/jobs/components/JobQueue.tsx
+msgid "{0} of {1} pages"
+msgstr "{0} of {1} pages"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown} of {total}"
 msgstr "{shown} of {total}"
@@ -25,18 +31,27 @@ msgstr "{total} titles"
 msgid "⌘K"
 msgstr "⌘K"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Actions"
+msgstr "Actions"
+
 #: src/features/browse/components/CatalogGrid.tsx
 #: src/features/library/components/LibraryTable.tsx
 msgid "Add a source, then browse its catalog to add a series. Everything you add appears here."
 msgstr "Add a source, then browse its catalog to add a series. Everything you add appears here."
 
 #: src/features/library/components/LibraryToolbar.tsx
+#: src/routes/downloads.tsx
 msgid "All"
 msgstr "All"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Any"
 msgstr "Any"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Background jobs"
+msgstr "Background jobs"
 
 #: src/shared/components/AppShell.tsx
 msgid "Browse"
@@ -45,6 +60,14 @@ msgstr "Browse"
 #: src/routes/browse.tsx
 msgid "Browse is not built yet."
 msgstr "Browse is not built yet."
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Cancel this job"
+msgstr "Cancel this job"
 
 #: src/features/library/components/LibraryTable.tsx
 #: src/routes/library.$mangaId.tsx
@@ -72,9 +95,13 @@ msgstr "Downloaded"
 msgid "Downloads"
 msgstr "Downloads"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Downloads and scheduled work appear here while they run."
+msgstr "Downloads and scheduled work appear here while they run."
+
 #: src/routes/downloads.tsx
-msgid "Downloads is not built yet."
-msgstr "Downloads is not built yet."
+#~ msgid "Downloads is not built yet."
+#~ msgstr "Downloads is not built yet."
 
 #: src/shared/components/AppShell.tsx
 msgid "Follows"
@@ -83,6 +110,10 @@ msgstr "Follows"
 #: src/routes/follows.tsx
 msgid "Follows is not built yet."
 msgstr "Follows is not built yet."
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Job"
+msgstr "Job"
 
 #: src/shared/components/AppShell.tsx
 msgid "Library"
@@ -100,6 +131,10 @@ msgstr "No chapters yet. Refresh the series to fetch its chapter list."
 msgid "No cover"
 msgstr "No cover"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Nothing in the queue"
+msgstr "Nothing in the queue"
+
 #: src/shared/components/AppShell.tsx
 msgid "Offline"
 msgstr "Offline"
@@ -112,9 +147,22 @@ msgstr "Open at the source"
 msgid "Overview"
 msgstr "Overview"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Progress"
+msgstr "Progress"
+
+#: src/features/jobs/components/JobQueue.tsx
 #: src/features/library/components/ChapterList.tsx
 msgid "Queued"
 msgstr "Queued"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Retry"
+msgstr "Retry"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Retry this job"
+msgstr "Retry this job"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Search {total} titles"
@@ -141,14 +189,30 @@ msgstr "Settings"
 msgid "Settings is not built yet."
 msgstr "Settings is not built yet."
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Size"
+msgstr "Size"
+
 #: src/features/library/components/LibraryTable.tsx
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Source"
 msgstr "Source"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Speed"
+msgstr "Speed"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "State"
+msgstr "State"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Status"
 msgstr "Status"
+
+#: src/routes/downloads.tsx
+msgid "The job queue could not be loaded."
+msgstr "The job queue could not be loaded."
 
 #: src/routes/library.tsx
 msgid "The library could not be loaded."

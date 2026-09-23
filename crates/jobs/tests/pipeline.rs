@@ -509,3 +509,196 @@ async fn a_retry_is_announced_as_queued_and_a_final_failure_as_failed() {
     .await;
     assert_eq!(final_.states(), vec![JobState::Failed]);
 }
+
+// ---------------------------------------------------------------------------
+// The job list's subject join
+// ---------------------------------------------------------------------------
+
+/// Seeds a source, a series and a chapter, returning the chapter's id.
+async fn seed_chapter(db: &DatabaseConnection, title: &str) -> uuid::Uuid {
+    let repo = uuid::Uuid::new_v4();
+    let source = uuid::Uuid::new_v4();
+    let manga = uuid::Uuid::new_v4();
+    let chapter = uuid::Uuid::new_v4();
+
+    for sql in [
+        format!(
+            "INSERT INTO source_repo (id, url, name, created_at) \
+             VALUES ('{repo}', 'https://example.org/{repo}', 'Repo', now())"
+        ),
+        format!(
+            "INSERT INTO source (id, repo_id, external_id, name, version, languages, \
+             required_capabilities, installed_at) \
+             VALUES ('{source}', '{repo}', 'src', 'Source', 1, '[]'::jsonb, '[]'::jsonb, now())"
+        ),
+        format!(
+            "INSERT INTO manga (id, source_id, external_key, title, authors, artists, tags, \
+             status, content_rating, direction, created_at, updated_at) \
+             VALUES ('{manga}', '{source}', 'k', '{title}', '[]'::jsonb, '[]'::jsonb, \
+             '[]'::jsonb, 0, 0, 0, now(), now())"
+        ),
+        format!(
+            "INSERT INTO chapter (id, manga_id, external_key, title, number, scanlators, \
+             locked, created_at) \
+             VALUES ('{chapter}', '{manga}', 'c1', 'The Ninth Gate', 9, '[]'::jsonb, false, now())"
+        ),
+    ] {
+        db.execute_raw(Statement::from_string(db.get_database_backend(), sql))
+            .await
+            .expect("seeding");
+    }
+    chapter
+}
+
+/// A download job names its chapter, and a maintenance job names nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_download_job_resolves_its_subject_and_a_maintenance_job_has_none() {
+    let Some(db) = fresh_database("nyuka_test_job_subject").await else {
+        return;
+    };
+    let chapter = seed_chapter(&db, "Ashfall Chronicle").await;
+    let queue = PostgresQueue::new(db.clone());
+
+    queue
+        .enqueue(
+            JobKind::DownloadChapter,
+            serde_json::json!({ "chapter_id": chapter.to_string() }),
+            None,
+            None,
+            0,
+            1,
+        )
+        .await
+        .expect("enqueue");
+    queue
+        .enqueue(
+            JobKind::PruneSessions,
+            serde_json::json!({}),
+            None,
+            None,
+            0,
+            1,
+        )
+        .await
+        .expect("enqueue");
+
+    let page = queue.list_summaries(None, 10).await.expect("summaries");
+    assert_eq!(page.items.len(), 2);
+
+    let download = page
+        .items
+        .iter()
+        .find(|s| s.job.kind == JobKind::DownloadChapter)
+        .expect("the download job");
+    let subject = download.subject.as_ref().expect("a resolved subject");
+    assert_eq!(subject.manga_title, "Ashfall Chronicle");
+    assert_eq!(subject.chapter_title.as_deref(), Some("The Ninth Gate"));
+    assert_eq!(subject.chapter_number, Some(9.0));
+    assert_eq!(subject.chapter_id.0, chapter);
+
+    let maintenance = page
+        .items
+        .iter()
+        .find(|s| s.job.kind == JobKind::PruneSessions)
+        .expect("the maintenance job");
+    assert!(
+        maintenance.subject.is_none(),
+        "a session prune is about nothing a reader named; inventing a subject \
+         would be worse than leaving it empty"
+    );
+}
+
+/// A payload whose `chapter_id` is not a uuid must not fail the query.
+///
+/// `::uuid` on a bad value raises an error that takes down the whole
+/// statement, so one malformed row would empty the queue view rather than
+/// showing itself as one job without a subject. The regex guard in the join is
+/// what prevents that, and this is the only thing checking it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_malformed_payload_yields_one_subjectless_row_not_an_empty_list() {
+    let Some(db) = fresh_database("nyuka_test_job_subject_bad").await else {
+        return;
+    };
+    let chapter = seed_chapter(&db, "Ashfall Chronicle").await;
+    let queue = PostgresQueue::new(db.clone());
+
+    queue
+        .enqueue(
+            JobKind::DownloadChapter,
+            serde_json::json!({ "chapter_id": chapter.to_string() }),
+            None,
+            None,
+            0,
+            1,
+        )
+        .await
+        .expect("enqueue");
+
+    for payload in [
+        serde_json::json!({ "chapter_id": "not-a-uuid" }),
+        serde_json::json!({ "chapter_id": "" }),
+        serde_json::json!({ "chapter_id": 42 }),
+        // Absent entirely, which is the ordinary shape of a different kind.
+        serde_json::json!({}),
+    ] {
+        queue
+            .enqueue(JobKind::DownloadChapter, payload, None, None, 0, 1)
+            .await
+            .expect("enqueue");
+    }
+
+    let page = queue
+        .list_summaries(None, 10)
+        .await
+        .expect("the query must not fail");
+
+    assert_eq!(
+        page.items.len(),
+        5,
+        "every job is listed, bad payload or not"
+    );
+    assert_eq!(
+        page.items.iter().filter(|s| s.subject.is_some()).count(),
+        1,
+        "only the well-formed one resolves"
+    );
+}
+
+/// Two jobs naming the same chapter — a retry and its original — must each get
+/// that chapter's subject. A positional zip of query results onto jobs would
+/// hand one of them the other's, because the lookup returns one row for the id
+/// while two jobs asked for it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_jobs_for_one_chapter_both_resolve() {
+    let Some(db) = fresh_database("nyuka_test_job_subject_dup").await else {
+        return;
+    };
+    let chapter = seed_chapter(&db, "Ashfall Chronicle").await;
+    let queue = PostgresQueue::new(db.clone());
+
+    for key in ["first", "second"] {
+        queue
+            .enqueue(
+                JobKind::DownloadChapter,
+                serde_json::json!({ "chapter_id": chapter.to_string() }),
+                None,
+                // Distinct keys, or the second enqueue is deduplicated into
+                // the first and there is only one job to assert on.
+                Some(key),
+                0,
+                1,
+            )
+            .await
+            .expect("enqueue");
+    }
+
+    let page = queue.list_summaries(None, 10).await.expect("summaries");
+    assert_eq!(page.items.len(), 2);
+    assert!(
+        page.items.iter().all(|s| s
+            .subject
+            .as_ref()
+            .is_some_and(|j| j.chapter_id.0 == chapter)),
+        "both jobs name the same chapter, so both must resolve to it"
+    );
+}

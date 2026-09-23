@@ -13,6 +13,12 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. placeholder {0}: progress.done
+#. placeholder {1}: progress.total
+#: src/features/jobs/components/JobQueue.tsx
+msgid "{0} of {1} pages"
+msgstr "{0} de {1} páginas"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown} of {total}"
 msgstr "{shown} de {total}"
@@ -25,18 +31,27 @@ msgstr "{total} títulos"
 msgid "⌘K"
 msgstr "⌘K"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Actions"
+msgstr "Acciones"
+
 #: src/features/browse/components/CatalogGrid.tsx
 #: src/features/library/components/LibraryTable.tsx
 msgid "Add a source, then browse its catalog to add a series. Everything you add appears here."
 msgstr "Añade una fuente y explora su catálogo para añadir una serie. Todo lo que añadas aparecerá aquí."
 
 #: src/features/library/components/LibraryToolbar.tsx
+#: src/routes/downloads.tsx
 msgid "All"
 msgstr "Todas"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Any"
 msgstr "Cualquiera"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Background jobs"
+msgstr "Trabajos en segundo plano"
 
 #: src/shared/components/AppShell.tsx
 msgid "Browse"
@@ -45,6 +60,14 @@ msgstr "Explorar"
 #: src/routes/browse.tsx
 msgid "Browse is not built yet."
 msgstr "Explorar todavía no está construido."
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Cancel this job"
+msgstr "Cancelar este trabajo"
 
 #: src/features/library/components/LibraryTable.tsx
 #: src/routes/library.$mangaId.tsx
@@ -72,9 +95,13 @@ msgstr "Descargados"
 msgid "Downloads"
 msgstr "Descargas"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Downloads and scheduled work appear here while they run."
+msgstr "Las descargas y el trabajo programado aparecen aquí mientras se ejecutan."
+
 #: src/routes/downloads.tsx
-msgid "Downloads is not built yet."
-msgstr "Descargas todavía no está construido."
+#~ msgid "Downloads is not built yet."
+#~ msgstr "Descargas todavía no está construido."
 
 #: src/shared/components/AppShell.tsx
 msgid "Follows"
@@ -83,6 +110,10 @@ msgstr "Seguimientos"
 #: src/routes/follows.tsx
 msgid "Follows is not built yet."
 msgstr "Seguimientos todavía no está construido."
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Job"
+msgstr "Trabajo"
 
 #: src/shared/components/AppShell.tsx
 msgid "Library"
@@ -100,6 +131,10 @@ msgstr "Todavía no hay capítulos. Actualiza la serie para obtener su lista de 
 msgid "No cover"
 msgstr "Sin portada"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Nothing in the queue"
+msgstr "No hay nada en la cola"
+
 #: src/shared/components/AppShell.tsx
 msgid "Offline"
 msgstr "Sin conexión"
@@ -112,9 +147,22 @@ msgstr "Abrir en la fuente"
 msgid "Overview"
 msgstr "Resumen"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Progress"
+msgstr "Progreso"
+
+#: src/features/jobs/components/JobQueue.tsx
 #: src/features/library/components/ChapterList.tsx
 msgid "Queued"
 msgstr "En cola"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Retry"
+msgstr "Reintentar"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Retry this job"
+msgstr "Reintentar este trabajo"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Search {total} titles"
@@ -141,14 +189,30 @@ msgstr "Ajustes"
 msgid "Settings is not built yet."
 msgstr "Ajustes todavía no está construido."
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Size"
+msgstr "Tamaño"
+
 #: src/features/library/components/LibraryTable.tsx
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Source"
 msgstr "Fuente"
 
+#: src/features/jobs/components/JobQueue.tsx
+msgid "Speed"
+msgstr "Velocidad"
+
+#: src/features/jobs/components/JobQueue.tsx
+msgid "State"
+msgstr "Estado"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Status"
 msgstr "Estado"
+
+#: src/routes/downloads.tsx
+msgid "The job queue could not be loaded."
+msgstr "No se pudo cargar la cola de trabajos."
 
 #: src/routes/library.tsx
 msgid "The library could not be loaded."

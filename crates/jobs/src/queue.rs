@@ -29,7 +29,9 @@
 //! real database rather than trusting inspection.
 
 use chrono::{DateTime, Utc};
-use nyuka_domain::model::{Cursor, Job, JobId, JobKind, JobState, Page};
+use nyuka_domain::model::{
+    ChapterId, Cursor, Job, JobId, JobKind, JobState, JobSubject, JobSummary, MangaId, Page,
+};
 use nyuka_domain::{DomainError, Result};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value};
 use uuid::Uuid;
@@ -135,6 +137,24 @@ fn row_to_job(row: &sea_orm::QueryResult) -> Result<Job> {
         last_error: row.try_get("", "last_error").map_err(db)?,
         created_at: row.try_get("", "created_at").map_err(db)?,
     })
+}
+
+/// Reads the joined subject columns, which are NULL for a job that has none.
+///
+/// Keyed off `manga_id`: the join either produced every column or none, so one
+/// of them standing for the rest cannot disagree with the others.
+fn row_to_subject(row: &sea_orm::QueryResult) -> Result<Option<JobSubject>> {
+    let manga_id: Option<Uuid> = row.try_get("", "subject_manga_id").map_err(db)?;
+    let Some(manga_id) = manga_id else {
+        return Ok(None);
+    };
+    Ok(Some(JobSubject {
+        manga_id: MangaId(manga_id),
+        manga_title: row.try_get("", "subject_manga_title").map_err(db)?,
+        chapter_id: ChapterId(row.try_get("", "subject_chapter_id").map_err(db)?),
+        chapter_number: row.try_get("", "subject_chapter_number").map_err(db)?,
+        chapter_title: row.try_get("", "subject_chapter_title").map_err(db)?,
+    }))
 }
 
 fn db(e: sea_orm::DbErr) -> DomainError {
@@ -353,6 +373,111 @@ impl PostgresQueue {
         })
     }
 
+    /// The job list with each download job's subject resolved.
+    ///
+    /// # The chapter id is parsed in Rust, not cast in SQL
+    ///
+    /// The id lives in a JSONB payload whose shape varies by kind. The obvious
+    /// query joins on `(payload->>'chapter_id')::uuid` — and `::uuid` on a
+    /// value that is not one raises an error that fails the *whole statement*,
+    /// so a single malformed payload empties the queue view instead of showing
+    /// one row without a subject.
+    ///
+    /// Guarding that cast with `AND` in the join condition does not work.
+    /// Postgres does not promise to evaluate conjuncts in written order, and it
+    /// does not: a regex guard written first still let the cast run on the rows
+    /// it was meant to exclude, and the test below caught it doing so.
+    ///
+    /// So no untrusted value is ever cast. The ids are parsed here, where a bad
+    /// one is an `Option` rather than an aborted transaction, and the second
+    /// query matches on `c.id` directly — which also keeps the primary key
+    /// index, as comparing `c.id::text` would not.
+    pub async fn list_summaries(
+        &self,
+        state: Option<JobState>,
+        limit: u64,
+    ) -> Result<Page<JobSummary>> {
+        let jobs = self.list(state, limit).await?;
+
+        // Parsed, not trusted. A payload that does not hold a uuid simply has
+        // no subject.
+        let wanted: Vec<Uuid> = jobs
+            .items
+            .iter()
+            .filter(|j| j.kind == JobKind::DownloadChapter)
+            .filter_map(|j| j.payload.get("chapter_id")?.as_str()?.parse::<Uuid>().ok())
+            .collect();
+
+        let subjects = self.subjects_for(&wanted).await?;
+
+        let items = jobs
+            .items
+            .into_iter()
+            .map(|job| {
+                let subject = job
+                    .payload
+                    .get("chapter_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| s.parse::<Uuid>().ok())
+                    .and_then(|id| subjects.get(&id).cloned());
+                JobSummary { job, subject }
+            })
+            .collect();
+
+        Ok(Page { items, next: None })
+    }
+
+    /// Looks up the series and chapter behind a set of chapter ids.
+    ///
+    /// Returns a map rather than a list because two jobs can name the same
+    /// chapter — a retry and its original — and a positional zip would then
+    /// hand one of them the other's subject.
+    async fn subjects_for(
+        &self,
+        chapter_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, JobSubject>> {
+        if chapter_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        // `= ANY($1)` rather than an IN list built by string concatenation:
+        // one bound parameter, and no way for a value to become syntax.
+        let sql = "SELECT c.id AS subject_chapter_id, \
+                   c.number AS subject_chapter_number, \
+                   c.title AS subject_chapter_title, \
+                   m.id AS subject_manga_id, \
+                   m.title AS subject_manga_title \
+                   FROM chapter c \
+                   JOIN manga m ON m.id = c.manga_id \
+                   WHERE c.id = ANY($1)";
+
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                sql,
+                [Value::Array(
+                    sea_orm::sea_query::ArrayType::Uuid,
+                    Some(Box::new(
+                        chapter_ids
+                            .iter()
+                            .map(|id| Value::Uuid(Some(*id)))
+                            .collect(),
+                    )),
+                )],
+            ))
+            .await
+            .map_err(db)?;
+
+        let mut map = std::collections::HashMap::new();
+        for row in &rows {
+            if let Some(subject) = row_to_subject(row)? {
+                map.insert(subject.chapter_id.0, subject);
+            }
+        }
+        Ok(map)
+    }
+
     /// Deletes terminal rows past the retention window.
     ///
     /// The partial claim index only covers queued rows, but terminal rows
@@ -434,6 +559,14 @@ impl nyuka_domain::ports::JobQueue for PostgresQueue {
     /// Wire keyset pagination here when something needs the second page.
     async fn list(&self, state: Option<JobState>, _cursor: Option<&Cursor>) -> Result<Page<Job>> {
         PostgresQueue::list(self, state, 100).await
+    }
+
+    async fn list_summaries(
+        &self,
+        state: Option<JobState>,
+        _cursor: Option<&Cursor>,
+    ) -> Result<Page<JobSummary>> {
+        PostgresQueue::list_summaries(self, state, 100).await
     }
 }
 

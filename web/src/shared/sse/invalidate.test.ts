@@ -1,7 +1,13 @@
 import { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
+import { renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { libraryKeys } from '@/features/library/api/keys'
-import { INVALIDATES, applyEvent, invalidateEverything } from './invalidate'
+import { applyEvent, INVALIDATES, invalidateEverything } from './invalidate'
+import { recordProgress, resetProgress, useProgress } from './progress'
+
+// The progress store is module state, so one test's events would otherwise be
+// visible to the next.
+beforeEach(resetProgress)
 
 function spyClient() {
   const queryClient = new QueryClient()
@@ -68,5 +74,61 @@ describe('invalidateEverything', () => {
 
     expect(spy).toHaveBeenCalledWith({ queryKey: libraryKeys.all })
     expect(libraryKeys.lists()).toEqual(expect.arrayContaining([...libraryKeys.all]))
+  })
+})
+
+/**
+ * Progress lives in its own store rather than the Query cache, so `applyEvent`
+ * routes those two event kinds by hand — and that hand-routing is where it can
+ * silently stop working.
+ */
+describe('the progress store handoff', () => {
+  function readProgress() {
+    return renderHook(() => useProgress()).result.current
+  }
+
+  it('records a progress tick instead of invalidating', () => {
+    const { queryClient, spy } = spyClient()
+
+    applyEvent(queryClient, 'job.progress', { job_id: 'j-1', done: 3, total: 9, bytes: 300 })
+
+    expect(spy).not.toHaveBeenCalled()
+    expect(readProgress().get('j-1')?.done).toBe(3)
+  })
+
+  /**
+   * The server capitalises its job states — `"Succeeded"`, as Rust names the
+   * variant, not `"succeeded"`. A lowercase comparison matches nothing, and
+   * the failure is invisible: every finished job keeps its last progress bar
+   * for the life of the tab while every other assertion still passes.
+   */
+  it('clears progress on the capitalisation the server actually sends', () => {
+    const { queryClient } = spyClient()
+    recordProgress({ job_id: 'j-1', done: 9, total: 9, bytes: 900 })
+    expect(readProgress().has('j-1')).toBe(true)
+
+    applyEvent(queryClient, 'job.state', { job_id: 'j-1', state: 'Succeeded' })
+
+    expect(readProgress().has('j-1')).toBe(false)
+  })
+
+  it('clears it for every terminal state, not only success', () => {
+    const { queryClient } = spyClient()
+
+    for (const state of ['Failed', 'Cancelled']) {
+      recordProgress({ job_id: 'j-1', done: 4, total: 9, bytes: 400 })
+      applyEvent(queryClient, 'job.state', { job_id: 'j-1', state })
+      expect(readProgress().has('j-1')).toBe(false)
+    }
+  })
+
+  /** A job going back to the queue keeps its bar: it has not finished. */
+  it('keeps progress for a state that is not terminal', () => {
+    const { queryClient } = spyClient()
+    recordProgress({ job_id: 'j-1', done: 4, total: 9, bytes: 400 })
+
+    applyEvent(queryClient, 'job.state', { job_id: 'j-1', state: 'Running' })
+
+    expect(readProgress().get('j-1')?.done).toBe(4)
   })
 })

@@ -467,6 +467,31 @@ pub enum JobKind {
     ReconcileLibrary,
 }
 
+/// What a job is *about*, when that can be resolved.
+///
+/// A queue of uuids answers nothing a person asks of it. Only download jobs
+/// have a subject today — they are the ones a reader watches — so this is
+/// `None` for maintenance work rather than being invented for it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobSubject {
+    pub manga_id: MangaId,
+    pub manga_title: String,
+    pub chapter_id: ChapterId,
+    pub chapter_number: Option<f32>,
+    pub chapter_title: Option<String>,
+}
+
+/// A job with its subject resolved.
+///
+/// The same projection as [`MangaSummary`] and [`ChapterSummary`]: the join
+/// belongs to the list view, and a caller that only needs the job row should
+/// not pay for it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobSummary {
+    pub job: Job,
+    pub subject: Option<JobSubject>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub id: JobId,

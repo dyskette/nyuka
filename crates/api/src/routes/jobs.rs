@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
-use crate::routes::dto::{JobDto, Paged};
+use crate::routes::dto::{JobDto, JobSummaryDto, Paged};
 use crate::routes::library::not_found;
 use crate::state::AppState;
 
@@ -31,14 +31,14 @@ pub struct JobQuery {
     tag = "jobs",
     params(JobQuery),
     responses(
-        (status = OK, body = Paged<JobDto>),
+        (status = OK, body = Paged<JobSummaryDto>),
         (status = BAD_REQUEST, description = "Unknown state filter"),
     ),
 )]
 pub async fn list(
     State(state): State<Arc<AppState>>,
     Query(query): Query<JobQuery>,
-) -> ApiResult<Json<Paged<JobDto>>> {
+) -> ApiResult<Json<Paged<JobSummaryDto>>> {
     let filter = match query.state.as_deref() {
         None => None,
         // An unknown filter is refused rather than ignored: silently returning
@@ -53,7 +53,11 @@ pub async fn list(
 
     let cursor = query.cursor.map(nyuka_domain::model::Cursor);
     Ok(Json(
-        state.queue.list(filter, cursor.as_ref()).await?.into(),
+        state
+            .queue
+            .list_summaries(filter, cursor.as_ref())
+            .await?
+            .into(),
     ))
 }
 

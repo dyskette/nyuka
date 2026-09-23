@@ -598,6 +598,27 @@ export interface components {
             run_at: string;
             state: string;
         };
+        /** @description What a job is about, when that can be resolved. */
+        JobSubjectDto: {
+            /** Format: uuid */
+            chapter_id: string;
+            /** Format: float */
+            chapter_number?: number | null;
+            chapter_title?: string | null;
+            /** Format: uuid */
+            manga_id: string;
+            manga_title: string;
+        };
+        /**
+         * @description A job with its subject resolved.
+         *
+         *     This is why the payload stays unexposed: a client needs to know *which*
+         *     chapter a download is for, not the opaque arguments the handler runs on.
+         *     Resolving it here answers the question without publishing the rest.
+         */
+        JobSummaryDto: components["schemas"]["JobDto"] & {
+            subject?: null | components["schemas"]["JobSubjectDto"];
+        };
         MangaDto: {
             artists: string[];
             authors: string[];
@@ -681,24 +702,10 @@ export interface components {
          *     page. Offsets are deliberately absent: they shift under inserts, and a
          *     library that gains a chapter mid-scroll would skip or repeat one.
          */
-        Paged_JobDto: {
-            items: {
-                /** Format: int32 */
-                attempts: number;
-                /** Format: date-time */
-                created_at: string;
-                /** Format: uuid */
-                id: string;
-                kind: string;
-                last_error?: string | null;
-                /** Format: int32 */
-                max_attempts: number;
-                /** Format: int32 */
-                priority: number;
-                /** Format: date-time */
-                run_at: string;
-                state: string;
-            }[];
+        Paged_JobSummaryDto: {
+            items: (components["schemas"]["JobDto"] & {
+                subject?: null | components["schemas"]["JobSubjectDto"];
+            })[];
             next_cursor?: string | null;
         };
         /**
@@ -1069,7 +1076,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Paged_JobDto"];
+                    "application/json": components["schemas"]["Paged_JobSummaryDto"];
                 };
             };
             /** @description Unknown state filter */

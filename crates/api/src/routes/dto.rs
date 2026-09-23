@@ -15,7 +15,8 @@
 
 use nyuka_domain::model::{
     Chapter, ChapterSummary, ContentRating, Cursor, Follow, InstalledSource, Job, JobKind,
-    JobState, Manga, MangaStatus, MangaSummary, Page, ReadingDirection, SourceEntry, SourceRepo,
+    JobState, JobSubject, JobSummary, Manga, MangaStatus, MangaSummary, Page, ReadingDirection,
+    SourceEntry, SourceRepo,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -354,6 +355,50 @@ impl From<Job> for JobDto {
             // browser's.
             last_error: j.last_error,
             created_at: j.created_at,
+        }
+    }
+}
+
+/// What a job is about, when that can be resolved.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct JobSubjectDto {
+    pub manga_id: Uuid,
+    pub manga_title: String,
+    pub chapter_id: Uuid,
+    pub chapter_number: Option<f32>,
+    pub chapter_title: Option<String>,
+}
+
+/// A job with its subject resolved.
+///
+/// This is why the payload stays unexposed: a client needs to know *which*
+/// chapter a download is for, not the opaque arguments the handler runs on.
+/// Resolving it here answers the question without publishing the rest.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct JobSummaryDto {
+    #[serde(flatten)]
+    pub job: JobDto,
+    /// Absent for maintenance work, which is about nothing a reader named.
+    pub subject: Option<JobSubjectDto>,
+}
+
+impl From<JobSubject> for JobSubjectDto {
+    fn from(s: JobSubject) -> Self {
+        Self {
+            manga_id: s.manga_id.0,
+            manga_title: s.manga_title,
+            chapter_id: s.chapter_id.0,
+            chapter_number: s.chapter_number,
+            chapter_title: s.chapter_title,
+        }
+    }
+}
+
+impl From<JobSummary> for JobSummaryDto {
+    fn from(s: JobSummary) -> Self {
+        Self {
+            job: s.job.into(),
+            subject: s.subject.map(Into::into),
         }
     }
 }

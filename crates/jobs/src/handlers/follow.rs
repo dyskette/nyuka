@@ -584,7 +584,7 @@ mod check_follow_tests {
     use super::tests::*;
     use super::*;
     use crate::handlers::testing::job;
-    use nyuka_domain::model::{Cursor, FollowId, JobId, JobState, Page};
+    use nyuka_domain::model::{Cursor, FollowId, JobId, JobState, JobSummary, Page};
     use std::sync::Mutex;
 
     /// One recorded `enqueue` call.
@@ -643,6 +643,16 @@ mod check_follow_tests {
             Err(DomainError::NotFound)
         }
         async fn list(&self, _state: Option<JobState>, _c: Option<&Cursor>) -> Result<Page<Job>> {
+            Ok(Page {
+                items: vec![],
+                next: None,
+            })
+        }
+        async fn list_summaries(
+            &self,
+            _state: Option<JobState>,
+            _c: Option<&Cursor>,
+        ) -> Result<Page<JobSummary>> {
             Ok(Page {
                 items: vec![],
                 next: None,
