@@ -105,6 +105,29 @@ export function useRefreshRepo() {
 }
 
 /**
+ * Writes one of a source's settings.
+ *
+ * The value is already postcard-encoded and base64'd by the caller, which is
+ * the only place that knows its type — the declaration says what each key
+ * holds, and this server does not (see `lib/postcard.ts`).
+ */
+export function usePutSourceSetting(sourceId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      const { error } = await api.PUT('/sources/{id}/settings', {
+        params: { path: { id: sourceId } },
+        body: { key, value },
+      })
+      if (error !== undefined) throw error
+      return key
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: sourceKeys.settings(sourceId) }),
+  })
+}
+
+/**
  * Adds a catalog entry to the library.
  *
  * The body names a source and a key, never the metadata: the server fetches

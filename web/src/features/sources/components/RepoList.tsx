@@ -2,6 +2,7 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { useState } from 'react'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
+import { SourceSettingsPanel } from './SourceSettingsPanel'
 
 type SourceRepo = components['schemas']['SourceRepoDto']
 type SourceEntry = components['schemas']['SourceEntryDto']
@@ -185,25 +186,79 @@ function SourceTable({
   return (
     <ul className="flex flex-col">
       {entries.map((entry) => (
-        <li
+        <SourceRow
           key={entry.external_id}
-          className="border-border px-cell flex h-row items-center gap-2 border-b last:border-b-0 text-sm"
-        >
-          <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-          <span className="text-muted-foreground tabular shrink-0 text-xs">v{entry.version}</span>
-          <span className="text-muted-foreground shrink-0 text-xs">
-            {entry.languages.join(', ')}
-          </span>
-          <EntryAction
-            repoId={repoId}
-            entry={entry}
-            onInstall={onInstall}
-            onUninstall={onUninstall}
-            installed={installed}
-          />
-        </li>
+          repoId={repoId}
+          entry={entry}
+          onInstall={onInstall}
+          onUninstall={onUninstall}
+          installed={installed}
+        />
       ))}
     </ul>
+  )
+}
+
+/**
+ * One source in a repository's index.
+ *
+ * An installed source can be expanded to show its own settings. Collapsed by
+ * default and fetched only when opened: a repository listing twenty sources
+ * would otherwise make twenty requests to render a list nobody expanded.
+ */
+function SourceRow({
+  repoId,
+  entry,
+  onInstall,
+  onUninstall,
+  installed,
+}: {
+  repoId: string
+  entry: SourceEntry
+  onInstall: (repoId: string, externalId: string) => void
+  onUninstall: (sourceId: string) => void
+  installed: ReadonlyMap<string, string>
+}) {
+  const { t } = useLingui()
+  const [open, setOpen] = useState(false)
+  const sourceId = installed.get(`${repoId}:${entry.external_id}`)
+
+  return (
+    <li className="border-border border-b last:border-b-0">
+      <div className="px-cell flex h-row items-center gap-2 text-sm">
+        {sourceId === undefined ? (
+          // A source that is not installed has no settings to show, so the
+          // space stays empty rather than holding a control that does nothing.
+          <span className="w-4 shrink-0" />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen((previous) => !previous)}
+            aria-expanded={open}
+            aria-label={t`Settings for ${entry.name}`}
+            className="text-muted-foreground hover:text-foreground w-4 shrink-0 text-xs"
+          >
+            <span aria-hidden="true">{open ? '\u25BE' : '\u25B8'}</span>
+          </button>
+        )}
+        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+        <span className="text-muted-foreground tabular shrink-0 text-xs">v{entry.version}</span>
+        <span className="text-muted-foreground shrink-0 text-xs">{entry.languages.join(', ')}</span>
+        <EntryAction
+          repoId={repoId}
+          entry={entry}
+          onInstall={onInstall}
+          onUninstall={onUninstall}
+          installed={installed}
+        />
+      </div>
+
+      {open && sourceId !== undefined && (
+        <div className="bg-surface-raised border-border border-t">
+          <SourceSettingsPanel sourceId={sourceId} />
+        </div>
+      )}
+    </li>
   )
 }
 

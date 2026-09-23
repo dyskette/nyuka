@@ -45,6 +45,26 @@ export function catalogQuery(sourceId: string, q?: string, cursor?: string) {
   })
 }
 
+/**
+ * A source's settings: its declaration and its stored values.
+ *
+ * `staleTime: 0` — this is the one view whose whole purpose is to show what is
+ * currently stored, and a save invalidates it.
+ */
+export function sourceSettingsQuery(sourceId: string) {
+  return queryOptions({
+    queryKey: sourceKeys.settings(sourceId),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/sources/{id}/settings', {
+          params: { path: { id: sourceId } },
+          signal,
+        }),
+      ),
+    staleTime: 0,
+  })
+}
+
 /** Configured repositories. */
 export function repoListQuery() {
   return queryOptions({

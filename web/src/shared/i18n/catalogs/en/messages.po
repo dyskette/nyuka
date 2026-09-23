@@ -13,6 +13,11 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. placeholder {0}: setting.title
+#: src/features/sources/components/SourceSettings.tsx
+msgid "{0}"
+msgstr "{0}"
+
 #. placeholder {0}: data.items.length
 #: src/routes/follows.tsx
 msgid "{0} followed"
@@ -303,6 +308,10 @@ msgstr "No repositories"
 msgid "No sources installed"
 msgstr "No sources installed"
 
+#: src/features/sources/components/SourceSettings.tsx
+msgid "Not available here ({declaredType})"
+msgstr "Not available here ({declaredType})"
+
 #: src/features/browse/components/CatalogGrid.tsx
 msgid "Nothing here"
 msgstr "Nothing here"
@@ -351,6 +360,10 @@ msgstr "Queued"
 #: src/features/sources/components/RepoList.tsx
 msgid "Reading the index…"
 msgstr "Reading the index…"
+
+#: src/features/sources/components/SourceSettingsPanel.tsx
+msgid "Reading this source's settings…"
+msgstr "Reading this source's settings…"
 
 #: src/features/sources/components/RepoList.tsx
 msgid "Refresh"
@@ -448,6 +461,11 @@ msgstr "Settings"
 msgid "Settings could not be loaded."
 msgstr "Settings could not be loaded."
 
+#. placeholder {0}: entry.name
+#: src/features/sources/components/RepoList.tsx
+msgid "Settings for {0}"
+msgstr "Settings for {0}"
+
 #: src/routes/settings.tsx
 #~ msgid "Settings is not built yet."
 #~ msgstr "Settings is not built yet."
@@ -489,6 +507,10 @@ msgstr "Stop following {0}"
 msgid "That did not work."
 msgstr "That did not work."
 
+#: src/features/sources/components/SourceSettingsPanel.tsx
+msgid "That setting could not be saved."
+msgstr "That setting could not be saved."
+
 #: src/routes/browse.tsx
 msgid "That source is no longer installed"
 msgstr "That source is no longer installed"
@@ -505,6 +527,10 @@ msgstr "The library could not be loaded."
 msgid "The request failed before it reached the source."
 msgstr "The request failed before it reached the source."
 
+#: src/features/sources/components/SourceSettingsPanel.tsx
+msgid "These settings could not be read."
+msgstr "These settings could not be read."
+
 #: src/features/sources/components/RepoList.tsx
 msgid "This repository lists no sources. Refresh it to read the index again."
 msgstr "This repository lists no sources. Refresh it to read the index again."
@@ -520,6 +546,10 @@ msgstr "This source could not be reached"
 #: src/routes/library.$mangaId.tsx
 msgid "This source gave no description."
 msgstr "This source gave no description."
+
+#: src/features/sources/components/SourceSettings.tsx
+msgid "This source has no settings."
+msgstr "This source has no settings."
 
 #: src/features/browse/components/CatalogGrid.tsx
 msgid "This source returned no results. Try a different search."
