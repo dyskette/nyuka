@@ -154,9 +154,13 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
       does not.
 - [ ] Browse — the catalog grid exists as a component; the screen that loads a
       source's catalog into it does not
-- [ ] The rest of the screens: downloads, jobs, sources, settings
-- [ ] Detail panel (`/library/$mangaId`), which ADR-0017 designed and nothing
-      yet renders — the `<aside>` is mounted with an empty `Outlet`
+- [x] **Downloads** — the job queue with live progress, per-row cancel and
+      retry, and a URL-driven state filter. Maintenance jobs appear alongside
+      downloads rather than being hidden: a stuck prune is what an operator
+      needs to see.
+- [ ] The rest of the screens: sources, settings
+- [x] Detail panel (`/library/$mangaId`) — header, URL-driven tabs, and the
+      chapter list with a per-row download action
 - [ ] Command palette (`cmdk`), from the mockup
 - [ ] The reader
 - [ ] Virtualized list for large libraries (TanStack Virtual)
