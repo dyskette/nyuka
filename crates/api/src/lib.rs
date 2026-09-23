@@ -324,7 +324,10 @@ fn documented_routes() -> OpenApiRouter<Arc<AppState>> {
             routes::follows::delete
         ))
         .routes(utoipa_axum::routes!(routes::follows::check_now))
-        .routes(utoipa_axum::routes!(routes::jobs::list))
+        .routes(utoipa_axum::routes!(
+            routes::jobs::list,
+            routes::jobs::trigger
+        ))
         .routes(utoipa_axum::routes!(routes::jobs::get))
         .routes(utoipa_axum::routes!(routes::jobs::cancel))
         .routes(utoipa_axum::routes!(routes::jobs::retry))
@@ -341,6 +344,10 @@ fn documented_routes() -> OpenApiRouter<Arc<AppState>> {
         .routes(utoipa_axum::routes!(routes::catalog::add))
         .routes(utoipa_axum::routes!(routes::sources::uninstall))
         .routes(utoipa_axum::routes!(routes::sources::filters))
+        .routes(utoipa_axum::routes!(
+            routes::sources::settings,
+            routes::sources::put_setting
+        ))
         .routes(utoipa_axum::routes!(routes::catalog::browse))
         .routes(utoipa_axum::routes!(routes::catalog::details))
         .routes(utoipa_axum::routes!(routes::catalog::chapters))

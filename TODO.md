@@ -45,8 +45,10 @@ recommendation in its own ADR that can simply be adopted.
 - [x] Jobs — list, get, cancel, retry
 - [x] OpenAPI document served at `/api/v1/openapi.json`
 - [x] **Source repositories** — CRUD, `POST /{id}/refresh`, `GET /{id}/available`
-- [x] **Sources** — list, install, uninstall, filters
-      (per-source settings still to do: the `defaults` key-value surface)
+- [x] **Sources** — list, install, uninstall, filters, and per-source
+      settings. Values cross the wire base64-encoded: they are postcard bytes
+      the source owns, and decoding would mean guessing at a schema this
+      server does not have.
 - [x] **Catalog** — browse a source, item details, item chapters
 - [x] **Add to library** — `POST /manga` from a catalog entry
 - [x] **Downloads** — `POST /downloads` with `Idempotency-Key`, 202 + `Location`
@@ -55,10 +57,9 @@ recommendation in its own ADR that can simply be adopted.
 - [x] **Telemetry ingest** — `POST /telemetry` (ADR-0013), OTLP/JSON only.
       Protobuf is refused by content type with 415 rather than fed to a JSON
       parser, so whoever hits it is not sent looking in the wrong place.
-- [ ] **Trigger a maintenance job by hand** — there is no endpoint for it, so
-      the runbook's restore procedure inserts a row with `psql`. A
-      `POST /jobs` restricted to the maintenance kinds would be better than
-      documenting a raw insert.
+- [x] **Trigger a maintenance job by hand** — `POST /jobs`, restricted to
+      the four maintenance kinds. The runbook no longer documents a raw
+      insert, which was a schema dependency in prose.
 - [ ] **OTLP/protobuf ingest** — the other half of ADR-0013's accepted
       encodings. The browser SDK can be configured for JSON, so this is a
       convenience rather than a blocker.

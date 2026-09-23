@@ -36,6 +36,12 @@ pub struct LoadedSource {
     pub module: wasmtime::Module,
     pub required: Vec<Capability>,
     pub filters: Option<serde_json::Value>,
+    /// `Payload/settings.json`, verbatim.
+    ///
+    /// Not interpreted here: it declares a form shape the package owns, and
+    /// this host has no business guessing at its schema. It is passed through
+    /// so a client can render it.
+    pub settings: Option<serde_json::Value>,
 }
 
 /// Holds compiled modules for the installed sources.
@@ -56,6 +62,16 @@ impl SourceRuntime {
             sources: RwLock::new(HashMap::new()),
             defaults,
         }
+    }
+
+    /// The package's settings declaration, or an empty array when it has
+    /// none.
+    pub fn settings_declaration(&self, source: SourceId) -> Result<serde_json::Value> {
+        Ok(self
+            .get(source)?
+            .settings
+            .clone()
+            .unwrap_or(serde_json::Value::Array(Vec::new())))
     }
 
     /// Drops a compiled module.
@@ -112,6 +128,7 @@ impl SourceRuntime {
             module,
             required: pkg.required,
             filters: pkg.filters,
+            settings: pkg.settings,
         });
         self.sources
             .write()

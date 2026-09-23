@@ -59,6 +59,7 @@ async fn every_library_route_requires_a_session() {
         format!("/api/v1/sources/{id}/catalog/some-key"),
         format!("/api/v1/sources/{id}/catalog/some-key/chapters"),
         format!("/api/v1/downloads/{id}/file"),
+        format!("/api/v1/sources/{id}/settings"),
     ] {
         let (status, body) = h.send(get(&path)).await;
         assert_eq!(
@@ -91,6 +92,8 @@ async fn every_mutating_route_requires_a_session_too() {
         (Method::POST, "/api/v1/manga".to_string()),
         (Method::POST, "/api/v1/downloads".to_string()),
         (Method::POST, "/api/v1/telemetry".to_string()),
+        (Method::POST, "/api/v1/jobs".to_string()),
+        (Method::PUT, format!("/api/v1/sources/{id}/settings")),
     ] {
         let (status, body) = h.send(mutate(method.clone(), &path)).await;
         assert_eq!(
@@ -169,6 +172,7 @@ async fn the_openapi_document_is_served_and_describes_the_routes() {
         "/sources/{id}/catalog/{key}/chapters",
         "/downloads",
         "/downloads/{chapter_id}/file",
+        "/sources/{id}/settings",
     ] {
         assert!(
             paths.contains_key(path),

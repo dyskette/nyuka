@@ -267,6 +267,10 @@ impl SourceRegistry for AidokuRegistry {
     fn supported_capabilities(&self) -> &[Capability] {
         &self.capabilities
     }
+
+    async fn settings_declaration(&self, source: SourceId) -> Result<serde_json::Value> {
+        self.runtime.settings_declaration(source)
+    }
 }
 
 #[cfg(test)]

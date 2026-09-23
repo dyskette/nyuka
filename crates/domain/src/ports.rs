@@ -91,6 +91,13 @@ pub trait SourceRegistry: Send + Sync {
     /// Capabilities this host build actually implements. Compared against a
     /// package's requirements at install time.
     fn supported_capabilities(&self) -> &[Capability];
+
+    /// The package's settings declaration, verbatim.
+    ///
+    /// Passed through rather than interpreted: it describes a form shape the
+    /// package owns, and this server has no schema for it. A client renders
+    /// it; the values live in the key-value namespace.
+    async fn settings_declaration(&self, source: SourceId) -> Result<serde_json::Value>;
 }
 
 // ---------------------------------------------------------------------------
@@ -330,4 +337,11 @@ pub trait SourceRepository: Send + Sync {
     /// understands, and the column is `bytea` either way.
     async fn kv_get(&self, source: SourceId, key: &str) -> Result<Option<Vec<u8>>>;
     async fn kv_set(&self, source: SourceId, key: &str, value: Vec<u8>) -> Result<()>;
+
+    /// Every key a source has stored.
+    ///
+    /// Needed because the settings endpoint reports what is set, and a source
+    /// writes keys of its own choosing — the declaration lists what it offers,
+    /// not what it has written.
+    async fn kv_list(&self, source: SourceId) -> Result<Vec<(String, Vec<u8>)>>;
 }

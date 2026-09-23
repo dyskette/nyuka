@@ -196,6 +196,9 @@ mod tests {
         async fn kv_set(&self, _s: SourceId, _k: &str, _v: Vec<u8>) -> Result<()> {
             Ok(())
         }
+        async fn kv_list(&self, _s: SourceId) -> Result<Vec<(String, Vec<u8>)>> {
+            Ok(vec![])
+        }
     }
 
     /// Fails for the repositories named in `failing`, succeeds for the rest.
@@ -228,6 +231,9 @@ mod tests {
         }
         fn supported_capabilities(&self) -> &[Capability] {
             &[]
+        }
+        async fn settings_declaration(&self, _s: SourceId) -> Result<serde_json::Value> {
+            Ok(serde_json::Value::Array(vec![]))
         }
     }
 

@@ -178,6 +178,9 @@ impl SourceRegistry for NoRegistry {
     fn supported_capabilities(&self) -> &[Capability] {
         &[]
     }
+    async fn settings_declaration(&self, _source: SourceId) -> Result<serde_json::Value> {
+        Err(DomainError::NotFound)
+    }
 }
 
 pub struct NoSource;

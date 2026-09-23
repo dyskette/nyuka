@@ -1212,6 +1212,36 @@ impl Repositories {
         row.map(|r| r.try_get("", "value").map_err(db)).transpose()
     }
 
+    /// Every setting a source has stored.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source_kv",
+        )
+    )]
+    pub async fn kv_list(&self, source: SourceId) -> Result<Vec<(String, Vec<u8>)>> {
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT key, value FROM source_kv WHERE source_id = $1 ORDER BY key",
+                [source.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    row.try_get("", "key").map_err(db)?,
+                    row.try_get("", "value").map_err(db)?,
+                ))
+            })
+            .collect()
+    }
+
     #[tracing::instrument(
         skip(self, value),
         fields(

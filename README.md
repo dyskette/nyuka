@@ -149,19 +149,19 @@ docker compose restart nyuka-api
 ```
 
 Then reconcile, so the database stops claiming chapters the restore did not
-bring back. There is **no endpoint to trigger a maintenance job by hand** —
-the scheduler owns them — so either wait for the daily run or queue one
-directly:
+bring back:
 
 ```bash
-docker compose exec postgres psql -U nyuka -c \
-  "INSERT INTO job (id, kind, payload, state, priority, run_at, attempts,
-                    max_attempts, created_at, updated_at)
-   VALUES (gen_random_uuid(), 'reconcile_library', '{}'::jsonb, 'queued',
-           20, now(), 0, 1, now(), now());"
+curl -si -X POST http://localhost:8080/api/v1/jobs \
+  -H 'content-type: application/json' \
+  -H 'x-requested-with: XMLHttpRequest' \
+  -b "$SESSION_COOKIE" \
+  -d '{"kind":"reconcile_library"}'
+# 202 Accepted, with Location naming the job to watch.
 ```
 
-A worker picks it up within a poll interval.
+Only the maintenance kinds can be queued this way. The rest take a payload
+naming a chapter or a follow, and each has an endpoint that validates it.
 
 `reconcile_library` clears the download record for any chapter whose file is
 missing, so the UI stops offering a read that would fail. It **refuses to run

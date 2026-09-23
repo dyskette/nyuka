@@ -324,6 +324,32 @@
             "description": "Unknown state filter"
           }
         }
+      },
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "`POST /api/v1/jobs` — queue a maintenance job.",
+        "description": "Exists because the alternative is a runbook that tells an operator to\n`INSERT` into the `job` table. A documented raw insert is a schema\ndependency in prose: it survives exactly until a column changes, and it\nbypasses every validation the enqueue path performs.",
+        "operationId": "trigger",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Queued; `Location` names the job"
+          },
+          "400": {
+            "description": "Not a kind that can be triggered by hand"
+          }
+        }
       }
     },
     "/jobs/{id}": {
@@ -978,6 +1004,83 @@
                 "schema": {}
               }
             }
+          },
+          "404": {
+            "description": "No such source"
+          }
+        }
+      }
+    },
+    "/sources/{id}/settings": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`GET /api/v1/sources/{id}/settings`",
+        "description": "# Values are opaque, and that is not laziness\n\nA source's settings are read and written by its WASM module through the\n`defaults` host import, which postcard-encodes them. This server does not\nknow what a given key means to a given source — the shape is declared in\nthe package's `settings.json` and interpreted by the module.\n\nSo values go over the wire base64-encoded rather than decoded into JSON.\nDecoding would mean this server guessing at a schema it does not have, and\nguessing wrong writes a value the source then misreads.",
+        "operationId": "settings",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceSettingsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such source"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "`PUT /api/v1/sources/{id}/settings`",
+        "operationId": "put_setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Stored"
+          },
+          "400": {
+            "description": "Not valid base64, or too large"
           },
           "404": {
             "description": "No such source"
@@ -1752,6 +1855,24 @@
           }
         }
       },
+      "SettingRequest": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Base64 of the postcard-encoded value. Absent clears the setting."
+          }
+        }
+      },
       "SourceEntryDto": {
         "type": "object",
         "required": [
@@ -1855,6 +1976,55 @@
           "url": {
             "type": "string",
             "description": "The index URL, such as `https://example.test/index.min.json`."
+          }
+        }
+      },
+      "SourceSettingDto": {
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Base64 of the postcard-encoded value, or absent when unset."
+          }
+        }
+      },
+      "SourceSettingsDto": {
+        "type": "object",
+        "required": [
+          "declared",
+          "values"
+        ],
+        "properties": {
+          "declared": {
+            "description": "The package's `settings.json`, verbatim. A client renders it; this\nserver does not interpret it."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceSettingDto"
+            },
+            "description": "What the source has actually stored, which is not necessarily what the\ndeclaration lists: a source writes keys of its own choosing."
+          }
+        }
+      },
+      "TriggerRequest": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "One of `update_sources`, `prune_jobs`, `prune_sessions`,\n`reconcile_library`."
           }
         }
       }

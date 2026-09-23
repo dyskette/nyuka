@@ -11,8 +11,10 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use nyuka_domain::model::{ExternalKey, JobKind, SourceId, SourceRepo, SourceRepoId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -330,6 +332,137 @@ pub async fn filters(
         .await
         .map_err(|e| not_found(e, "source"))?;
     Ok(Json(filters))
+}
+
+/// `GET /api/v1/sources/{id}/settings`
+///
+/// # Values are opaque, and that is not laziness
+///
+/// A source's settings are read and written by its WASM module through the
+/// `defaults` host import, which postcard-encodes them. This server does not
+/// know what a given key means to a given source — the shape is declared in
+/// the package's `settings.json` and interpreted by the module.
+///
+/// So values go over the wire base64-encoded rather than decoded into JSON.
+/// Decoding would mean this server guessing at a schema it does not have, and
+/// guessing wrong writes a value the source then misreads.
+#[utoipa::path(
+    get,
+    path = "/sources/{id}/settings",
+    tag = "sources",
+    params(("id" = Uuid, Path, description = "Source id")),
+    responses(
+        (status = OK, body = SourceSettingsDto),
+        (status = NOT_FOUND, description = "No such source"),
+    ),
+)]
+pub async fn settings(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<SourceSettingsDto>> {
+    let source = state
+        .sources
+        .get(SourceId(id))
+        .await
+        .map_err(|e| not_found(e, "source"))?;
+
+    let declared = state.registry.settings_declaration(source.id).await?;
+    let stored = state.sources.kv_list(source.id).await?;
+
+    Ok(Json(SourceSettingsDto {
+        declared,
+        values: stored
+            .into_iter()
+            .map(|(key, value)| SourceSettingDto {
+                key,
+                value: Some(BASE64.encode(value)),
+            })
+            .collect(),
+    }))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SourceSettingsDto {
+    /// The package's `settings.json`, verbatim. A client renders it; this
+    /// server does not interpret it.
+    pub declared: serde_json::Value,
+    /// What the source has actually stored, which is not necessarily what the
+    /// declaration lists: a source writes keys of its own choosing.
+    pub values: Vec<SourceSettingDto>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SourceSettingDto {
+    pub key: String,
+    /// Base64 of the postcard-encoded value, or absent when unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SettingRequest {
+    pub key: String,
+    /// Base64 of the postcard-encoded value. Absent clears the setting.
+    pub value: Option<String>,
+}
+
+/// The largest setting value accepted.
+///
+/// A setting is read into WASM memory by the source on every invocation, and
+/// the value arrives from a client. Without a ceiling, one request decides
+/// how much memory every subsequent source call allocates.
+pub const MAX_SETTING_BYTES: usize = 64 * 1024;
+
+/// `PUT /api/v1/sources/{id}/settings`
+#[utoipa::path(
+    put,
+    path = "/sources/{id}/settings",
+    tag = "sources",
+    params(("id" = Uuid, Path, description = "Source id")),
+    request_body = SettingRequest,
+    responses(
+        (status = NO_CONTENT, description = "Stored"),
+        (status = BAD_REQUEST, description = "Not valid base64, or too large"),
+        (status = NOT_FOUND, description = "No such source"),
+    ),
+)]
+pub async fn put_setting(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SettingRequest>,
+) -> ApiResult<Response> {
+    state
+        .sources
+        .get(SourceId(id))
+        .await
+        .map_err(|e| not_found(e, "source"))?;
+
+    if body.key.trim().is_empty() || body.key.len() > 256 {
+        return Err(field_error("/key", "Must be between 1 and 256 characters."));
+    }
+
+    let bytes = match body.value {
+        // Absent clears it. Modelled as an empty value rather than a delete,
+        // matching the `defaults` host import: the guest cannot tell absent
+        // from empty across that ABI, so a real delete would be a distinction
+        // only this side could see.
+        None => Vec::new(),
+        Some(encoded) => {
+            let decoded = BASE64
+                .decode(encoded.as_bytes())
+                .map_err(|_| field_error("/value", "Must be base64."))?;
+            if decoded.len() > MAX_SETTING_BYTES {
+                return Err(field_error(
+                    "/value",
+                    &format!("Must be at most {MAX_SETTING_BYTES} bytes once decoded."),
+                ));
+            }
+            decoded
+        }
+    };
+
+    state.sources.kv_set(SourceId(id), &body.key, bytes).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 #[cfg(test)]

@@ -6,8 +6,9 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use nyuka_domain::model::{JobId, JobState};
+use nyuka_domain::model::{JobId, JobKind, JobState};
 use serde::Deserialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
@@ -53,6 +54,97 @@ pub async fn list(
     Ok(Json(
         state.queue.list(filter, cursor.as_ref()).await?.into(),
     ))
+}
+
+/// The job kinds an operator may queue by hand.
+///
+/// Deliberately only the maintenance kinds. The others take a payload naming
+/// a chapter, a follow or a series, and each already has an endpoint that
+/// validates it — `POST /downloads`, `POST /follows/{id}/check-now`. Letting
+/// a client name an arbitrary kind here would be a second, unvalidated way to
+/// enqueue the same work.
+pub const TRIGGERABLE: &[JobKind] = &[
+    JobKind::UpdateSources,
+    JobKind::PruneJobs,
+    JobKind::PruneSessions,
+    JobKind::ReconcileLibrary,
+];
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TriggerRequest {
+    /// One of `update_sources`, `prune_jobs`, `prune_sessions`,
+    /// `reconcile_library`.
+    pub kind: String,
+}
+
+/// `POST /api/v1/jobs` — queue a maintenance job.
+///
+/// Exists because the alternative is a runbook that tells an operator to
+/// `INSERT` into the `job` table. A documented raw insert is a schema
+/// dependency in prose: it survives exactly until a column changes, and it
+/// bypasses every validation the enqueue path performs.
+#[utoipa::path(
+    post,
+    path = "/jobs",
+    tag = "jobs",
+    request_body = TriggerRequest,
+    responses(
+        (status = ACCEPTED, description = "Queued; `Location` names the job"),
+        (status = BAD_REQUEST, description = "Not a kind that can be triggered by hand"),
+    ),
+)]
+pub async fn trigger(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<TriggerRequest>,
+) -> ApiResult<Response> {
+    let kind = nyuka_jobs::queue::kind_from_str(&body.kind)
+        .filter(|k| TRIGGERABLE.contains(k))
+        .ok_or_else(|| {
+            let allowed: Vec<&str> = TRIGGERABLE
+                .iter()
+                .map(|k| nyuka_jobs::queue::kind_to_str(*k))
+                .collect();
+            ApiError(Box::new(
+                Problem::invalid(format!(
+                    "`{}` cannot be queued by hand; expected one of {}",
+                    body.kind,
+                    allowed.join(", ")
+                ))
+                .with_errors(vec![crate::error::FieldError {
+                    field: "/kind".into(),
+                    message: format!("Must be one of: {}.", allowed.join(", ")),
+                }]),
+            ))
+        })?;
+
+    // Keyed on the minute, so an operator pressing the button twice queues
+    // one job rather than two runs of the same sweep.
+    let bucket = chrono::Utc::now().timestamp() / 60;
+    let job = state
+        .queue
+        .enqueue(
+            kind,
+            serde_json::json!({}),
+            None,
+            Some(&format!(
+                "{}:manual:{bucket}",
+                nyuka_jobs::queue::kind_to_str(kind)
+            )),
+            // Ahead of the scheduler's own sweeps: someone asked for this one
+            // and is waiting to see it finish.
+            0,
+            1,
+        )
+        .await?;
+
+    Ok((
+        StatusCode::ACCEPTED,
+        [(
+            axum::http::header::LOCATION,
+            format!("/api/v1/jobs/{}", job.0),
+        )],
+    )
+        .into_response())
 }
 
 /// `GET /api/v1/jobs/{id}`
@@ -197,6 +289,37 @@ mod tests {
             !is_terminal(JobState::Running),
             "retrying a running job would reset the attempt counter under a worker"
         );
+    }
+
+    /// The others take a payload naming a chapter or a follow, and each has
+    /// an endpoint that validates it. A second, unvalidated way in is not a
+    /// convenience.
+    #[test]
+    fn only_maintenance_kinds_can_be_triggered_by_hand() {
+        for kind in TRIGGERABLE {
+            assert!(
+                matches!(
+                    kind,
+                    JobKind::UpdateSources
+                        | JobKind::PruneJobs
+                        | JobKind::PruneSessions
+                        | JobKind::ReconcileLibrary
+                ),
+                "{kind:?} takes a payload and belongs to its own endpoint"
+            );
+        }
+
+        for kind in [
+            JobKind::DownloadChapter,
+            JobKind::PackageChapter,
+            JobKind::RefreshMetadata,
+            JobKind::CheckFollow,
+        ] {
+            assert!(
+                !TRIGGERABLE.contains(&kind),
+                "{kind:?} needs a payload this endpoint cannot validate"
+            );
+        }
     }
 
     /// Silently returning everything for a typo looks like the filter worked.

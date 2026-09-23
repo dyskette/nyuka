@@ -156,6 +156,10 @@ impl SourceRepository for Repositories {
     async fn kv_set(&self, source: SourceId, key: &str, value: Vec<u8>) -> Result<()> {
         Repositories::kv_set(self, source, key, value).await
     }
+
+    async fn kv_list(&self, source: SourceId) -> Result<Vec<(String, Vec<u8>)>> {
+        Repositories::kv_list(self, source).await
+    }
 }
 
 #[async_trait::async_trait]

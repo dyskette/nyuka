@@ -151,6 +151,9 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.26", features = ["v4", "v7", "serde"] }
 sha2 = "0.11"
+# Settings values are postcard bytes the source owns; the wire form is
+# base64 because this server has no schema to decode them with.
+base64 = "0.22"
 figment = { version = "0.10", features = ["env", "toml"] }
 utoipa = { version = "5.5", features = ["axum_extras", "chrono", "uuid"] }
 utoipa-axum = "0.2"

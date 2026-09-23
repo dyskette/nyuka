@@ -2896,6 +2896,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "axum-tracing-opentelemetry",
+ "base64 0.22.1",
  "chrono",
  "figment",
  "futures",

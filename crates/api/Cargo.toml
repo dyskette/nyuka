@@ -29,6 +29,7 @@ nyuka-aidoku-runtime = { path = "../aidoku-runtime" }
 nyuka-packaging = { path = "../packaging" }
 
 axum = { workspace = true }
+base64 = { workspace = true }
 axum-extra = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }

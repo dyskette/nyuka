@@ -133,7 +133,14 @@ export interface paths {
         /** `GET /api/v1/jobs` */
         get: operations["list"];
         put?: never;
-        post?: never;
+        /**
+         * `POST /api/v1/jobs` — queue a maintenance job.
+         * @description Exists because the alternative is a runbook that tells an operator to
+         *     `INSERT` into the `job` table. A documented raw insert is a schema
+         *     dependency in prose: it survives exactly until a column changes, and it
+         *     bypasses every validation the enqueue path performs.
+         */
+        post: operations["trigger"];
         delete?: never;
         options?: never;
         head?: never;
@@ -431,6 +438,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sources/{id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `GET /api/v1/sources/{id}/settings`
+         * @description # Values are opaque, and that is not laziness
+         *
+         *     A source's settings are read and written by its WASM module through the
+         *     `defaults` host import, which postcard-encodes them. This server does not
+         *     know what a given key means to a given source — the shape is declared in
+         *     the package's `settings.json` and interpreted by the module.
+         *
+         *     So values go over the wire base64-encoded rather than decoded into JSON.
+         *     Decoding would mean this server guessing at a schema it does not have, and
+         *     guessing wrong writes a value the source then misreads.
+         */
+        get: operations["settings"];
+        /** `PUT /api/v1/sources/{id}/settings` */
+        put: operations["put_setting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -672,6 +709,11 @@ export interface components {
             /** Format: int32 */
             permits: number;
         };
+        SettingRequest: {
+            key: string;
+            /** @description Base64 of the postcard-encoded value. Absent clears the setting. */
+            value?: string | null;
+        };
         SourceEntryDto: {
             base_url?: string | null;
             content_rating: string;
@@ -703,6 +745,30 @@ export interface components {
             name: string;
             /** @description The index URL, such as `https://example.test/index.min.json`. */
             url: string;
+        };
+        SourceSettingDto: {
+            key: string;
+            /** @description Base64 of the postcard-encoded value, or absent when unset. */
+            value?: string | null;
+        };
+        SourceSettingsDto: {
+            /**
+             * @description The package's `settings.json`, verbatim. A client renders it; this
+             *     server does not interpret it.
+             */
+            declared: unknown;
+            /**
+             * @description What the source has actually stored, which is not necessarily what the
+             *     declaration lists: a source writes keys of its own choosing.
+             */
+            values: components["schemas"]["SourceSettingDto"][];
+        };
+        TriggerRequest: {
+            /**
+             * @description One of `update_sources`, `prune_jobs`, `prune_sessions`,
+             *     `reconcile_library`.
+             */
+            kind: string;
         };
     };
     responses: never;
@@ -988,6 +1054,35 @@ export interface operations {
                 };
             };
             /** @description Unknown state filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    trigger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriggerRequest"];
+            };
+        };
+        responses: {
+            /** @description Queued; `Location` names the job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a kind that can be triggered by hand */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1520,6 +1615,74 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description No such source */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceSettingsDto"];
+                };
+            };
+            /** @description No such source */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    put_setting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingRequest"];
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not valid base64, or too large */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No such source */
             404: {
