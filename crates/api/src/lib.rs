@@ -31,8 +31,8 @@ pub mod telemetry;
 use std::sync::Arc;
 
 use anyhow::Context;
-use axum::Router;
 use axum::routing::{get, post};
+use axum::{Json, Router};
 use nyuka_aidoku_runtime::adapter::SourceRuntime;
 use nyuka_aidoku_runtime::engine::{Limits, Runtime};
 use nyuka_aidoku_runtime::fetcher::{FetcherConfig, VettedFetcher};
@@ -55,6 +55,8 @@ use nyuka_persistence::session::SessionRepository;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tower_http::compression::CompressionLayer;
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
 
 use crate::config::Config;
 use crate::session_store::PostgresSessionStore;
@@ -328,7 +330,33 @@ pub fn router(state: Arc<AppState>) -> Router {
     // Everything that needs a signed-in user. The auth endpoints are
     // deliberately not here: a login route behind a login check cannot let
     // anyone in.
-    let protected = Router::new()
+    //
+    // `OpenApiRouter` rather than `Router`, so registering a handler and
+    // describing it are the same call — the drift this guards against is a
+    // schema that says one thing while the server does another.
+    let (protected, api_doc) = OpenApiRouter::with_openapi(openapi::ApiDoc::openapi())
+        .routes(utoipa_axum::routes!(routes::library::list))
+        .routes(utoipa_axum::routes!(routes::library::get))
+        .routes(utoipa_axum::routes!(routes::library::chapters))
+        .routes(utoipa_axum::routes!(routes::library::chapter))
+        .routes(utoipa_axum::routes!(
+            routes::follows::list,
+            routes::follows::upsert
+        ))
+        .routes(utoipa_axum::routes!(
+            routes::follows::get,
+            routes::follows::delete
+        ))
+        .routes(utoipa_axum::routes!(routes::follows::check_now))
+        .routes(utoipa_axum::routes!(routes::jobs::list))
+        .routes(utoipa_axum::routes!(routes::jobs::get))
+        .routes(utoipa_axum::routes!(routes::jobs::cancel))
+        .routes(utoipa_axum::routes!(routes::jobs::retry))
+        .split_for_parts();
+
+    let protected = protected
+        // SSE is not in the OpenAPI document: it is not a request/response
+        // pair, and a generated client method for it would be misleading.
         .route("/events", get(sse::events))
         .layer(axum::middleware::from_fn(auth::require_session));
 
@@ -337,6 +365,13 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/auth/callback", get(auth::callback))
         .route("/auth/logout", post(auth::logout))
         .route("/me", get(auth::me))
+        .route(
+            "/openapi.json",
+            get(move || {
+                let doc = api_doc.clone();
+                async move { Json(doc) }
+            }),
+        )
         .merge(protected)
         // Applied to `/api/v1` only. The health probes below are outside it,
         // and an orchestrator's probe cannot set a header.
