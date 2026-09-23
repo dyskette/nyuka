@@ -51,6 +51,13 @@ async fn every_library_route_requires_a_session() {
         "/api/v1/jobs".to_string(),
         format!("/api/v1/jobs/{id}"),
         "/api/v1/events".to_string(),
+        "/api/v1/source-repos".to_string(),
+        format!("/api/v1/source-repos/{id}/available"),
+        "/api/v1/sources".to_string(),
+        format!("/api/v1/sources/{id}/filters"),
+        format!("/api/v1/sources/{id}/catalog"),
+        format!("/api/v1/sources/{id}/catalog/some-key"),
+        format!("/api/v1/sources/{id}/catalog/some-key/chapters"),
     ] {
         let (status, body) = h.send(get(&path)).await;
         assert_eq!(
@@ -75,6 +82,12 @@ async fn every_mutating_route_requires_a_session_too() {
         (Method::POST, format!("/api/v1/follows/{id}/check-now")),
         (Method::POST, format!("/api/v1/jobs/{id}/cancel")),
         (Method::POST, format!("/api/v1/jobs/{id}/retry")),
+        (Method::POST, "/api/v1/source-repos".to_string()),
+        (Method::DELETE, format!("/api/v1/source-repos/{id}")),
+        (Method::POST, format!("/api/v1/source-repos/{id}/refresh")),
+        (Method::POST, "/api/v1/sources".to_string()),
+        (Method::DELETE, format!("/api/v1/sources/{id}")),
+        (Method::POST, "/api/v1/manga".to_string()),
     ] {
         let (status, body) = h.send(mutate(method.clone(), &path)).await;
         assert_eq!(
@@ -141,6 +154,16 @@ async fn the_openapi_document_is_served_and_describes_the_routes() {
         "/jobs/{id}",
         "/jobs/{id}/cancel",
         "/jobs/{id}/retry",
+        "/source-repos",
+        "/source-repos/{id}",
+        "/source-repos/{id}/refresh",
+        "/source-repos/{id}/available",
+        "/sources",
+        "/sources/{id}",
+        "/sources/{id}/filters",
+        "/sources/{id}/catalog",
+        "/sources/{id}/catalog/{key}",
+        "/sources/{id}/catalog/{key}/chapters",
     ] {
         assert!(
             paths.contains_key(path),
@@ -157,6 +180,34 @@ async fn the_openapi_document_is_served_and_describes_the_routes() {
         !paths.contains_key("/events"),
         "SSE is not a request/response pair; a generated method for it would \
          be misleading"
+    );
+}
+
+/// `POST /manga` and `GET /manga` share a path, registered from different
+/// modules. utoipa-axum panics at router build on a mismatched grouping, so
+/// this asserts the intended shape rather than merely that it built.
+#[tokio::test(flavor = "multi_thread")]
+async fn adding_to_the_library_is_a_post_on_the_library_path() {
+    let Some(h) = support::harness("nyuka_test_routes_manga_methods").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (_, doc) = h.send(get("/api/v1/openapi.json")).await;
+    let manga = doc["paths"]["/manga"].as_object().expect("/manga");
+
+    assert!(manga.contains_key("get"), "listing the library");
+    assert!(
+        manga.contains_key("post"),
+        "adding from a catalog; if this landed on /sources instead, the \
+         generated client would call the wrong endpoint"
+    );
+    assert!(
+        !doc["paths"]["/sources"]
+            .as_object()
+            .expect("/sources")
+            .contains_key("post"),
+        "installing a source is POST /sources; adding a series must not be"
     );
 }
 
@@ -179,21 +230,56 @@ async fn every_documented_path_is_actually_routed() {
     let paths = doc["paths"].as_object().expect("paths").clone();
     assert!(!paths.is_empty(), "an empty schema would make this vacuous");
 
-    for path in paths.keys() {
-        // Substitute any path parameter with a real uuid so routing matches.
-        let concrete = path.replace("{id}", &uuid::Uuid::new_v4().to_string());
-        let response = h.raw(get(&format!("/api/v1{concrete}"))).await;
-        let status = response.status();
-        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-            .await
-            .expect("body");
+    let mut checked = 0;
+    for (path, item) in &paths {
+        // Substitute path parameters with real values so routing matches.
+        let concrete = path
+            .replace("{id}", &uuid::Uuid::new_v4().to_string())
+            .replace("{key}", "some-external-key");
 
-        assert!(
-            status != StatusCode::NOT_FOUND || !bytes.is_empty(),
-            "{path} is in the schema but nothing is mounted there: axum's \
-             fallback answered with an empty 404"
-        );
+        // Every method, not just GET. Registering a handler under the wrong
+        // path is easy to do — `routes!` groups handlers for one path, so
+        // pairing two that differ mounts the second at the first's path — and
+        // checking only GET would miss it entirely.
+        for method in item.as_object().expect("path item").keys() {
+            let Ok(method) = Method::from_bytes(method.to_uppercase().as_bytes()) else {
+                // `parameters`, `summary` and friends sit alongside the
+                // methods in a path item.
+                continue;
+            };
+
+            let request = Request::builder()
+                .method(method.clone())
+                .uri(format!("/api/v1{concrete}"))
+                .header("x-requested-with", "XMLHttpRequest")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .expect("request");
+
+            let response = h.raw(request).await;
+            let status = response.status();
+            let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+                .await
+                .expect("body");
+
+            assert!(
+                status != StatusCode::NOT_FOUND || !bytes.is_empty(),
+                "{method} {path} is in the schema but nothing is mounted \
+                 there: axum's fallback answered with an empty 404"
+            );
+            assert_ne!(
+                status,
+                StatusCode::METHOD_NOT_ALLOWED,
+                "{method} {path} is documented but the router does not accept \
+                 that method there"
+            );
+            checked += 1;
+        }
     }
+    assert!(
+        checked > 20,
+        "only {checked} method/path pairs were checked"
+    );
 }
 
 /// And the control for the control: a path that is definitely not routed must

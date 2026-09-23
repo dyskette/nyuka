@@ -27,9 +27,11 @@
 //! form-encoded body, or a handler mounted outside the stack, reopens the hole
 //! — ADR-0005 requires a test that a mutation without the header is rejected.
 
+pub mod catalog;
 pub mod dto;
 pub mod follows;
 pub mod health;
 pub mod jobs;
 pub mod library;
+pub mod sources;
 pub mod telemetry;

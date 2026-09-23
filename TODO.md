@@ -40,10 +40,11 @@ recommendation in its own ADR that can simply be adopted.
 - [x] Follows — list, get, upsert, delete, check-now
 - [x] Jobs — list, get, cancel, retry
 - [x] OpenAPI document served at `/api/v1/openapi.json`
-- [ ] **Source repositories** — CRUD, `POST /{id}/refresh`
-- [ ] **Sources** — list, install, uninstall, settings, filters
-- [ ] **Catalog** — browse a source, item details, item chapters
-- [ ] **Add to library** — `POST /manga` from a catalog entry
+- [x] **Source repositories** — CRUD, `POST /{id}/refresh`, `GET /{id}/available`
+- [x] **Sources** — list, install, uninstall, filters
+      (per-source settings still to do: the `defaults` key-value surface)
+- [x] **Catalog** — browse a source, item details, item chapters
+- [x] **Add to library** — `POST /manga` from a catalog entry
 - [ ] **Downloads** — `POST /downloads` with `Idempotency-Key`, 202 + `Location`
 - [ ] **Chapter file** — `GET /downloads/{chapter_id}/file`, ranged, ETag from
       the stored checksum

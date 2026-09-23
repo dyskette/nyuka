@@ -38,6 +38,14 @@ pub struct AppState {
     pub queue: Arc<dyn JobQueue>,
     pub events: Arc<dyn EventBus>,
     pub users: Arc<dyn UserRepository>,
+
+    /// Shared with the worker pool.
+    ///
+    /// The API holds it so a freshly installed source's declared limit takes
+    /// effect immediately: registering it only at the next restart would let
+    /// the first download of a new source ignore what it asked for, which is
+    /// the fastest route to the IP ban ADR-0004 warns about.
+    pub limiter: Arc<nyuka_jobs::limiter::SourceLimiter>,
     pub sessions: nyuka_persistence::session::SessionRepository,
 
     /// The discovered OIDC client.

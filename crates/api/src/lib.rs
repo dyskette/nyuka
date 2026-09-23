@@ -189,7 +189,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
                 repositories.clone(),
                 source_runtime.clone(),
                 events.clone(),
-                limiter,
+                limiter.clone(),
             )),
         )
         .register(
@@ -252,6 +252,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         queue,
         events,
         users: repositories,
+        limiter,
         sessions,
         oidc,
         event_tx,
@@ -352,6 +353,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .routes(utoipa_axum::routes!(routes::jobs::get))
         .routes(utoipa_axum::routes!(routes::jobs::cancel))
         .routes(utoipa_axum::routes!(routes::jobs::retry))
+        .routes(utoipa_axum::routes!(
+            routes::sources::list_repos,
+            routes::sources::add_repo
+        ))
+        .routes(utoipa_axum::routes!(routes::sources::delete_repo))
+        .routes(utoipa_axum::routes!(routes::sources::refresh_repo))
+        .routes(utoipa_axum::routes!(routes::sources::available))
+        .routes(utoipa_axum::routes!(routes::sources::list))
+        // `POST /manga` sits with the catalog rather than with the library
+        // routes because it is how a catalog entry becomes a library entry.
+        .routes(utoipa_axum::routes!(routes::catalog::add))
+        .routes(utoipa_axum::routes!(routes::sources::uninstall))
+        .routes(utoipa_axum::routes!(routes::sources::filters))
+        .routes(utoipa_axum::routes!(routes::catalog::browse))
+        .routes(utoipa_axum::routes!(routes::catalog::details))
+        .routes(utoipa_axum::routes!(routes::catalog::chapters))
         .split_for_parts();
 
     let protected = protected

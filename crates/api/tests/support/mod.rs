@@ -137,6 +137,7 @@ pub async fn harness(name: &str) -> Option<Harness> {
         queue: Arc::new(nyuka_jobs::queue::PostgresQueue::new(db.clone())),
         events: Arc::new(BroadcastBus::new(event_tx.clone())),
         users: repositories,
+        limiter: Arc::new(nyuka_jobs::limiter::SourceLimiter::new(4)),
         sessions: SessionRepository::new(db.clone()),
         // No identity provider is reachable from a test, and discovery would
         // have to contact one. The auth routes report that plainly rather than
