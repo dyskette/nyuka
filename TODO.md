@@ -55,7 +55,7 @@ recommendation in its own ADR that can simply be adopted.
       well as `/auth/login` (ADR-0005 follow-up 6). Uses a custom key
       extractor: the shipped `SmartIpKeyExtractor` trusts `X-Forwarded-For`
       unconditionally, so anyone could opt out of the limit by forging it.
-- [ ] **Request tracing layer** — `axum-tracing-opentelemetry`, so `trace_id`
+- [x] **Request tracing layer** — `axum-tracing-opentelemetry`, so `trace_id`
       reaches every request line
 
 ## Verification owed
@@ -63,9 +63,11 @@ recommendation in its own ADR that can simply be adopted.
 Named separately because each is a control that a code review cannot stand in
 for.
 
-- [ ] **`trace_id` on every line, end to end** — a request and the job it
-      enqueues (ADR-0014 follow-up 4). Silent loss of correlation makes the
-      whole telemetry design worthless.
+- [x] **`trace_id` on every line, end to end** — a request and the job it
+      enqueues (ADR-0014 follow-up 4). The test found two real bugs: the
+      global propagator was never installed, so an incoming `traceparent` was
+      silently ignored; and `trace_id` was declared on the server span but
+      never recorded, so no line carried one.
 - [ ] **Fuzz `paths.rs`** with traversal sequences, null bytes, overlong
       UTF-8, RTL overrides, and 300-character names (ADR-0007 follow-up 1).
       These strings come from untrusted extensions.

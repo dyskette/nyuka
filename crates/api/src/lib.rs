@@ -28,6 +28,7 @@ pub mod sse;
 pub mod state;
 pub mod static_files;
 pub mod telemetry;
+pub mod tracing_layer;
 
 use std::sync::Arc;
 
@@ -435,5 +436,13 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/readyz", get(routes::health::readyz))
         .layer(session_layer)
         .layer(compression_layer())
+        // Outside compression and sessions, so the span covers the whole
+        // request including whatever those layers do. `client.address` is
+        // recorded from inside it.
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            tracing_layer::record_span_fields,
+        ))
+        .layer(tracing_layer::layer())
         .with_state(state)
 }

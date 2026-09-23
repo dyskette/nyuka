@@ -13,9 +13,30 @@
 //!                            secret|password on the way out
 //! ```
 //!
-//! Every line carries `trace_id` and `span_id`. Sampling affects export only —
-//! **logs are never sampled**, because for a low-traffic single-tenant service
-//! full fidelity beats aggregate queryability.
+//! Sampling affects export only — **logs are never sampled**, because for a
+//! low-traffic single-tenant service full fidelity beats aggregate
+//! queryability.
+//!
+//! # `trace_id` on a line is not automatic
+//!
+//! This module used to claim every line carried one. It did not. The
+//! OpenTelemetry layer keeps the trace context in its own span extension
+//! rather than as a `tracing` field, so the JSON formatter never sees it: the
+//! lines carry every other span field and no trace id, and each one looks
+//! perfectly fine on its own.
+//!
+//! Two things are needed, and both were missing:
+//!
+//! 1. The global `TraceContextPropagator`, installed below. Without it an
+//!    incoming `traceparent` is ignored — not rejected, ignored — and every
+//!    request starts a fresh trace, so a browser span and the server's lines
+//!    become unrelated.
+//! 2. Recording `trace_id` onto the server span, which
+//!    `tracing_layer::record_span_fields` does before the handler runs.
+//!
+//! `tests/trace_correlation.rs` is what found both. ADR-0014 asks for that
+//! test and calls silent loss of correlation the failure that makes this
+//! design worthless; it was right.
 //!
 //! Two tests are load-bearing here: one asserting the redaction layer drops an
 //! authorization header, a cookie, and a token-bearing query string; and one
@@ -244,6 +265,15 @@ pub const DEFAULT_FILTER: &str = "info,nyuka_api=debug,sea_orm=warn,sqlx=warn,hy
 
 /// Installs the subscriber. Call once, before anything that logs.
 pub fn init(config: &TelemetryConfig) -> anyhow::Result<TelemetryGuard> {
+    // Without this, an incoming `traceparent` is ignored and every request
+    // starts a new trace. Nothing errors — the header is simply not read — so
+    // a browser-originated span and the server's lines become two unrelated
+    // traces, which is the correlation ADR-0013 exists to establish.
+    // `tests/trace_correlation.rs` is what caught its absence.
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+
     let resource = Resource::builder()
         .with_service_name(config.service_name.clone())
         .with_attribute(opentelemetry::KeyValue::new(
