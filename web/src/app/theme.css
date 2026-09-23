@@ -120,6 +120,49 @@
   --panel-p: 12px;
 }
 
+/* ---------------------------------------------------------------------------
+   Tailwind utilities for the tokens above.
+
+   `@theme inline` rather than `@theme`: the values stay as `var(--token)`
+   references, so `bg-surface` follows whichever theme block is active at
+   runtime. Copying the colours in here instead would freeze them at the light
+   values and dark mode would silently stop working for every utility.
+
+   Without this, `bg-surface` and `text-muted-foreground` are not utilities at
+   all. Tailwind ignores a class it does not recognise, so a component using
+   one compiles, builds, and renders unstyled — with nothing anywhere to say
+   so. That is how the first components written against these tokens shipped
+   inert.
+--------------------------------------------------------------------------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --color-ring: var(--ring);
+
+  /* Density is three variables and nothing else (spec-design.md), so these
+     are exposed as utilities rather than hard-coded per component: a row that
+     sets its own height stops responding to the density control. */
+  --spacing-row: var(--row-h);
+  --spacing-cell: var(--cell-px);
+  --spacing-panel: var(--panel-p);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

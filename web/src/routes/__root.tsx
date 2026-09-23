@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
+import { AppShell } from '@/shared/components/AppShell'
 
 /**
  * The root route.
@@ -12,6 +13,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 })
 
 function RootLayout() {
-  // TODO(scaffold): AppShell — sidebar, status bar, command palette.
-  return <Outlet />
+  // TODO: the command palette (cmdk), which the mockup binds to ⌘K.
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  )
 }

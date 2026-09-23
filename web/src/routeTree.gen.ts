@@ -10,7 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BrowseRouteImport } from './routes/browse'
+import { Route as DownloadsRouteImport } from './routes/downloads'
+import { Route as FollowsRouteImport } from './routes/follows'
 import { Route as LibraryRouteImport } from './routes/library'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as LibraryMangaIdRouteImport } from './routes/library.$mangaId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -18,9 +22,29 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BrowseRoute = BrowseRouteImport.update({
+  id: '/browse',
+  path: '/browse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadsRoute = DownloadsRouteImport.update({
+  id: '/downloads',
+  path: '/downloads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FollowsRoute = FollowsRouteImport.update({
+  id: '/follows',
+  path: '/follows',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LibraryRoute = LibraryRouteImport.update({
   id: '/library',
   path: '/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LibraryMangaIdRoute = LibraryMangaIdRouteImport.update({
@@ -31,31 +55,69 @@ const LibraryMangaIdRoute = LibraryMangaIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/browse': typeof BrowseRoute
+  '/downloads': typeof DownloadsRoute
+  '/follows': typeof FollowsRoute
   '/library': typeof LibraryRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/library/$mangaId': typeof LibraryMangaIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/browse': typeof BrowseRoute
+  '/downloads': typeof DownloadsRoute
+  '/follows': typeof FollowsRoute
   '/library': typeof LibraryRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/library/$mangaId': typeof LibraryMangaIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/browse': typeof BrowseRoute
+  '/downloads': typeof DownloadsRoute
+  '/follows': typeof FollowsRoute
   '/library': typeof LibraryRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/library/$mangaId': typeof LibraryMangaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/library' | '/library/$mangaId'
+  fullPaths:
+    | '/'
+    | '/browse'
+    | '/downloads'
+    | '/follows'
+    | '/library'
+    | '/settings'
+    | '/library/$mangaId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/library' | '/library/$mangaId'
-  id: '__root__' | '/' | '/library' | '/library/$mangaId'
+  to:
+    | '/'
+    | '/browse'
+    | '/downloads'
+    | '/follows'
+    | '/library'
+    | '/settings'
+    | '/library/$mangaId'
+  id:
+    | '__root__'
+    | '/'
+    | '/browse'
+    | '/downloads'
+    | '/follows'
+    | '/library'
+    | '/settings'
+    | '/library/$mangaId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BrowseRoute: typeof BrowseRoute
+  DownloadsRoute: typeof DownloadsRoute
+  FollowsRoute: typeof FollowsRoute
   LibraryRoute: typeof LibraryRouteWithChildren
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -67,11 +129,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/browse': {
+      id: '/browse'
+      path: '/browse'
+      fullPath: '/browse'
+      preLoaderRoute: typeof BrowseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/downloads': {
+      id: '/downloads'
+      path: '/downloads'
+      fullPath: '/downloads'
+      preLoaderRoute: typeof DownloadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/follows': {
+      id: '/follows'
+      path: '/follows'
+      fullPath: '/follows'
+      preLoaderRoute: typeof FollowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/library': {
       id: '/library'
       path: '/library'
       fullPath: '/library'
       preLoaderRoute: typeof LibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/library/$mangaId': {
@@ -97,7 +187,11 @@ const LibraryRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BrowseRoute: BrowseRoute,
+  DownloadsRoute: DownloadsRoute,
+  FollowsRoute: FollowsRoute,
   LibraryRoute: LibraryRouteWithChildren,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
