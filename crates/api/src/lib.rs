@@ -241,6 +241,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         queue.clone(),
         Arc::new(handlers),
         metrics.clone(),
+        // The same bus the SSE endpoint subscribes to, so a job finishing
+        // reaches an open browser (ADR-0010).
+        events.clone(),
         WorkerConfig {
             workers: config.jobs.workers,
             poll_interval: config.jobs.poll_interval,

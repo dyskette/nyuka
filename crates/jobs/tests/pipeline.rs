@@ -16,7 +16,7 @@ use nyuka_jobs::handlers::Registry;
 use nyuka_jobs::handlers::maintenance::{PruneJobs, PruneSessions};
 use nyuka_jobs::queue::PostgresQueue;
 use nyuka_jobs::scheduler::{Periodic, Scheduler, SchedulerConfig};
-use nyuka_jobs::worker::{WorkerConfig, WorkerPool};
+use nyuka_jobs::worker::{NoEvents, WorkerConfig, WorkerPool};
 use nyuka_persistence::migration::{Migrator, MigratorTrait};
 use nyuka_persistence::session::{SessionRecord, SessionRepository};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
@@ -116,6 +116,7 @@ async fn a_scheduled_job_runs_and_its_effect_lands() {
         queue.clone(),
         Arc::new(registry),
         metrics(),
+        Arc::new(NoEvents),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -167,6 +168,7 @@ async fn an_unhandled_kind_fails_once_and_stops() {
         // Deliberately empty: this stands for a build with no source runtime.
         Arc::new(Registry::new()),
         metrics(),
+        Arc::new(NoEvents),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -230,6 +232,7 @@ async fn run_one(
         queue,
         handler,
         metrics,
+        Arc::new(NoEvents),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -377,4 +380,132 @@ async fn a_user_requested_download_is_timed_and_a_background_one_is_not() {
         "nobody is waiting for a follow sweep's download, and timing it would \
          measure the scheduler's pacing"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Job state events (ADR-0010)
+// ---------------------------------------------------------------------------
+
+/// Records what was published, so a test can assert on it.
+#[derive(Default)]
+struct RecordingBus(std::sync::Mutex<Vec<nyuka_domain::model::JobEvent>>);
+
+impl nyuka_domain::ports::EventBus for RecordingBus {
+    fn publish(&self, event: nyuka_domain::model::JobEvent) {
+        self.0.lock().expect("lock").push(event);
+    }
+}
+
+impl RecordingBus {
+    fn states(&self) -> Vec<JobState> {
+        self.0
+            .lock()
+            .expect("lock")
+            .iter()
+            .filter_map(|e| match e {
+                nyuka_domain::model::JobEvent::JobState { state, .. } => Some(*state),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+async fn run_one_with_bus(
+    db: &DatabaseConnection,
+    handler: Arc<dyn nyuka_jobs::worker::JobHandler>,
+    bus: Arc<RecordingBus>,
+    max_attempts: i32,
+) {
+    let queue = Arc::new(PostgresQueue::new(db.clone()));
+    queue
+        .enqueue(
+            JobKind::DownloadChapter,
+            serde_json::json!({}),
+            None,
+            None,
+            0,
+            max_attempts,
+        )
+        .await
+        .expect("enqueue");
+
+    let pool = WorkerPool::start(
+        queue,
+        handler,
+        metrics(),
+        bus,
+        WorkerConfig {
+            workers: 1,
+            poll_interval: Duration::from_millis(20),
+            drain_timeout: Duration::from_secs(5),
+        },
+    );
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    pool.shutdown().await;
+}
+
+/// The worker is the one place that sees every transition, so it is the one
+/// place that announces them. Before this, `JobEvent::JobState` was a variant
+/// the SSE layer named and nothing ever published: a browser listening for
+/// `job.state` would have waited forever, and every test still passed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_finished_job_announces_itself() {
+    let Some(db) = fresh_database("nyuka_test_events_ok").await else {
+        return;
+    };
+
+    struct Ok_;
+    #[async_trait::async_trait]
+    impl nyuka_jobs::worker::JobHandler for Ok_ {
+        async fn handle(&self, _job: nyuka_domain::model::Job) -> nyuka_domain::Result<()> {
+            Ok(())
+        }
+    }
+
+    let bus = Arc::new(RecordingBus::default());
+    run_one_with_bus(&db, Arc::new(Ok_), bus.clone(), 1).await;
+
+    assert_eq!(bus.states(), vec![JobState::Succeeded]);
+}
+
+/// A job that will run again is not a failed job. Announcing `Failed` on an
+/// attempt that has retries left would make a UI show a permanent failure for
+/// something already back in the queue.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_retry_is_announced_as_queued_and_a_final_failure_as_failed() {
+    let Some(db) = fresh_database("nyuka_test_events_retry").await else {
+        return;
+    };
+
+    let retrying = Arc::new(RecordingBus::default());
+    run_one_with_bus(
+        &db,
+        Arc::new(FailingHandler {
+            error: || nyuka_domain::DomainError::Storage("transient".into()),
+        }),
+        retrying.clone(),
+        // Attempts remaining, so the failure is not final.
+        5,
+    )
+    .await;
+    assert_eq!(
+        retrying.states(),
+        vec![JobState::Queued],
+        "a job with attempts left is going back to the queue, not failing"
+    );
+
+    let Some(db) = fresh_database("nyuka_test_events_failed").await else {
+        return;
+    };
+    let final_ = Arc::new(RecordingBus::default());
+    run_one_with_bus(
+        &db,
+        Arc::new(FailingHandler {
+            error: || nyuka_domain::DomainError::Storage("disk".into()),
+        }),
+        final_.clone(),
+        1,
+    )
+    .await;
+    assert_eq!(final_.states(), vec![JobState::Failed]);
 }

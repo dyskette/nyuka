@@ -21,12 +21,24 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nyuka_domain::Result;
-use nyuka_domain::model::Job;
+use nyuka_domain::model::{Job, JobEvent, JobState};
+use nyuka_domain::ports::EventBus;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 use crate::metrics::{self, JobMetrics};
 use crate::queue::PostgresQueue;
+
+/// An [`EventBus`] that discards everything.
+///
+/// For tests that do not observe events. Named rather than an `Option`, so a
+/// call site says which it means instead of leaving "no bus" and "a bus I
+/// forgot to pass" looking identical.
+pub struct NoEvents;
+
+impl EventBus for NoEvents {
+    fn publish(&self, _event: JobEvent) {}
+}
 
 /// Runs one job.
 #[async_trait::async_trait]
@@ -77,6 +89,7 @@ impl WorkerPool {
         queue: Arc<PostgresQueue>,
         handler: Arc<dyn JobHandler>,
         metrics: Arc<JobMetrics>,
+        events: Arc<dyn EventBus>,
         config: WorkerConfig,
     ) -> Self {
         let cancel = CancellationToken::new();
@@ -86,10 +99,11 @@ impl WorkerPool {
             let queue = queue.clone();
             let handler = handler.clone();
             let metrics = metrics.clone();
+            let events = events.clone();
             let cancel = cancel.clone();
             let poll = config.poll_interval;
             tasks.spawn(async move {
-                run_worker(index, queue, handler, metrics, cancel, poll).await;
+                run_worker(index, queue, handler, metrics, events, cancel, poll).await;
                 index
             });
         }
@@ -185,6 +199,7 @@ async fn run_worker(
     queue: Arc<PostgresQueue>,
     handler: Arc<dyn JobHandler>,
     metrics: Arc<JobMetrics>,
+    events: Arc<dyn EventBus>,
     cancel: CancellationToken,
     poll: Duration,
 ) {
@@ -210,6 +225,14 @@ async fn run_worker(
                     Ok(()) => {
                         let _ = queue.complete(id).await;
                         metrics.record(metrics::Outcome::Succeeded);
+                        // Published here rather than in each handler: this is
+                        // the one place that sees every transition, so a new
+                        // job kind is live without its author remembering to
+                        // emit anything.
+                        events.publish(JobEvent::JobState {
+                            job_id: id,
+                            state: JobState::Succeeded,
+                        });
 
                         if interactive
                             && let Ok(elapsed) = (chrono::Utc::now() - created_at).to_std()
@@ -224,8 +247,20 @@ async fn run_worker(
                         // and counting each attempt would make the rate
                         // depend on how many retries are configured.
                         match queue.fail(id, &e.to_string(), retryable).await {
-                            Ok(Some(_next_run_at)) => {}
-                            _ => metrics.record(metrics::classify(&e)),
+                            // A retry is not an outcome, and announcing one as
+                            // `Failed` would make a UI show a job as failed
+                            // that is about to run again.
+                            Ok(Some(_next_run_at)) => events.publish(JobEvent::JobState {
+                                job_id: id,
+                                state: JobState::Queued,
+                            }),
+                            _ => {
+                                metrics.record(metrics::classify(&e));
+                                events.publish(JobEvent::JobState {
+                                    job_id: id,
+                                    state: JobState::Failed,
+                                });
+                            }
                         }
                     }
                 }

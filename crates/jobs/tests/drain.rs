@@ -15,7 +15,7 @@ use std::time::Duration;
 use nyuka_domain::model::{Job, JobKind, JobState};
 use nyuka_domain::{DomainError, Result};
 use nyuka_jobs::queue::PostgresQueue;
-use nyuka_jobs::worker::{JobHandler, WorkerConfig, WorkerPool};
+use nyuka_jobs::worker::{JobHandler, NoEvents, WorkerConfig, WorkerPool};
 use nyuka_persistence::migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 
@@ -112,6 +112,7 @@ async fn shutdown_finishes_in_flight_work_and_stops_claiming() {
             finished: finished.clone(),
         }),
         metrics(),
+        Arc::new(NoEvents),
         WorkerConfig {
             workers: 2,
             poll_interval: Duration::from_millis(20),
@@ -179,6 +180,7 @@ async fn work_that_outlasts_the_drain_returns_to_queued() {
             finished: finished.clone(),
         }),
         metrics(),
+        Arc::new(NoEvents),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -234,6 +236,7 @@ async fn a_panicking_handler_does_not_block_shutdown() {
         queue.clone(),
         Arc::new(PanicHandler),
         metrics(),
+        Arc::new(NoEvents),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -290,6 +293,7 @@ async fn a_retryable_failure_is_rescheduled_and_a_permanent_one_is_not() {
             queue.clone(),
             Arc::new(FailHandler { retryable }),
             metrics(),
+            Arc::new(NoEvents),
             WorkerConfig {
                 workers: 1,
                 poll_interval: Duration::from_millis(20),
