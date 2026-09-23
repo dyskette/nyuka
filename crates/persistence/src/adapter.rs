@@ -12,7 +12,7 @@
 
 use nyuka_domain::Result;
 use nyuka_domain::model::*;
-use nyuka_domain::ports::{ChapterRepository, FollowRepository, MangaRepository};
+use nyuka_domain::ports::{ChapterRepository, FollowRepository, MangaRepository, SourceRepository};
 
 use crate::repository::Repositories;
 
@@ -97,6 +97,53 @@ impl FollowRepository for Repositories {
     }
 }
 
+#[async_trait::async_trait]
+impl SourceRepository for Repositories {
+    async fn get(&self, id: SourceId) -> Result<InstalledSource> {
+        self.get_source(id).await
+    }
+
+    async fn list(&self) -> Result<Vec<InstalledSource>> {
+        self.list_sources().await
+    }
+
+    async fn upsert(&self, source: &InstalledSource) -> Result<SourceId> {
+        self.upsert_source(source).await
+    }
+
+    async fn remove(&self, id: SourceId) -> Result<()> {
+        self.delete_source(id).await
+    }
+
+    async fn list_repos(&self) -> Result<Vec<SourceRepo>> {
+        self.list_source_repos().await
+    }
+
+    async fn get_repo(&self, id: SourceRepoId) -> Result<SourceRepo> {
+        self.get_source_repo(id).await
+    }
+
+    async fn upsert_repo(&self, repo: &SourceRepo) -> Result<SourceRepoId> {
+        self.upsert_source_repo(repo).await
+    }
+
+    async fn remove_repo(&self, id: SourceRepoId) -> Result<()> {
+        self.delete_source_repo(id).await
+    }
+
+    async fn mark_repo_refreshed(&self, id: SourceRepoId) -> Result<()> {
+        Repositories::mark_repo_refreshed(self, id).await
+    }
+
+    async fn kv_get(&self, source: SourceId, key: &str) -> Result<Option<Vec<u8>>> {
+        Repositories::kv_get(self, source, key).await
+    }
+
+    async fn kv_set(&self, source: SourceId, key: &str, value: Vec<u8>) -> Result<()> {
+        Repositories::kv_set(self, source, key, value).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,7 +158,8 @@ mod tests {
             let shared = Arc::new(repos);
             let _: Arc<dyn MangaRepository> = shared.clone();
             let _: Arc<dyn ChapterRepository> = shared.clone();
-            let _: Arc<dyn FollowRepository> = shared;
+            let _: Arc<dyn FollowRepository> = shared.clone();
+            let _: Arc<dyn SourceRepository> = shared;
         }
         // Never called: this is a compile-time assertion about the types.
         let _ = assert_ports;

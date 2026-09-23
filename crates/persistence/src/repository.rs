@@ -89,6 +89,41 @@ fn row_to_chapter(row: &sea_orm::QueryResult) -> Result<Chapter> {
     })
 }
 
+fn row_to_source(row: &sea_orm::QueryResult) -> Result<InstalledSource> {
+    let version: i32 = row.try_get("", "version").map_err(db)?;
+    Ok(InstalledSource {
+        id: SourceId(row.try_get("", "id").map_err(db)?),
+        repo_id: SourceRepoId(row.try_get("", "repo_id").map_err(db)?),
+        external_id: ExternalKey(row.try_get("", "external_id").map_err(db)?),
+        name: row.try_get("", "name").map_err(db)?,
+        // The column is signed because Postgres has no unsigned integer; a
+        // negative value could only come from outside this crate.
+        version: version.max(0) as u32,
+        languages: json_list(row.try_get("", "languages").map_err(db)?),
+        required_capabilities: serde_json::from_value(
+            row.try_get("", "required_capabilities").map_err(db)?,
+        )
+        // A capability this build does not know about must not make the
+        // source unreadable: it is re-checked against the package at install
+        // time anyway.
+        .unwrap_or_default(),
+        declared_rate_limit: row
+            .try_get::<Option<serde_json::Value>>("", "declared_rate_limit")
+            .map_err(db)?
+            .and_then(|v| serde_json::from_value(v).ok()),
+    })
+}
+
+fn row_to_source_repo(row: &sea_orm::QueryResult) -> Result<SourceRepo> {
+    Ok(SourceRepo {
+        id: SourceRepoId(row.try_get("", "id").map_err(db)?),
+        name: row.try_get("", "name").map_err(db)?,
+        url: row.try_get("", "url").map_err(db)?,
+        last_refreshed_at: row.try_get("", "last_refreshed_at").map_err(db)?,
+        created_at: row.try_get("", "created_at").map_err(db)?,
+    })
+}
+
 fn row_to_follow(row: &sea_orm::QueryResult) -> Result<Follow> {
     Ok(Follow {
         id: FollowId(row.try_get("", "id").map_err(db)?),
@@ -705,6 +740,253 @@ impl Repositories {
             .execute_raw(Statement::from_sql_and_values(
                 self.db.get_database_backend(),
                 "UPDATE follow SET last_checked_at = now() WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    // --- sources and repositories -------------------------------------------
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source",
+        )
+    )]
+    pub async fn get_source(&self, id: SourceId) -> Result<InstalledSource> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM source WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_source(&row)
+    }
+
+    /// Every installed source.
+    ///
+    /// Not paginated: the count is bounded by what an operator installed, and
+    /// the job engine needs all of them to register rate limits at startup.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source",
+        )
+    )]
+    pub async fn list_sources(&self) -> Result<Vec<InstalledSource>> {
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_string(
+                self.db.get_database_backend(),
+                "SELECT * FROM source ORDER BY name",
+            ))
+            .await
+            .map_err(db)?;
+        rows.iter().map(row_to_source).collect()
+    }
+
+    /// Inserts or updates a source, keyed on `(repo_id, external_id)`.
+    ///
+    /// Reinstalling keeps the row's id, so every `manga` row pointing at it
+    /// survives an upgrade. A new id would orphan the whole library for that
+    /// source.
+    #[tracing::instrument(
+        skip(self, source),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "INSERT",
+            db.collection.name = "source",
+        )
+    )]
+    pub async fn upsert_source(&self, source: &InstalledSource) -> Result<SourceId> {
+        let rate_limit = source
+            .declared_rate_limit
+            .map(|r| serde_json::to_value(r).map_err(|e| DomainError::Internal(e.to_string())))
+            .transpose()?;
+        let sql = r#"
+            INSERT INTO source (id, repo_id, external_id, name, version, languages,
+                                required_capabilities, declared_rate_limit, installed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+            ON CONFLICT (repo_id, external_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                version = EXCLUDED.version,
+                languages = EXCLUDED.languages,
+                required_capabilities = EXCLUDED.required_capabilities,
+                declared_rate_limit = COALESCE(EXCLUDED.declared_rate_limit,
+                                               source.declared_rate_limit)
+            RETURNING id
+        "#;
+        let capabilities = serde_json::to_value(&source.required_capabilities)
+            .map_err(|e| DomainError::Internal(e.to_string()))?;
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                sql,
+                [
+                    Uuid::new_v4().into(),
+                    source.repo_id.0.into(),
+                    source.external_id.0.clone().into(),
+                    source.name.clone().into(),
+                    (source.version as i32).into(),
+                    json(&source.languages)?.into(),
+                    capabilities.into(),
+                    rate_limit.map(Value::from).unwrap_or(Value::Json(None)),
+                ],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or_else(|| DomainError::Internal("upsert returned no row".into()))?;
+        Ok(SourceId(row.try_get("", "id").map_err(db)?))
+    }
+
+    /// Uninstalls a source.
+    ///
+    /// > [!WARNING]
+    /// > The foreign keys cascade, so this deletes every `manga` row from this
+    /// > source and everything hanging off them. Packaged files in the library
+    /// > are untouched — they are the user's, and nothing else knows how to
+    /// > find them again.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "DELETE",
+            db.collection.name = "source",
+        )
+    )]
+    pub async fn delete_source(&self, id: SourceId) -> Result<()> {
+        self.db
+            .execute_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "DELETE FROM source WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source_repo",
+        )
+    )]
+    pub async fn list_source_repos(&self) -> Result<Vec<SourceRepo>> {
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_string(
+                self.db.get_database_backend(),
+                "SELECT * FROM source_repo ORDER BY created_at",
+            ))
+            .await
+            .map_err(db)?;
+        rows.iter().map(row_to_source_repo).collect()
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "source_repo",
+        )
+    )]
+    pub async fn get_source_repo(&self, id: SourceRepoId) -> Result<SourceRepo> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM source_repo WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_source_repo(&row)
+    }
+
+    /// Adds or renames a repository, keyed on its url.
+    ///
+    /// `last_refreshed_at` is not touched: adding the same url twice must not
+    /// make an index that was never fetched look current.
+    #[tracing::instrument(
+        skip(self, repo),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "INSERT",
+            db.collection.name = "source_repo",
+        )
+    )]
+    pub async fn upsert_source_repo(&self, repo: &SourceRepo) -> Result<SourceRepoId> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "INSERT INTO source_repo (id, name, url, created_at) \
+                 VALUES ($1, $2, $3, now()) \
+                 ON CONFLICT (url) DO UPDATE SET name = EXCLUDED.name \
+                 RETURNING id",
+                [
+                    Uuid::new_v4().into(),
+                    repo.name.clone().into(),
+                    repo.url.clone().into(),
+                ],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or_else(|| DomainError::Internal("upsert returned no row".into()))?;
+        Ok(SourceRepoId(row.try_get("", "id").map_err(db)?))
+    }
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "DELETE",
+            db.collection.name = "source_repo",
+        )
+    )]
+    pub async fn delete_source_repo(&self, id: SourceRepoId) -> Result<()> {
+        self.db
+            .execute_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "DELETE FROM source_repo WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    /// Stamps a successful index refresh, so a failed one leaves the
+    /// repository looking as stale as it is.
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "UPDATE",
+            db.collection.name = "source_repo",
+        )
+    )]
+    pub async fn mark_repo_refreshed(&self, id: SourceRepoId) -> Result<()> {
+        self.db
+            .execute_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "UPDATE source_repo SET last_refreshed_at = now() WHERE id = $1",
                 [id.0.into()],
             ))
             .await

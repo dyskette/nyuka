@@ -474,3 +474,217 @@ async fn a_deleted_follow_is_gone() {
     // Deleting again is the desired state, not a failure.
     repos.delete_follow(id).await.expect("idempotent delete");
 }
+
+// ---------------------------------------------------------------------------
+// Sources and repositories
+// ---------------------------------------------------------------------------
+
+fn sample_source(repo: SourceRepoId, external: &str) -> InstalledSource {
+    InstalledSource {
+        id: SourceId(Uuid::nil()),
+        repo_id: repo,
+        external_id: ExternalKey(external.into()),
+        name: "Example".into(),
+        version: 7,
+        languages: vec!["en".into(), "ja".into()],
+        required_capabilities: vec![Capability::Net, Capability::Html],
+        declared_rate_limit: None,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_source_round_trips_through_every_column() {
+    let Some((_db, repos, seed)) = fresh("nyuka_test_repo_source").await else {
+        return;
+    };
+    let repo_id = repos
+        .get_source(seeded_source(&repos, seed).await)
+        .await
+        .expect("seeded source")
+        .repo_id;
+
+    let written = sample_source(repo_id, "en.example");
+    let id = repos.upsert_source(&written).await.expect("upsert");
+    let read = repos.get_source(id).await.expect("get");
+
+    assert_eq!(read.repo_id, repo_id);
+    assert_eq!(read.external_id, written.external_id);
+    assert_eq!(read.name, "Example");
+    assert_eq!(
+        read.version, 7,
+        "a numeric manifest version must stay numeric through the column"
+    );
+    assert_eq!(read.languages, vec!["en".to_string(), "ja".to_string()]);
+    assert_eq!(
+        read.required_capabilities,
+        vec![Capability::Net, Capability::Html]
+    );
+    assert!(read.declared_rate_limit.is_none());
+}
+
+/// Reinstalling must keep the row's id, or every `manga` row pointing at the
+/// source would be orphaned by an upgrade.
+#[tokio::test(flavor = "multi_thread")]
+async fn reinstalling_a_source_keeps_its_id() {
+    let Some((_db, repos, seed)) = fresh("nyuka_test_repo_source_reinstall").await else {
+        return;
+    };
+    let repo_id = repos
+        .get_source(seeded_source(&repos, seed).await)
+        .await
+        .expect("seeded source")
+        .repo_id;
+
+    let first = repos
+        .upsert_source(&sample_source(repo_id, "en.example"))
+        .await
+        .expect("install");
+
+    let mut upgraded = sample_source(repo_id, "en.example");
+    upgraded.version = 8;
+    upgraded.name = "Example (renamed)".into();
+    let second = repos.upsert_source(&upgraded).await.expect("upgrade");
+
+    assert_eq!(second, first);
+    let read = repos.get_source(first).await.expect("get");
+    assert_eq!(read.version, 8);
+    assert_eq!(read.name, "Example (renamed)");
+}
+
+/// A rate limit is only learned once the module runs, so an upsert that does
+/// not know one must not erase one already recorded.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_upsert_without_a_rate_limit_keeps_the_recorded_one() {
+    let Some((_db, repos, seed)) = fresh("nyuka_test_repo_source_rate").await else {
+        return;
+    };
+    let repo_id = repos
+        .get_source(seeded_source(&repos, seed).await)
+        .await
+        .expect("seeded source")
+        .repo_id;
+
+    let mut with_limit = sample_source(repo_id, "en.example");
+    with_limit.declared_rate_limit = Some(RateLimit {
+        permits: 2,
+        period_seconds: 10,
+    });
+    let id = repos.upsert_source(&with_limit).await.expect("install");
+    assert_eq!(
+        repos
+            .get_source(id)
+            .await
+            .expect("get")
+            .declared_rate_limit
+            .map(|r| r.permits),
+        Some(2)
+    );
+
+    repos
+        .upsert_source(&sample_source(repo_id, "en.example"))
+        .await
+        .expect("reinstall");
+    assert_eq!(
+        repos
+            .get_source(id)
+            .await
+            .expect("get")
+            .declared_rate_limit
+            .map(|r| r.permits),
+        Some(2),
+        "a reinstall that has not yet seen the module declare a limit must \
+         not drop the one already known"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_repository_round_trips_and_is_keyed_on_its_url() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_source_repo").await else {
+        return;
+    };
+    let written = SourceRepo {
+        id: SourceRepoId(Uuid::nil()),
+        name: "Community".into(),
+        url: "https://example.test/index.json".into(),
+        last_refreshed_at: None,
+        created_at: Utc::now(),
+    };
+    let id = repos.upsert_source_repo(&written).await.expect("insert");
+    let read = repos.get_source_repo(id).await.expect("get");
+    assert_eq!(read.name, "Community");
+    assert_eq!(read.url, written.url);
+    assert!(read.last_refreshed_at.is_none());
+
+    let renamed = SourceRepo {
+        name: "Community (renamed)".into(),
+        ..written
+    };
+    assert_eq!(
+        repos.upsert_source_repo(&renamed).await.expect("update"),
+        id,
+        "the same url must not create a second repository"
+    );
+    assert_eq!(
+        repos.get_source_repo(id).await.expect("get").name,
+        "Community (renamed)"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_a_successful_refresh_is_stamped() {
+    let Some((_db, repos, _seed)) = fresh("nyuka_test_repo_refresh_stamp").await else {
+        return;
+    };
+    let id = repos
+        .upsert_source_repo(&SourceRepo {
+            id: SourceRepoId(Uuid::nil()),
+            name: "R".into(),
+            url: "https://example.test/r.json".into(),
+            last_refreshed_at: None,
+            created_at: Utc::now(),
+        })
+        .await
+        .expect("insert");
+
+    assert!(
+        repos
+            .get_source_repo(id)
+            .await
+            .expect("get")
+            .last_refreshed_at
+            .is_none(),
+        "a repository nobody has fetched must read as never refreshed"
+    );
+
+    repos.mark_repo_refreshed(id).await.expect("stamp");
+    assert!(
+        repos
+            .get_source_repo(id)
+            .await
+            .expect("get")
+            .last_refreshed_at
+            .is_some()
+    );
+}
+
+/// Uninstalling cascades. This is the destructive half of the operation and
+/// the reason the method carries a warning.
+#[tokio::test(flavor = "multi_thread")]
+async fn deleting_a_source_removes_its_series() {
+    let Some((_db, repos, seed)) = fresh("nyuka_test_repo_source_delete").await else {
+        return;
+    };
+    let source = seeded_source(&repos, seed).await;
+    assert!(repos.get_manga(seed).await.is_ok());
+
+    repos.delete_source(source).await.expect("delete");
+
+    assert!(matches!(
+        repos.get_manga(seed).await,
+        Err(DomainError::NotFound)
+    ));
+    assert!(matches!(
+        repos.get_source(source).await,
+        Err(DomainError::NotFound)
+    ));
+}

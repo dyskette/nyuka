@@ -25,6 +25,7 @@
 pub mod download;
 pub mod follow;
 pub mod maintenance;
+pub mod sources;
 
 use std::collections::HashMap;
 use std::sync::Arc;

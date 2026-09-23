@@ -283,8 +283,25 @@ pub trait FollowRepository: Send + Sync {
 pub trait SourceRepository: Send + Sync {
     async fn get(&self, id: SourceId) -> Result<InstalledSource>;
     async fn list(&self) -> Result<Vec<InstalledSource>>;
+    async fn upsert(&self, source: &InstalledSource) -> Result<SourceId>;
+    async fn remove(&self, id: SourceId) -> Result<()>;
+
+    /// The configured repositories, which is what `update_sources` walks.
+    async fn list_repos(&self) -> Result<Vec<SourceRepo>>;
+    async fn get_repo(&self, id: SourceRepoId) -> Result<SourceRepo>;
+    async fn upsert_repo(&self, repo: &SourceRepo) -> Result<SourceRepoId>;
+    async fn remove_repo(&self, id: SourceRepoId) -> Result<()>;
+
+    /// Stamps a successful index refresh.
+    async fn mark_repo_refreshed(&self, id: SourceRepoId) -> Result<()>;
+
     /// The per-source key-value namespace the WASM `defaults` host import
     /// reads and writes.
-    async fn kv_get(&self, source: SourceId, key: &str) -> Result<Option<serde_json::Value>>;
-    async fn kv_set(&self, source: SourceId, key: &str, value: serde_json::Value) -> Result<()>;
+    ///
+    /// Opaque bytes, not JSON: the guest postcard-encodes these values and
+    /// this layer does not interpret them (ADR-0004). Typing them as JSON
+    /// would mean decoding and re-encoding a payload only the guest
+    /// understands, and the column is `bytea` either way.
+    async fn kv_get(&self, source: SourceId, key: &str) -> Result<Option<Vec<u8>>>;
+    async fn kv_set(&self, source: SourceId, key: &str, value: Vec<u8>) -> Result<()>;
 }

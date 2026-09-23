@@ -60,7 +60,12 @@ impl SourceRuntime {
 
     /// Compiles and registers a package, refusing it if this host cannot run
     /// it.
-    pub fn install(&self, id: SourceId, bytes: &[u8]) -> Result<InstalledSource> {
+    pub fn install(
+        &self,
+        id: SourceId,
+        repo_id: nyuka_domain::model::SourceRepoId,
+        bytes: &[u8],
+    ) -> Result<InstalledSource> {
         let pkg: Package = package::load(bytes, &package::WasmtimeImports(&self.runtime))
             .map_err(map_load_error)?;
         let module = self
@@ -73,11 +78,18 @@ impl SourceRuntime {
 
         let installed = InstalledSource {
             id,
-            repo_id: nyuka_domain::model::SourceRepoId(uuid::Uuid::nil()),
+            repo_id,
+            external_id: nyuka_domain::model::ExternalKey(pkg.manifest.info.id.clone()),
             name: pkg.manifest.info.name.clone(),
-            version: pkg.manifest.info.version.to_string(),
+            version: pkg.manifest.info.version,
             languages: pkg.manifest.info.languages.clone(),
             required_capabilities: pkg.required.clone(),
+            // A rate limit is not in the manifest — a source declares it at
+            // runtime through `net::set_rate_limit`, so it cannot be known
+            // until the module first runs. The caller persists whatever the
+            // module later declares; `None` here means "not yet declared",
+            // not "unlimited". `SourceLimiter` applies the operator's cap
+            // until one arrives.
             declared_rate_limit: None,
         };
 

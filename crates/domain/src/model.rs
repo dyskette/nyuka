@@ -286,6 +286,18 @@ pub struct RateLimit {
     pub period_seconds: u32,
 }
 
+/// A configured index of installable sources.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceRepo {
+    pub id: SourceRepoId,
+    pub name: String,
+    pub url: String,
+    /// When the index was last fetched. `None` means it has never been
+    /// refreshed, which is why `update_sources` treats it as due.
+    pub last_refreshed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Host capabilities a source requires. `SourceRegistry` refuses installation
 /// when any required capability is unimplemented (ADR-0004).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -306,8 +318,13 @@ pub enum Capability {
 pub struct InstalledSource {
     pub id: SourceId,
     pub repo_id: SourceRepoId,
+    /// The source's own id, such as `en.asurascans`. Unique within a repo.
+    pub external_id: ExternalKey,
     pub name: String,
-    pub version: String,
+    /// The `.aix` manifest's version, which is a number there and an
+    /// `integer` column here. Keeping it numeric means the two cannot drift
+    /// through a string that only happens to parse.
+    pub version: u32,
     pub languages: Vec<String>,
     pub required_capabilities: Vec<Capability>,
     pub declared_rate_limit: Option<RateLimit>,
