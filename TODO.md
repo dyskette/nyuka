@@ -160,8 +160,8 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
       needs to see.
 - [x] **Settings** — repositories and the sources installed from them: add,
       refresh, remove, install, update, uninstall.
-- [ ] Follows screen — the route is still a stub, and `/follows` is the one
-      API surface with no UI at all
+- [x] **Follows** — the schedule table: missing-chapter count, interval,
+      auto-download, check-now and unfollow. Every API surface now has a UI.
 - [ ] Per-source settings (`GET`/`PUT /sources/{id}/settings`) and filters
       (`GET /sources/{id}/filters`). Both are served and neither is rendered;
       the values are opaque postcard bytes, so this needs a form built from
