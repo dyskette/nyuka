@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { api } from '@/shared/api/client'
-import { libraryKeys } from './keys'
+import { type LibraryListParams, libraryKeys } from './keys'
 
 /**
  * Query options for the library.
@@ -28,18 +28,25 @@ function unwrap<D, E>({ data, error }: { data?: D; error?: E }): D {
   return data as D
 }
 
-/** Series already in the library, newest first. */
-export function libraryListQuery(cursor?: string) {
+/**
+ * A page of the library, as the server ordered and filtered it.
+ *
+ * Every parameter goes to the server. Ordering or filtering here would only
+ * ever apply to the page in hand, which describes what is on screen rather
+ * than what is in the library — a difference that is invisible until the
+ * library outgrows one page, and then every count is wrong.
+ */
+export function libraryListQuery(params: LibraryListParams = {}) {
   return queryOptions({
-    queryKey: libraryKeys.list(cursor),
+    queryKey: libraryKeys.list(params),
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET('/manga', {
-          // Spread rather than `cursor` directly: `exactOptionalPropertyTypes`
+          // Spread rather than passing the object: `exactOptionalPropertyTypes`
           // distinguishes an absent key from one set to `undefined`, and the
-          // server's first page is the absence — sending `?cursor=undefined`
+          // server's default is the absence — sending `?cursor=undefined`
           // would be a cursor that fails to parse.
-          params: { query: { ...(cursor ? { cursor } : {}) } },
+          params: { query: defined(params) },
           signal,
         }),
       ),
@@ -47,6 +54,13 @@ export function libraryListQuery(cursor?: string) {
     // top of that would be the traffic ADR-0010 chose SSE to avoid.
     staleTime: 30_000,
   })
+}
+
+/** Drops the keys that are absent, so none is sent as the string "undefined". */
+function defined(params: LibraryListParams): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  )
 }
 
 /** One series. */

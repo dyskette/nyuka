@@ -9,14 +9,83 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
-use nyuka_domain::model::{ChapterId, MangaId};
+use nyuka_domain::model::{ChapterId, Cursor, MangaId, MangaQuery, MangaSort, SortDir, SourceId};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
 use crate::routes::dto::{
-    ChapterDto, ChapterSummaryDto, MangaDto, MangaSummaryDto, Paged, Pagination,
+    ChapterDto, ChapterSummaryDto, MangaDto, MangaSummaryDto, Paged, Pagination, status_from_name,
 };
 use crate::state::AppState;
+
+/// The library listing's filters and ordering.
+///
+/// Every field is optional and every unrecognised value is refused rather than
+/// ignored. Ignoring `sort=titel` returns the default ordering and looks like
+/// the sort silently not working; ignoring `status=onging` returns every
+/// series and looks like the filter matching everything.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+pub struct LibraryQuery {
+    /// Free text matched against the title.
+    pub q: Option<String>,
+    /// One of `unknown`, `ongoing`, `completed`, `cancelled`, `hiatus`.
+    pub status: Option<String>,
+    pub source_id: Option<Uuid>,
+    /// One of `title`, `added`, `updated`, `chapters`. Defaults to `updated`.
+    pub sort: Option<String>,
+    /// `asc` or `desc`. Defaults to `desc`.
+    pub dir: Option<String>,
+    pub cursor: Option<String>,
+}
+
+impl LibraryQuery {
+    /// Validates the request into a domain query.
+    fn parse(&self) -> ApiResult<MangaQuery> {
+        let sort = match self.sort.as_deref() {
+            None => MangaSort::default(),
+            Some("title") => MangaSort::Title,
+            Some("added") => MangaSort::Added,
+            Some("updated") => MangaSort::Updated,
+            Some("chapters") => MangaSort::Chapters,
+            Some(other) => {
+                return Err(ApiError(Box::new(Problem::invalid(format!(
+                    "`{other}` is not a sort order; expected one of title, \
+                     added, updated, chapters"
+                )))));
+            }
+        };
+
+        let dir = match self.dir.as_deref() {
+            None => SortDir::default(),
+            Some("asc") => SortDir::Asc,
+            Some("desc") => SortDir::Desc,
+            Some(other) => {
+                return Err(ApiError(Box::new(Problem::invalid(format!(
+                    "`{other}` is not a direction; expected asc or desc"
+                )))));
+            }
+        };
+
+        let status = match self.status.as_deref() {
+            None => None,
+            Some(name) => Some(status_from_name(name).ok_or_else(|| {
+                ApiError(Box::new(Problem::invalid(format!(
+                    "`{name}` is not a publication status; expected one of \
+                     unknown, ongoing, completed, cancelled, hiatus"
+                ))))
+            })?),
+        };
+
+        Ok(MangaQuery {
+            q: self.q.clone(),
+            status,
+            source_id: self.source_id.map(SourceId),
+            sort,
+            dir,
+        })
+    }
+}
 
 /// `GET /api/v1/manga`
 #[utoipa::path(
@@ -24,20 +93,26 @@ use crate::state::AppState;
     get,
     path = "/manga",
     tag = "library",
-    params(Pagination),
-    responses((status = OK, body = Paged<MangaSummaryDto>)),
+    params(LibraryQuery),
+    responses(
+        (status = OK, body = Paged<MangaSummaryDto>),
+        (status = BAD_REQUEST, description = "Unknown sort, direction, or status"),
+    ),
 )]
 pub async fn list(
     State(state): State<Arc<AppState>>,
-    Query(page): Query<Pagination>,
+    Query(query): Query<LibraryQuery>,
 ) -> ApiResult<Json<Paged<MangaSummaryDto>>> {
     // Summaries rather than bare series: the list view shows chapter and
     // download counts, and fetching those per row would be one query per
     // series on a page of fifty.
+    //
+    // Ordering and filtering are the server's job for the same reason: a
+    // client can only order what it holds, which is one page.
     Ok(Json(
         state
             .manga
-            .list_summaries(page.cursor().as_ref())
+            .list_summaries(&query.parse()?, query.cursor.clone().map(Cursor).as_ref())
             .await?
             .into(),
     ))

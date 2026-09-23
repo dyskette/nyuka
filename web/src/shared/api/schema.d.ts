@@ -1226,7 +1226,15 @@ export interface operations {
     listLibrary: {
         parameters: {
             query?: {
-                /** @description The `next_cursor` from a previous page. */
+                /** @description Free text matched against the title. */
+                q?: string | null;
+                /** @description One of `unknown`, `ongoing`, `completed`, `cancelled`, `hiatus`. */
+                status?: string | null;
+                source_id?: string | null;
+                /** @description One of `title`, `added`, `updated`, `chapters`. Defaults to `updated`. */
+                sort?: string | null;
+                /** @description `asc` or `desc`. Defaults to `desc`. */
+                dir?: string | null;
                 cursor?: string | null;
             };
             header?: never;
@@ -1242,6 +1250,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Paged_MangaSummaryDto"];
                 };
+            };
+            /** @description Unknown sort, direction, or status */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -7,14 +7,22 @@ export interface LibraryFilters {
   source: string
 }
 
+/** One choice in a filter dropdown. */
+export interface FilterOption {
+  /** What the server is sent. */
+  value: string
+  label: string
+}
+
 export interface LibraryToolbarProps {
   filters: LibraryFilters
-  /** Every distinct value present on the loaded page, for the two selects. */
-  sources: string[]
-  statuses: string[]
-  /** Number of rows after filtering, for the count readout. */
+  /** The installed sources, by id — which is what the server filters on. */
+  sources: { id: string; name: string }[]
+  statuses: readonly string[]
+  /** Rows on this page. */
   shown: number
-  total: number
+  /** Whether the server has another page under these filters. */
+  hasMore: boolean
   onChange: (next: Partial<LibraryFilters>) => void
 }
 
@@ -37,7 +45,7 @@ export function LibraryToolbar({
   sources,
   statuses,
   shown,
-  total,
+  hasMore,
   onChange,
 }: LibraryToolbarProps) {
   const { t } = useLingui()
@@ -46,35 +54,35 @@ export function LibraryToolbar({
     <div className="border-border px-cell flex h-row shrink-0 items-center gap-2 border-b">
       <SearchBox
         value={filters.q ?? ''}
-        placeholder={t`Search ${total} titles`}
+        placeholder={t`Search your library`}
         onChange={(q) => onChange({ q })}
       />
 
       <Select
         label={t`Status`}
         value={filters.status}
-        options={statuses}
+        options={statuses.map((status) => ({ value: status, label: status }))}
         anyLabel={t`Any`}
         onChange={(status) => onChange({ status })}
       />
       <Select
         label={t`Source`}
         value={filters.source}
-        options={sources}
+        options={sources.map((source) => ({ value: source.id, label: source.name }))}
         anyLabel={t`All`}
         onChange={(source) => onChange({ source })}
       />
 
       {/* `aria-live` so a screen reader hears the result of a filter it just
           applied. `polite`, because it must not interrupt typing. */}
+      {/*
+        The count is of this page, and says so when there are more. The server
+        pages with a keyset and reports no total, and inventing one from the
+        rows in hand would be a number that stops being true at fifty-one
+        series — which is exactly when someone starts relying on it.
+      */}
       <span className="text-muted-foreground tabular ml-auto text-xs" aria-live="polite">
-        {shown === total ? (
-          <Trans>{total} titles</Trans>
-        ) : (
-          <Trans>
-            {shown} of {total}
-          </Trans>
-        )}
+        {hasMore ? <Trans>{shown}+ titles</Trans> : <Trans>{shown} titles</Trans>}
       </span>
     </div>
   )
@@ -140,7 +148,7 @@ function Select({
 }: {
   label: string
   value: string
-  options: string[]
+  options: FilterOption[]
   anyLabel: string
   onChange: (value: string) => void
 }) {
@@ -156,8 +164,8 @@ function Select({
             indistinguishable from a source actually called that. */}
         <option value="">{anyLabel}</option>
         {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>

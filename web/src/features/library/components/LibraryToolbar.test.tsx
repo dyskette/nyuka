@@ -7,10 +7,13 @@ import { LibraryToolbar, type LibraryToolbarProps } from './LibraryToolbar'
 function props(overrides: Partial<LibraryToolbarProps> = {}): LibraryToolbarProps {
   return {
     filters: { q: '', status: '', source: '' },
-    sources: ['Kaizoku', 'MangaHaven'],
+    sources: [
+      { id: 'src-kaizoku', name: 'Kaizoku' },
+      { id: 'src-mangahaven', name: 'MangaHaven' },
+    ],
     statuses: ['completed', 'ongoing'],
     shown: 12,
-    total: 12,
+    hasMore: false,
     onChange: vi.fn(),
     ...overrides,
   }
@@ -24,7 +27,7 @@ describe('LibraryToolbar', () => {
   it('labels the search box rather than relying on the placeholder', async () => {
     await renderWithProviders(<LibraryToolbar {...props()} />)
 
-    expect(screen.getByRole('searchbox', { name: /Search 12 titles/ })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: /Search your library/ })).toBeInTheDocument()
   })
 
   /**
@@ -60,12 +63,15 @@ describe('LibraryToolbar', () => {
   it('offers the sources and statuses it was given', async () => {
     await renderWithProviders(<LibraryToolbar {...props()} />)
 
-    const source = screen.getByRole('combobox', { name: /Source/ })
-    expect(
-      within(source)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual(['All', 'Kaizoku', 'MangaHaven'])
+    const options = within(screen.getByRole('combobox', { name: /Source/ })).getAllByRole('option')
+    expect(options.map((o) => o.textContent)).toEqual(['All', 'Kaizoku', 'MangaHaven'])
+    // The value sent is the source's id, because that is what the server
+    // filters on — filtering by a display name would break on a rename.
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual([
+      '',
+      'src-kaizoku',
+      'src-mangahaven',
+    ])
   })
 
   /**
@@ -85,9 +91,18 @@ describe('LibraryToolbar', () => {
     expect(onChange).toHaveBeenCalledWith({ status: '' })
   })
 
-  it('says how many rows a filter left', async () => {
-    await renderWithProviders(<LibraryToolbar {...props({ shown: 3, total: 12 })} />)
+  /**
+   * The server pages with a keyset and reports no total, so a count of the
+   * rows in hand is all there is. Claiming it as the total would be a number
+   * that stops being true at fifty-one series.
+   */
+  it('counts this page, and marks it partial when there is more', async () => {
+    const { rerender } = await renderWithProviders(
+      <LibraryToolbar {...props({ shown: 12, hasMore: false })} />,
+    )
+    expect(screen.getByText('12 titles')).toBeInTheDocument()
 
-    expect(screen.getByText('3 of 12')).toBeInTheDocument()
+    rerender(<LibraryToolbar {...props({ shown: 50, hasMore: true })} />)
+    expect(screen.getByText('50+ titles')).toBeInTheDocument()
   })
 })

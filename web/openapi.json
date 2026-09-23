@@ -1453,7 +1453,66 @@
         "operationId": "listLibrary",
         "parameters": [
           {
-            "description": "The `next_cursor` from a previous page.",
+            "description": "Free text matched against the title.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "One of `unknown`, `ongoing`, `completed`, `cancelled`, `hiatus`.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "One of `title`, `added`, `updated`, `chapters`. Defaults to `updated`.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "`asc` or `desc`. Defaults to `desc`.",
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -1475,6 +1534,9 @@
               }
             },
             "description": ""
+          },
+          "400": {
+            "description": "Unknown sort, direction, or status"
           }
         },
         "summary": "`GET /api/v1/manga`",

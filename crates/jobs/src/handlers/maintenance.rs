@@ -261,6 +261,7 @@ mod tests {
         }
         async fn list_summaries(
             &self,
+            _query: &nyuka_domain::model::MangaQuery,
             _cursor: Option<&Cursor>,
         ) -> Result<nyuka_domain::model::Page<nyuka_domain::model::MangaSummary>> {
             Ok(nyuka_domain::model::Page {

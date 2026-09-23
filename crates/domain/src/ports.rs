@@ -238,12 +238,20 @@ pub trait MangaRepository: Send + Sync {
     async fn upsert(&self, manga: &Manga) -> Result<MangaId>;
     async fn list(&self, cursor: Option<&Cursor>) -> Result<Page<Manga>>;
 
-    /// The library list, with its aggregates.
+    /// The library list, with its aggregates, ordered and filtered.
     ///
     /// A separate method rather than a flag on `list`, because the two have
     /// different costs: this one joins the source and counts chapters, and a
     /// caller that only needs the series should not pay for that by default.
-    async fn list_summaries(&self, cursor: Option<&Cursor>) -> Result<Page<MangaSummary>>;
+    ///
+    /// The ordering is part of the request because the cursor is only
+    /// meaningful under it — a cursor taken while sorted by title does not
+    /// describe a position in a list sorted by recency.
+    async fn list_summaries(
+        &self,
+        query: &MangaQuery,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<MangaSummary>>;
 }
 
 #[async_trait]

@@ -89,6 +89,22 @@ pub fn status_name(status: MangaStatus) -> &'static str {
     }
 }
 
+/// The inverse of [`status_name`], for a filter a client sends back.
+///
+/// Returns `None` for anything else, so an unknown value is refused rather
+/// than quietly matching everything — a filter that silently does nothing
+/// looks exactly like a filter that matched every row.
+pub fn status_from_name(name: &str) -> Option<MangaStatus> {
+    Some(match name {
+        "unknown" => MangaStatus::Unknown,
+        "ongoing" => MangaStatus::Ongoing,
+        "completed" => MangaStatus::Completed,
+        "cancelled" => MangaStatus::Cancelled,
+        "hiatus" => MangaStatus::Hiatus,
+        _ => return None,
+    })
+}
+
 pub fn rating_name(rating: ContentRating) -> &'static str {
     match rating {
         ContentRating::Unknown => "unknown",

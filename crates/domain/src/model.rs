@@ -166,6 +166,45 @@ pub struct SourceManga {
     pub chapters: Option<Vec<SourceChapter>>,
 }
 
+/// How a library listing is ordered.
+///
+/// A closed set, not a column name. The persistence layer maps each variant to
+/// a fixed identifier, so no part of a client's request ever reaches the
+/// `ORDER BY` clause as text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum MangaSort {
+    Title,
+    /// When the series was added to this library.
+    Added,
+    /// When the series was last changed here.
+    #[default]
+    Updated,
+    Chapters,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SortDir {
+    Asc,
+    #[default]
+    Desc,
+}
+
+/// What a library listing asks for.
+///
+/// Ordering and filtering belong here rather than in the client, because a
+/// client can only order and filter the page it holds — which describes what
+/// is on screen and not what is in the library. The difference is invisible
+/// until the library outgrows one page, and then every count is wrong.
+#[derive(Debug, Clone, Default)]
+pub struct MangaQuery {
+    /// Free text matched against the title. Absent matches everything.
+    pub q: Option<String>,
+    pub status: Option<MangaStatus>,
+    pub source_id: Option<SourceId>,
+    pub sort: MangaSort,
+    pub dir: SortDir,
+}
+
 /// A library entry with the numbers the list view shows.
 ///
 /// A projection, not an entity: `chapter_count` and `downloaded_count` are

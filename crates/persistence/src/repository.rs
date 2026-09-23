@@ -191,6 +191,22 @@ fn row_to_follow_summary(row: &sea_orm::QueryResult) -> Result<FollowSummary> {
     })
 }
 
+/// Escapes the wildcards `LIKE` gives meaning to.
+///
+/// Without this, searching for `100%` matches every title and searching for
+/// `_` matches all of them: the box silently stops narrowing rather than
+/// failing, which is the kind of wrong nobody reports.
+///
+/// The backslash is escaped first, or escaping the others would double-escape
+/// it. PostgreSQL's default `LIKE` escape character is the backslash, so no
+/// `ESCAPE` clause is needed.
+fn escape_like(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// Default page size for cursor-paginated reads.
 const PAGE_SIZE: u64 = 50;
 
@@ -383,37 +399,114 @@ impl Repositories {
             db.collection.name = "manga",
         )
     )]
+    /// The library list: aggregates, filters, and an ordering.
+    ///
+    /// # One `MATERIALIZED` CTE, referenced twice
+    ///
+    /// Keyset pagination compares the cursor row's sort key against every
+    /// candidate, so the sort key has to exist before the comparison. For
+    /// `chapter_count` that key is an aggregate, which no `WHERE` clause can
+    /// see — so the projection is computed once in a CTE and both the
+    /// comparison and the result read from it.
+    ///
+    /// `MATERIALIZED` is explicit because PostgreSQL 12 and later inline a CTE
+    /// referenced once and may inline this one too, which would compute every
+    /// series' chapter count a second time to resolve the cursor.
+    ///
+    /// # Nothing from the request reaches the SQL as text
+    ///
+    /// `sort` and `dir` are closed enums mapped to fixed identifiers below.
+    /// Every value — the search text, the status, the source — is a bound
+    /// parameter. The only interpolation is of strings this file owns.
+    #[tracing::instrument(
+        skip(self, query, cursor),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "manga",
+        )
+    )]
     pub async fn list_manga_summaries(
         &self,
+        query: &MangaQuery,
         cursor: Option<&Cursor>,
     ) -> Result<Page<MangaSummary>> {
         let after = parse_cursor(cursor, "manga")?;
-        let select = "SELECT m.*, s.name AS source_name, \
+
+        // Bound parameters, numbered as they are pushed. Postgres numbers
+        // placeholders by position, so building the list and the clauses
+        // together is what keeps them in step.
+        let mut values: Vec<Value> = Vec::new();
+        let mut filters: Vec<String> = Vec::new();
+
+        if let Some(text) = query.q.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            values.push(format!("%{}%", escape_like(text)).into());
+            // `ILIKE` rather than a trigram index: a self-hosted library is
+            // thousands of rows, not millions, and an extension this server
+            // would have to require is a worse trade than a sequential scan.
+            filters.push(format!("m.title ILIKE ${}", values.len()));
+        }
+        if let Some(status) = query.status {
+            values.push(status.as_i16().into());
+            filters.push(format!("m.status = ${}", values.len()));
+        }
+        if let Some(source) = query.source_id {
+            values.push(source.0.into());
+            filters.push(format!("m.source_id = ${}", values.len()));
+        }
+
+        let where_clause = if filters.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {} ", filters.join(" AND "))
+        };
+
+        let sort_column = match query.sort {
+            MangaSort::Title => "title",
+            MangaSort::Added => "created_at",
+            MangaSort::Updated => "updated_at",
+            MangaSort::Chapters => "chapter_count",
+        };
+        let (direction, comparison) = match query.dir {
+            SortDir::Asc => ("ASC", ">"),
+            SortDir::Desc => ("DESC", "<"),
+        };
+
+        // The id is the tiebreaker in the same direction, so the pair is
+        // unique and the comparison below is a total order. Without it, two
+        // series updated in the same millisecond can both be skipped or both
+        // repeated across a page boundary.
+        let order = format!("ORDER BY {sort_column} {direction}, id {direction}");
+
+        let keyset = match after {
+            Some(id) => {
+                values.push(id.into());
+                format!(
+                    "WHERE ({sort_column}, id) {comparison} \
+                     (SELECT {sort_column}, id FROM summary WHERE id = ${}) ",
+                    values.len()
+                )
+            }
+            None => String::new(),
+        };
+
+        values.push(((PAGE_SIZE + 1) as i64).into());
+        let limit = format!("LIMIT ${}", values.len());
+
+        let sql = format!(
+            "WITH summary AS MATERIALIZED ( \
+               SELECT m.*, s.name AS source_name, \
                       COUNT(DISTINCT c.id) AS chapter_count, \
                       COUNT(DISTINCT d.chapter_id) AS downloaded_count \
-                      FROM manga m \
-                      JOIN source s ON s.id = m.source_id \
-                      LEFT JOIN chapter c ON c.manga_id = m.id \
-                      LEFT JOIN downloaded_chapter d ON d.chapter_id = c.id ";
-
-        let (sql, values): (String, Vec<Value>) = match after {
-            Some(id) => (
-                format!(
-                    "{select} WHERE (m.created_at, m.id) < \
-                     (SELECT created_at, id FROM manga WHERE id = $1) \
-                     GROUP BY m.id, s.name \
-                     ORDER BY m.created_at DESC, m.id DESC LIMIT $2"
-                ),
-                vec![id.into(), ((PAGE_SIZE + 1) as i64).into()],
-            ),
-            None => (
-                format!(
-                    "{select} GROUP BY m.id, s.name \
-                     ORDER BY m.created_at DESC, m.id DESC LIMIT $1"
-                ),
-                vec![((PAGE_SIZE + 1) as i64).into()],
-            ),
-        };
+               FROM manga m \
+               JOIN source s ON s.id = m.source_id \
+               LEFT JOIN chapter c ON c.manga_id = m.id \
+               LEFT JOIN downloaded_chapter d ON d.chapter_id = c.id \
+               {where_clause}\
+               GROUP BY m.id, s.name \
+             ) \
+             SELECT * FROM summary {keyset}{order} {limit}"
+        );
 
         let rows = self
             .db

@@ -36,8 +36,12 @@ impl MangaRepository for Repositories {
         self.list_manga(cursor).await
     }
 
-    async fn list_summaries(&self, cursor: Option<&Cursor>) -> Result<Page<MangaSummary>> {
-        self.list_manga_summaries(cursor).await
+    async fn list_summaries(
+        &self,
+        query: &MangaQuery,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<MangaSummary>> {
+        self.list_manga_summaries(query, cursor).await
     }
 }
 

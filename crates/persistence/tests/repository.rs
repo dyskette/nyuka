@@ -895,7 +895,10 @@ async fn a_library_summary_counts_chapters_and_downloads_independently() {
             .expect("download");
     }
 
-    let page = repos.list_manga_summaries(None).await.expect("summaries");
+    let page = repos
+        .list_manga_summaries(&MangaQuery::default(), None)
+        .await
+        .expect("summaries");
     let summary = page.items.first().expect("one series");
 
     assert_eq!(
@@ -919,7 +922,10 @@ async fn a_series_with_no_chapters_still_appears_with_zero_counts() {
         return;
     };
 
-    let page = repos.list_manga_summaries(None).await.expect("summaries");
+    let page = repos
+        .list_manga_summaries(&MangaQuery::default(), None)
+        .await
+        .expect("summaries");
     let summary = page.items.first().expect("the seeded series");
 
     assert_eq!(summary.manga.id, manga);
@@ -1097,4 +1103,343 @@ async fn a_follow_with_no_chapters_appears_with_nothing_missing() {
     let page = repos.list_follow_summaries(None).await.expect("summaries");
     let summary = page.items.first().expect("the follow must be listed");
     assert_eq!(summary.missing_count, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Ordering, filtering and search (ADR-0020)
+// ---------------------------------------------------------------------------
+
+/// Seeds several series in one library, returning their ids in the order given.
+async fn seed_series(
+    repos: &Repositories,
+    source: SourceId,
+    specs: &[(&str, MangaStatus, usize)],
+) -> Vec<MangaId> {
+    let mut ids = Vec::new();
+    // The external key is distinct per row, never the title: `upsert_manga`
+    // keys on (source_id, external_key), so two series sharing a title would
+    // otherwise collide into one — and a fixture built to have duplicate
+    // titles would silently seed one row.
+    for (index, (title, status, chapters)) in specs.iter().enumerate() {
+        // The id comes back from the upsert rather than being chosen here:
+        // `upsert_manga` keys on (source_id, external_key) and returns the row
+        // that actually exists.
+        let id = repos
+            .upsert_manga(&Manga {
+                id: MangaId(uuid::Uuid::new_v4()),
+                source_id: source,
+                external_key: ExternalKey(format!("seed-{index}-{title}")),
+                title: title.to_string(),
+                authors: vec![],
+                artists: vec![],
+                description: None,
+                tags: vec![],
+                cover_url: None,
+                url: None,
+                language: None,
+                status: *status,
+                content_rating: ContentRating::Safe,
+                direction: ReadingDirection::RightToLeft,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            })
+            .await
+            .expect("manga");
+
+        if *chapters > 0 {
+            let list: Vec<SourceChapter> = (1..=*chapters)
+                .map(|n| chapter(&format!("seed-{index}-c{n}"), n as f32))
+                .collect();
+            repos.upsert_chapters(id, &list).await.expect("chapters");
+        }
+        ids.push(id);
+    }
+    ids
+}
+
+fn titles(page: &nyuka_domain::model::Page<nyuka_domain::model::MangaSummary>) -> Vec<String> {
+    page.items.iter().map(|s| s.manga.title.clone()).collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_library_listing_sorts_by_every_offered_key() {
+    let Some((_db, repos, seeded)) = fresh("nyuka_test_repo_sort").await else {
+        return;
+    };
+    let source = repos
+        .get_manga(seeded)
+        .await
+        .expect("seeded series")
+        .source_id;
+
+    seed_series(
+        &repos,
+        source,
+        &[
+            ("Beta", MangaStatus::Ongoing, 3),
+            ("Alpha", MangaStatus::Completed, 9),
+        ],
+    )
+    .await;
+
+    let sorted = |sort, dir| {
+        let repos = repos.clone();
+        async move {
+            titles(
+                &repos
+                    .list_manga_summaries(
+                        &MangaQuery {
+                            sort,
+                            dir,
+                            ..Default::default()
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("summaries"),
+            )
+        }
+    };
+
+    assert_eq!(
+        sorted(MangaSort::Title, SortDir::Asc).await,
+        vec!["Alpha", "Beta", "Series"],
+        "titles ascend A-Z"
+    );
+    assert_eq!(
+        sorted(MangaSort::Title, SortDir::Desc).await,
+        vec!["Series", "Beta", "Alpha"]
+    );
+
+    // The seeded series has no chapters, so it is last ascending.
+    assert_eq!(
+        sorted(MangaSort::Chapters, SortDir::Desc).await,
+        vec!["Alpha", "Beta", "Series"],
+        "sorting on an aggregate is the case a plain WHERE clause cannot do"
+    );
+}
+
+/// A filter that matched nothing would look identical to one that matched
+/// everything, so each is asserted against a known count.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_library_listing_filters_on_status_and_source() {
+    let Some((_db, repos, seeded)) = fresh("nyuka_test_repo_filter").await else {
+        return;
+    };
+    let source = repos
+        .get_manga(seeded)
+        .await
+        .expect("seeded series")
+        .source_id;
+
+    seed_series(
+        &repos,
+        source,
+        &[
+            ("Beta", MangaStatus::Ongoing, 0),
+            ("Alpha", MangaStatus::Completed, 0),
+        ],
+    )
+    .await;
+
+    let ongoing = repos
+        .list_manga_summaries(
+            &MangaQuery {
+                status: Some(MangaStatus::Ongoing),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("summaries");
+    assert_eq!(titles(&ongoing), vec!["Beta"]);
+
+    let other_source = repos
+        .list_manga_summaries(
+            &MangaQuery {
+                source_id: Some(SourceId(uuid::Uuid::new_v4())),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .expect("summaries");
+    assert!(
+        other_source.items.is_empty(),
+        "a source with nothing in it returns nothing, not everything"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_library_search_matches_part_of_a_title_in_any_case() {
+    let Some((_db, repos, seeded)) = fresh("nyuka_test_repo_search").await else {
+        return;
+    };
+    let source = repos
+        .get_manga(seeded)
+        .await
+        .expect("seeded series")
+        .source_id;
+
+    seed_series(
+        &repos,
+        source,
+        &[
+            ("Ashfall Chronicle", MangaStatus::Ongoing, 0),
+            ("Mountain Ash", MangaStatus::Ongoing, 0),
+            ("Blue Hour", MangaStatus::Ongoing, 0),
+        ],
+    )
+    .await;
+
+    let search = |q: &str| {
+        let repos = repos.clone();
+        let q = q.to_string();
+        async move {
+            titles(
+                &repos
+                    .list_manga_summaries(
+                        &MangaQuery {
+                            q: Some(q),
+                            sort: MangaSort::Title,
+                            dir: SortDir::Asc,
+                            ..Default::default()
+                        },
+                        None,
+                    )
+                    .await
+                    .expect("summaries"),
+            )
+        }
+    };
+
+    assert_eq!(
+        search("ASH").await,
+        vec!["Ashfall Chronicle", "Mountain Ash"]
+    );
+    assert_eq!(search("  ").await.len(), 4, "blank search filters nothing");
+}
+
+/// `%` and `_` are wildcards to `LIKE`. Unescaped, a search for either stops
+/// narrowing and silently returns the whole library — which reads as a search
+/// box that does nothing rather than one that is broken.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_library_search_treats_wildcards_as_literal_text() {
+    let Some((_db, repos, seeded)) = fresh("nyuka_test_repo_search_wildcard").await else {
+        return;
+    };
+    let source = repos
+        .get_manga(seeded)
+        .await
+        .expect("seeded series")
+        .source_id;
+
+    seed_series(
+        &repos,
+        source,
+        &[
+            ("100% Orange", MangaStatus::Ongoing, 0),
+            ("Blue Hour", MangaStatus::Ongoing, 0),
+        ],
+    )
+    .await;
+
+    for (needle, expected) in [("%", vec!["100% Orange"]), ("_", Vec::<&str>::new())] {
+        let page = repos
+            .list_manga_summaries(
+                &MangaQuery {
+                    q: Some(needle.to_string()),
+                    ..Default::default()
+                },
+                None,
+            )
+            .await
+            .expect("summaries");
+        assert_eq!(
+            titles(&page),
+            expected,
+            "`{needle}` must match text, not every row"
+        );
+    }
+}
+
+/// Keyset pagination has to hold under the chosen ordering, not the default
+/// one — the cursor compares the sort key, so a mismatch shows as a page that
+/// skips or repeats rows only after the first.
+///
+/// # Two properties this fixture is built to expose
+///
+/// **Titles repeat.** Twenty distinct titles, three series each. With unique
+/// titles the `(title, id)` pair is unique on `title` alone, so dropping the
+/// id tiebreaker changes nothing and the test passes against a query that
+/// cannot page a run of equal keys. Both were true of the first version of
+/// this test, and it caught neither break.
+///
+/// **Creation order is the reverse of title order.** Otherwise a query that
+/// ignored `sort` and keyed on `created_at` would return the same rows in the
+/// same order, and pass.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sorted_library_pages_without_gaps_or_repeats() {
+    let Some((_db, repos, seeded)) = fresh("nyuka_test_repo_sort_page").await else {
+        return;
+    };
+    let source = repos
+        .get_manga(seeded)
+        .await
+        .expect("seeded series")
+        .source_id;
+
+    // Inserted highest title first, so `created_at` descends as the title
+    // ascends and the two orderings cannot be confused.
+    let specs: Vec<(String, MangaStatus, usize)> = (0..60)
+        .rev()
+        .map(|n: usize| (format!("Title {:02}", n / 3), MangaStatus::Ongoing, 0))
+        .collect();
+    let borrowed: Vec<(&str, MangaStatus, usize)> =
+        specs.iter().map(|(t, s, c)| (t.as_str(), *s, *c)).collect();
+    let ids = seed_series(&repos, source, &borrowed).await;
+    assert_eq!(ids.len(), 60);
+
+    let query = MangaQuery {
+        sort: MangaSort::Title,
+        dir: SortDir::Asc,
+        ..Default::default()
+    };
+
+    let mut seen: Vec<(String, uuid::Uuid)> = Vec::new();
+    let mut cursor = None;
+    for _ in 0..6 {
+        let page = repos
+            .list_manga_summaries(&query, cursor.as_ref())
+            .await
+            .expect("summaries");
+        seen.extend(
+            page.items
+                .iter()
+                .map(|s| (s.manga.title.clone(), s.manga.id.0)),
+        );
+        match page.next {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
+
+    // Identity is the id, not the title: twenty titles cover sixty rows.
+    let mut unique: Vec<uuid::Uuid> = seen.iter().map(|(_, id)| *id).collect();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        seen.len(),
+        "no row appears twice across page boundaries"
+    );
+    assert_eq!(seen.len(), 61, "every seeded series, and the fixture's own");
+
+    let titles: Vec<String> = seen.iter().map(|(t, _)| t.clone()).collect();
+    let mut expected = titles.clone();
+    expected.sort();
+    assert_eq!(
+        titles, expected,
+        "the requested order holds across page boundaries"
+    );
 }

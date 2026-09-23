@@ -25,12 +25,20 @@ msgid "{0} of {1} pages"
 msgstr "{0} de {1} páginas"
 
 #: src/features/library/components/LibraryToolbar.tsx
-msgid "{shown} of {total}"
-msgstr "{shown} de {total}"
+#~ msgid "{shown} of {total}"
+#~ msgstr "{shown} de {total}"
 
 #: src/features/library/components/LibraryToolbar.tsx
-msgid "{total} titles"
-msgstr "{total} títulos"
+msgid "{shown} titles"
+msgstr "{shown} títulos"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "{shown}+ titles"
+msgstr "{shown}+ títulos"
+
+#: src/features/library/components/LibraryToolbar.tsx
+#~ msgid "{total} titles"
+#~ msgstr "{total} títulos"
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "↑↓ navigate"
@@ -388,8 +396,8 @@ msgid "Search “{0}” in Browse"
 msgstr "Buscar «{0}» en Explorar"
 
 #: src/features/library/components/LibraryToolbar.tsx
-msgid "Search {total} titles"
-msgstr "Buscar en {total} títulos"
+#~ msgid "Search {total} titles"
+#~ msgstr "Buscar en {total} títulos"
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Search sources"
@@ -398,6 +406,10 @@ msgstr "Buscar en las fuentes"
 #: src/routes/browse.tsx
 msgid "Search this source"
 msgstr "Buscar en esta fuente"
+
+#: src/features/library/components/LibraryToolbar.tsx
+msgid "Search your library"
+msgstr "Buscar en tu biblioteca"
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Search your library, or type a command"

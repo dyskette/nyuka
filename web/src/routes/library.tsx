@@ -1,14 +1,21 @@
 import { Trans } from '@lingui/react/macro'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, retainSearchParams } from '@tanstack/react-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { z } from 'zod'
 import { libraryListQuery } from '@/features/library/api/queries'
 import { LibraryTable } from '@/features/library/components/LibraryTable'
 import { type LibraryFilters, LibraryToolbar } from '@/features/library/components/LibraryToolbar'
-import type { components } from '@/shared/api/schema'
+import { sourceListQuery } from '@/features/sources/api/queries'
 
-type MangaSummary = components['schemas']['MangaSummaryDto']
+/**
+ * The publication statuses the server accepts as a filter.
+ *
+ * A fixed list, not the values present on the loaded page: a status nobody in
+ * the library has is still a status worth being able to filter to zero, and
+ * deriving the list from the page would hide it.
+ */
+const STATUSES = ['unknown', 'ongoing', 'completed', 'cancelled', 'hiatus'] as const
 
 /**
  * The library master list, and the parent of the detail panel (ADR-0017).
@@ -46,13 +53,27 @@ export const Route = createFileRoute('/library')({
   // Only the cursor affects what is fetched. Sort and direction are applied to
   // what is already loaded, so listing them here would refetch the same page
   // every time the user changed the ordering.
-  loaderDeps: ({ search }) => ({ cursor: search.cursor }),
+  // Everything the server uses. Sort and direction are here now: they change
+  // what the server returns, so a loader that ignored them would prime the
+  // cache with a differently ordered page than the component asks for.
+  loaderDeps: ({ search }) => ({
+    q: search.q,
+    status: search.status,
+    source_id: search.source,
+    sort: search.sort,
+    dir: search.dir,
+    cursor: search.cursor,
+  }),
 
   // Primes the cache so the table has data on first paint. The loader returns
   // nothing the component reads: components always read through hooks, so
   // there is one source of truth for the data and one for its loading state
   // (ADR-0008).
-  loader: ({ context, deps }) => context.queryClient.ensureQueryData(libraryListQuery(deps.cursor)),
+  loader: ({ context, deps }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(libraryListQuery(deps)),
+      context.queryClient.ensureQueryData(sourceListQuery()),
+    ]),
 
   component: LibraryLayout,
   pendingComponent: LibrarySkeleton,
@@ -62,25 +83,24 @@ export const Route = createFileRoute('/library')({
 function LibraryLayout() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
-  const { data } = useSuspenseQuery(libraryListQuery(search.cursor))
-
-  // The three filter fields are destructured rather than passing `search`
-  // whole: a memo depending on the whole object also recomputes when the
-  // cursor changes, and the dependency list would no longer describe what the
-  // computation actually reads.
-  const { q, status, source } = search
-  const items = useMemo(
-    () => filterItems(sortItems(data.items, search.sort, search.dir), { q, status, source }),
-    [data.items, search.sort, search.dir, q, status, source],
+  // The server orders and filters. There is nothing left to do here, and
+  // anything done here would apply to one page rather than to the library.
+  const { data } = useSuspenseQuery(
+    libraryListQuery({
+      q: search.q,
+      status: search.status,
+      source_id: search.source,
+      sort: search.sort,
+      dir: search.dir,
+      cursor: search.cursor,
+    }),
   )
+  const items = data.items
 
   // Offered from what is on the page rather than from a fixed list: a source
   // the reader has not installed is not a filter worth showing, and an
   // enumeration of every possible status would offer several that match
   // nothing.
-  const sources = useMemo(() => distinct(data.items.map((m) => m.source_name)), [data.items])
-  const statuses = useMemo(() => distinct(data.items.map((m) => m.status)), [data.items])
-
   const onFilterChange = useCallback(
     (next: Partial<LibraryFilters>) => {
       navigate({
@@ -99,6 +119,12 @@ function LibraryLayout() {
     },
     [navigate],
   )
+
+  // The options come from the installed sources, not from the loaded page.
+  // Deriving them from the page was fine while filtering happened here; now
+  // that the server filters it is circular — choosing a source would leave
+  // that source as the only option, with no way back.
+  const { data: sources } = useSuspenseQuery(sourceListQuery())
 
   // Selection is component state, not a search parameter: a URL carrying
   // forty ids is not shareable in any useful sense, and it would make every
@@ -130,9 +156,9 @@ function LibraryLayout() {
         <LibraryToolbar
           filters={{ q: search.q, status: search.status ?? '', source: search.source ?? '' }}
           sources={sources}
-          statuses={statuses}
+          statuses={STATUSES}
           shown={items.length}
-          total={data.items.length}
+          hasMore={data.next_cursor !== null && data.next_cursor !== undefined}
           onChange={onFilterChange}
         />
         <div className="flex-1 overflow-y-auto">
@@ -156,86 +182,11 @@ function LibraryLayout() {
   )
 }
 
-/** The distinct values of a column, ordered for a dropdown. */
-function distinct(values: string[]): string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b))
-}
-
 /** Drops a filter set back to its empty value, so the key leaves the URL. */
 function blankToUndefined(next: Partial<LibraryFilters>): Partial<LibraryFilters> {
   return Object.fromEntries(
     Object.entries(next).map(([key, value]) => [key, value === '' ? undefined : value]),
   )
-}
-
-/**
- * Narrows the loaded page to what matches the filter bar.
- *
- * Client-side, over one page, for the same reason as the sort below. The text
- * comparison is case-insensitive through `toLocaleLowerCase`, because the
- * plain `toLowerCase` gets Turkish dotted and dotless I wrong.
- *
- * The two dropdowns match exactly: their options come from the data itself,
- * so a substring match would only let "ongoing" also select "not ongoing".
- */
-function filterItems(
-  items: MangaSummary[],
-  filters: { q?: string | undefined; status?: string | undefined; source?: string | undefined },
-): MangaSummary[] {
-  const needle = filters.q?.trim().toLocaleLowerCase() ?? ''
-
-  return items.filter((manga) => {
-    if (filters.status !== undefined && filters.status !== '' && manga.status !== filters.status) {
-      return false
-    }
-    if (
-      filters.source !== undefined &&
-      filters.source !== '' &&
-      manga.source_name !== filters.source
-    ) {
-      return false
-    }
-    if (needle === '') return true
-    return (
-      manga.title.toLocaleLowerCase().includes(needle) ||
-      manga.source_name.toLocaleLowerCase().includes(needle)
-    )
-  })
-}
-
-/**
- * Orders the loaded page.
- *
- * Client-side because the server returns one keyset page ordered by creation,
- * and re-sorting across pages would need the server to do it — which it does
- * not offer. So this orders what is on screen, and the ordering resets per
- * page rather than pretending to span the library.
- */
-function sortItems(
-  items: MangaSummary[],
-  sort: 'title' | 'updated' | 'added' | 'chapters',
-  dir: 'asc' | 'desc',
-): MangaSummary[] {
-  const compare = (a: MangaSummary, b: MangaSummary): number => {
-    switch (sort) {
-      case 'title':
-        // `localeCompare` rather than `<`: the latter orders by code point, so
-        // "Álbum" sorts after "Zebra" and a Spanish reader sees a list that
-        // looks unsorted.
-        return a.title.localeCompare(b.title)
-      case 'updated':
-        return a.updated_at.localeCompare(b.updated_at)
-      case 'added':
-        return a.created_at.localeCompare(b.created_at)
-      case 'chapters':
-        return a.chapter_count - b.chapter_count
-    }
-  }
-
-  // Copied before sorting: `toSorted` leaves the query cache's array alone,
-  // and mutating it would reorder what every other consumer of that cache
-  // entry sees.
-  return items.toSorted((a, b) => (dir === 'asc' ? compare(a, b) : -compare(a, b)))
 }
 
 /// Stable keys for a list that never reorders. An index would do, but only
