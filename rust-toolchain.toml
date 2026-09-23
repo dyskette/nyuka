@@ -6,7 +6,17 @@
 #   wasmtime 48 -> 1.95
 #   sqlx 0.9    -> 1.94   (via sea-orm 2.0)
 [toolchain]
-channel = "1.98"
+# The patch version, not the `1.98` channel.
+#
+# `rust:1.98-slim` ships toolchain `1.98.1`. rustup matches by name, so the
+# channel `1.98` is a *different* toolchain to it and gets downloaded and
+# installed on every Docker build — several hundred megabytes committed into a
+# builder layer that is then thrown away. Naming the version the base image
+# already has makes rustup find it and do nothing.
+#
+# This couples the pin to the `FROM rust:…` line in the Dockerfile. They are
+# meant to agree, which is what this file is for; bump them together.
+channel = "1.98.1"
 components = ["rustfmt", "clippy"]
 
 # `minimal` plus the two components above, not `default`.
