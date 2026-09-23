@@ -3,6 +3,12 @@
 //! Accepts OTLP/JSON and OTLP/protobuf, session-authenticated, and emits each
 //! span as a `tracing` event into the same log stream as everything else.
 //!
+//! The two encodings converge on one filter rather than each carrying its own
+//! copy of the rules. An allow-list enforced in one decoder and not the other
+//! is the shape of bug where a client simply picks the encoding that skips
+//! the check, so a test asserts the same batch produces the same result
+//! either way.
+//!
 //! Limits: 256 KB body, 200 spans per batch, ~30 requests/minute per session
 //! plus a per-IP limit. `TELEMETRY_INGEST_ENABLED` is the kill switch.
 //!
@@ -145,7 +151,7 @@ struct KeyValue {
 }
 
 /// The OTLP `AnyValue` union, reduced to what is loggable.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct AnyValue {
     #[serde(default, alias = "stringValue")]
     string_value: Option<String>,
@@ -201,7 +207,7 @@ pub struct Accepted {
 /// Why a batch was refused.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Rejected {
-    NotJson(String),
+    Malformed(String),
     WrongService(String),
     TooManySpans(usize),
 }
@@ -209,7 +215,7 @@ pub enum Rejected {
 impl Rejected {
     fn detail(&self) -> String {
         match self {
-            Self::NotJson(e) => format!("The body is not OTLP/JSON: {e}"),
+            Self::Malformed(e) => format!("The body is not valid OTLP: {e}"),
             Self::WrongService(found) => format!(
                 "Only `{EXPECTED_SERVICE}` telemetry is accepted here; the batch claimed \
                  `{}`.",
@@ -225,8 +231,110 @@ impl Rejected {
 /// Parses and filters a batch. Pure, so every rule is testable directly.
 pub fn accept(body: &[u8]) -> Result<Accepted, Rejected> {
     let parsed: OtlpBody =
-        serde_json::from_slice(body).map_err(|e| Rejected::NotJson(e.to_string()))?;
+        serde_json::from_slice(body).map_err(|e| Rejected::Malformed(e.to_string()))?;
 
+    filter(parsed)
+}
+
+/// Decodes an OTLP/protobuf batch and applies the same filtering.
+///
+/// The two encodings converge on [`filter`] rather than each carrying their
+/// own copy of the rules. An allow-list that is enforced in one decoder and
+/// not the other is the shape of bug where a client picks the encoding that
+/// skips the check.
+pub fn accept_protobuf(body: &[u8]) -> Result<Accepted, Rejected> {
+    use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
+    use prost::Message;
+
+    let request =
+        ExportTraceServiceRequest::decode(body).map_err(|e| Rejected::Malformed(e.to_string()))?;
+
+    filter(from_proto(request))
+}
+
+/// Maps the generated protobuf types onto the same shape the JSON decoder
+/// produces.
+///
+/// Deliberately lossy in the same way: a field this does not carry across
+/// cannot reach the log stream, whichever encoding it arrived in.
+fn from_proto(
+    request: opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+) -> OtlpBody {
+    use opentelemetry_proto::tonic::common::v1::any_value::Value as ProtoValue;
+
+    fn convert_value(value: opentelemetry_proto::tonic::common::v1::AnyValue) -> Option<AnyValue> {
+        Some(match value.value? {
+            ProtoValue::StringValue(s) => AnyValue {
+                string_value: Some(s),
+                ..AnyValue::default()
+            },
+            ProtoValue::BoolValue(b) => AnyValue {
+                bool_value: Some(b),
+                ..AnyValue::default()
+            },
+            ProtoValue::IntValue(i) => AnyValue {
+                int_value: Some(serde_json::Value::from(i)),
+                ..AnyValue::default()
+            },
+            ProtoValue::DoubleValue(d) => AnyValue {
+                double_value: Some(d),
+                ..AnyValue::default()
+            },
+            // Arrays, nested maps and raw bytes are dropped here exactly as
+            // the JSON path drops them: flattening is where unbounded nesting
+            // becomes unbounded output.
+            _ => return None,
+        })
+    }
+
+    fn convert_kv(kv: opentelemetry_proto::tonic::common::v1::KeyValue) -> KeyValue {
+        KeyValue {
+            key: kv.key,
+            value: kv.value.and_then(convert_value),
+        }
+    }
+
+    OtlpBody {
+        resource_spans: request
+            .resource_spans
+            .into_iter()
+            .map(|rs| ResourceSpans {
+                resource: rs.resource.map(|r| OtlpResource {
+                    attributes: r.attributes.into_iter().map(convert_kv).collect(),
+                }),
+                scope_spans: rs
+                    .scope_spans
+                    .into_iter()
+                    .map(|ss| ScopeSpans {
+                        spans: ss
+                            .spans
+                            .into_iter()
+                            .map(|span| OtlpSpan {
+                                name: span.name,
+                                // Protobuf carries ids as raw bytes; OTLP/JSON
+                                // uses lowercase hex. Rendered to hex so both
+                                // encodings produce the same log line for the
+                                // same span.
+                                trace_id: hex(&span.trace_id),
+                                span_id: hex(&span.span_id),
+                                start_time_unix_nano: None,
+                                end_time_unix_nano: None,
+                                attributes: span.attributes.into_iter().map(convert_kv).collect(),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The validation both encodings share.
+fn filter(parsed: OtlpBody) -> Result<Accepted, Rejected> {
     // The service claim is checked before any span is examined: a batch from
     // something other than the web app has nothing here worth reading.
     let service = parsed
@@ -313,26 +421,33 @@ pub async fn ingest(
         return Err(ApiError(Box::new(Problem::payload_too_large(limit))));
     }
 
-    // Protobuf is declared in ADR-0013 and is not implemented. Refusing by
-    // content type is the honest form of that: the alternative is feeding
-    // protobuf bytes to a JSON parser and reporting a parse error, which
-    // sends whoever hits it looking in the wrong place.
-    if let Some(content_type) = headers
+    // Both encodings ADR-0013 names. The content type selects the decoder
+    // rather than being sniffed from the bytes: a guess that reads protobuf
+    // as JSON reports a syntax error, which sends whoever hits it looking in
+    // the wrong place.
+    let content_type = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        && content_type.starts_with("application/x-protobuf")
+        .unwrap_or("application/json");
+
+    let decoded = if content_type.starts_with("application/x-protobuf")
+        || content_type.starts_with("application/protobuf")
     {
+        accept_protobuf(&body)
+    } else if content_type.starts_with("application/json") {
+        accept(&body)
+    } else {
         return Err(ApiError(Box::new(
             Problem::new(
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
                 "unsupported-encoding",
-                "OTLP/protobuf is not accepted",
+                "Unsupported telemetry encoding",
             )
-            .with_detail("Send OTLP/JSON with `Content-Type: application/json`."),
+            .with_detail("Send OTLP as `application/json` or `application/x-protobuf`."),
         )));
-    }
+    };
 
-    let accepted = accept(&body).map_err(|rejected| {
+    let accepted = decoded.map_err(|rejected| {
         ApiError(Box::new(
             Problem::new(
                 StatusCode::BAD_REQUEST,
@@ -628,7 +743,177 @@ mod tests {
             b"{".as_slice(),
             &[0xFF, 0xFE, 0x00],
         ] {
-            assert!(matches!(accept(body), Err(Rejected::NotJson(_))));
+            assert!(matches!(accept(body), Err(Rejected::Malformed(_))));
+        }
+    }
+
+    // --- protobuf ------------------------------------------------------
+
+    use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
+    use opentelemetry_proto::tonic::common::v1::any_value::Value as PbValue;
+    use opentelemetry_proto::tonic::common::v1::{AnyValue as PbAny, KeyValue as PbKv};
+    use opentelemetry_proto::tonic::resource::v1::Resource as PbResource;
+    use opentelemetry_proto::tonic::trace::v1::{
+        ResourceSpans as PbResourceSpans, ScopeSpans as PbScopeSpans, Span as PbSpan,
+    };
+    use prost::Message as _;
+
+    fn pb_string(key: &str, value: &str) -> PbKv {
+        PbKv {
+            key: key.into(),
+            value: Some(PbAny {
+                value: Some(PbValue::StringValue(value.into())),
+            }),
+            // Profiling-signal field; irrelevant here but part of the
+            // generated struct.
+            ..Default::default()
+        }
+    }
+
+    fn pb_batch(service: &str, spans: Vec<PbSpan>) -> Vec<u8> {
+        ExportTraceServiceRequest {
+            resource_spans: vec![PbResourceSpans {
+                resource: Some(PbResource {
+                    attributes: vec![pb_string("service.name", service)],
+                    ..Default::default()
+                }),
+                scope_spans: vec![PbScopeSpans {
+                    spans,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        }
+        .encode_to_vec()
+    }
+
+    fn pb_span(name: &str, attributes: Vec<PbKv>) -> PbSpan {
+        PbSpan {
+            name: name.into(),
+            trace_id: vec![0x4b, 0xf9, 0x2f, 0x35],
+            span_id: vec![0x00, 0xf0, 0x67, 0xaa],
+            attributes,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_protobuf_batch_is_accepted() {
+        let body = pb_batch(
+            EXPECTED_SERVICE,
+            vec![pb_span(
+                "GET /api/v1/manga",
+                vec![pb_string("http.request.method", "GET")],
+            )],
+        );
+        let accepted = accept_protobuf(&body).expect("accepted");
+        assert_eq!(accepted.spans.len(), 1);
+        assert_eq!(accepted.spans[0].name, "GET /api/v1/manga");
+        assert_eq!(
+            accepted.spans[0].attributes,
+            vec![("http.request.method".to_string(), "GET".to_string())]
+        );
+    }
+
+    /// Ids are raw bytes in protobuf and lowercase hex in OTLP/JSON. The same
+    /// span must produce the same log line whichever encoding carried it, or
+    /// correlating a browser trace depends on which one the SDK chose.
+    #[test]
+    fn protobuf_ids_are_rendered_as_hex() {
+        let accepted = accept_protobuf(&pb_batch(EXPECTED_SERVICE, vec![pb_span("x", vec![])]))
+            .expect("accepted");
+        assert_eq!(accepted.spans[0].trace_id, "4bf92f35");
+        assert_eq!(accepted.spans[0].span_id, "00f067aa");
+    }
+
+    /// The allow-list has to hold on both paths. A rule enforced in one
+    /// decoder and not the other is the shape of bug where a client picks the
+    /// encoding that skips the check.
+    #[test]
+    fn the_allow_list_holds_for_protobuf_too() {
+        let body = pb_batch(
+            EXPECTED_SERVICE,
+            vec![pb_span(
+                "x",
+                vec![
+                    pb_string("user.id", "somebody-else"),
+                    pb_string("db.statement", "select 1"),
+                    pb_string("http.route", "/kept"),
+                ],
+            )],
+        );
+        let accepted = accept_protobuf(&body).expect("accepted");
+        let rendered = format!("{:?}", accepted.spans[0].attributes);
+
+        assert!(!rendered.contains("somebody-else"), "{rendered}");
+        assert!(!rendered.contains("select 1"), "{rendered}");
+        assert!(rendered.contains("/kept"));
+        assert_eq!(accepted.dropped_attributes, 2);
+    }
+
+    #[test]
+    fn a_protobuf_batch_claiming_another_service_is_refused() {
+        let body = pb_batch("manga-api", vec![pb_span("x", vec![])]);
+        assert!(matches!(
+            accept_protobuf(&body),
+            Err(Rejected::WrongService(_))
+        ));
+    }
+
+    #[test]
+    fn a_protobuf_batch_over_the_span_limit_is_refused() {
+        let spans: Vec<PbSpan> = (0..MAX_SPANS + 1)
+            .map(|i| pb_span(&format!("s{i}"), vec![]))
+            .collect();
+        assert!(matches!(
+            accept_protobuf(&pb_batch(EXPECTED_SERVICE, spans)),
+            Err(Rejected::TooManySpans(_))
+        ));
+    }
+
+    /// The two encodings must agree. Anything else means the wire format
+    /// changes what reaches the log stream.
+    #[test]
+    fn both_encodings_produce_the_same_result() {
+        let json = accept(&batch(
+            EXPECTED_SERVICE,
+            serde_json::json!([{
+                "name": "GET /x",
+                "traceId": "4bf92f35",
+                "spanId": "00f067aa",
+                "attributes": [
+                    { "key": "http.route", "value": { "stringValue": "/x" } },
+                    { "key": "db.statement", "value": { "stringValue": "dropped" } }
+                ]
+            }]),
+        ))
+        .expect("json accepted");
+
+        let proto = accept_protobuf(&pb_batch(
+            EXPECTED_SERVICE,
+            vec![pb_span(
+                "GET /x",
+                vec![
+                    pb_string("http.route", "/x"),
+                    pb_string("db.statement", "dropped"),
+                ],
+            )],
+        ))
+        .expect("protobuf accepted");
+
+        assert_eq!(json, proto);
+    }
+
+    #[test]
+    fn arbitrary_bytes_do_not_panic_the_protobuf_decoder() {
+        for body in [
+            b"not protobuf".as_slice(),
+            b"".as_slice(),
+            &[0xFF; 64],
+            // A valid JSON body sent with the wrong content type.
+            br#"{"resourceSpans":[]}"#,
+        ] {
+            let _ = accept_protobuf(body);
         }
     }
 

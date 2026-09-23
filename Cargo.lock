@@ -2915,6 +2915,7 @@ dependencies = [
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
  "proptest",
+ "prost",
  "rust-embed",
  "sea-orm",
  "serde",

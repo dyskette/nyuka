@@ -116,6 +116,9 @@ opentelemetry-semantic-conventions = "0.32"
 # `gen-tonic` and with it the whole tonic gRPC stack. This build decodes OTLP
 # bodies over HTTP and never speaks gRPC, so the feature list above was
 # previously decorative.
+# Decoding OTLP/protobuf bodies. Same major as the one `opentelemetry-proto`
+# generates against, or the generated types would not implement this Message.
+prost = "0.14"
 opentelemetry-proto = { version = "0.32", default-features = false, features = [
     "gen-tonic-messages", "with-serde", "trace",
 ] }

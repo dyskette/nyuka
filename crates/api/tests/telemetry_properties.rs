@@ -16,6 +16,22 @@ use nyuka_api::routes::telemetry::{
 };
 use proptest::prelude::*;
 
+/// Arbitrary bytes through the protobuf decoder, which parses a denser and
+/// less forgiving format than JSON.
+#[test]
+fn arbitrary_bytes_never_panic_the_protobuf_decoder() {
+    use nyuka_api::routes::telemetry::accept_protobuf;
+    for body in [
+        b"not protobuf".as_slice(),
+        b"".as_slice(),
+        &[0xFF; 256],
+        &[0x08, 0x96, 0x01],
+        br#"{"resourceSpans":[]}"#,
+    ] {
+        let _ = accept_protobuf(body);
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(2048))]
 
@@ -24,6 +40,9 @@ proptest! {
     #[test]
     fn arbitrary_bytes_never_panic(bytes in prop::collection::vec(any::<u8>(), 0..2048)) {
         let _ = accept(&bytes);
+        // Both decoders read the same untrusted body; a client chooses which
+        // one by setting a header.
+        let _ = nyuka_api::routes::telemetry::accept_protobuf(&bytes);
     }
 
     /// Text is more likely than random bytes to reach the parser's interior.

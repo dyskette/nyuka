@@ -54,15 +54,14 @@ recommendation in its own ADR that can simply be adopted.
 - [x] **Downloads** — `POST /downloads` with `Idempotency-Key`, 202 + `Location`
 - [x] **Chapter file** — `GET /downloads/{chapter_id}/file`, ranged, ETag from
       the stored checksum
-- [x] **Telemetry ingest** — `POST /telemetry` (ADR-0013), OTLP/JSON only.
-      Protobuf is refused by content type with 415 rather than fed to a JSON
-      parser, so whoever hits it is not sent looking in the wrong place.
+- [x] **Telemetry ingest** — `POST /telemetry` (ADR-0013), both OTLP/JSON
+      and OTLP/protobuf. The two decoders converge on one filter, with a
+      test that the same batch produces the same result either way: an
+      allow-list enforced in one and not the other is the shape of bug
+      where a client picks the encoding that skips the check.
 - [x] **Trigger a maintenance job by hand** — `POST /jobs`, restricted to
       the four maintenance kinds. The runbook no longer documents a raw
       insert, which was a schema dependency in prose.
-- [ ] **OTLP/protobuf ingest** — the other half of ADR-0013's accepted
-      encodings. The browser SDK can be configured for JSON, so this is a
-      convenience rather than a blocker.
 - [x] **Embedded SPA** — `rust-embed` over `web/dist`, with the route
       precedence rules (ADR-0006). `build.rs` writes a placeholder
       `index.html` when the directory is absent, so the backend builds and
