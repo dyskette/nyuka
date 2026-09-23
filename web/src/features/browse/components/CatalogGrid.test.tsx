@@ -44,7 +44,7 @@ describe('CatalogGrid', () => {
     )
 
     expect(screen.queryByRole('button', { name: /Add/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('link').getAttribute('href')).toContain(
+    expect(screen.getByRole('link', { name: 'Open in library' }).getAttribute('href')).toContain(
       '/library/11111111-1111-4111-8111-111111111111',
     )
     // The mockup's "✓ Library" mark. The word carries it, not the glyph.
@@ -126,6 +126,19 @@ describe('CatalogGrid', () => {
 
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
     expect(screen.getByText(/Nothing here/)).toBeInTheDocument()
+  })
+
+  /**
+   * The panel is where a reader decides whether to add. The card's own link
+   * opens it; the action beside it stays separate, so a click never has to be
+   * interpreted as one or the other.
+   */
+  it('opens the detail panel from the card itself', async () => {
+    await renderWithProviders(<CatalogGrid items={[item()]} onAdd={vi.fn()} />)
+
+    expect(screen.getByRole('link', { name: /Glass Orchard/ }).getAttribute('href')).toContain(
+      '/browse/glass-orchard',
+    )
   })
 
   it('renders one card per entry', async () => {

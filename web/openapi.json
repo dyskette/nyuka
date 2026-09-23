@@ -1360,7 +1360,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JobDto"
+                  "$ref": "#/components/schemas/JobSummaryDto"
                 }
               }
             },

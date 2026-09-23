@@ -1140,7 +1140,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobDto"];
+                    "application/json": components["schemas"]["JobSummaryDto"];
                 };
             };
             /** @description No such job */

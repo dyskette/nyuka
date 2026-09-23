@@ -161,17 +161,19 @@ pub async fn trigger(
     tag = "jobs",
     params(("id" = Uuid, Path, description = "Job id")),
     responses(
-        (status = OK, body = JobDto),
+        (status = OK, body = JobSummaryDto),
         (status = NOT_FOUND, description = "No such job"),
     ),
 )]
 pub async fn get(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-) -> ApiResult<Json<JobDto>> {
+) -> ApiResult<Json<JobSummaryDto>> {
+    // The summary, so the detail panel names the chapter rather than repeating
+    // the uuid that is already in the address bar.
     let job = state
         .queue
-        .get(JobId(id))
+        .get_summary(JobId(id))
         .await
         .map_err(|e| not_found(e, "job"))?;
     Ok(Json(job.into()))

@@ -652,6 +652,9 @@ mod check_follow_tests {
                 next: None,
             })
         }
+        async fn get_summary(&self, _job: JobId) -> Result<JobSummary> {
+            unimplemented!("the job detail panel is not exercised here")
+        }
         async fn list_summaries(
             &self,
             _state: Option<JobState>,

@@ -56,6 +56,30 @@ export async function renderWithProviders(ui: ReactNode) {
     component: () => null,
   })
 
+  // Downloads and its detail panel, for the queue row's link.
+  const downloadsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/downloads',
+    component: () => null,
+  })
+  const jobRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/downloads/$jobId',
+    component: () => null,
+  })
+
+  // Browse and its detail panel, for the catalog card's links.
+  const browseRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/browse',
+    component: () => null,
+  })
+  const catalogRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/browse/$key',
+    component: () => null,
+  })
+
   // Same, for `Link to="/library"` — the sortable column headers. A route
   // that does not exist makes `Link` throw, so this is not decoration.
   const listRoute = createRoute({
@@ -65,7 +89,15 @@ export async function renderWithProviders(ui: ReactNode) {
   })
 
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, listRoute, detailRoute]),
+    routeTree: rootRoute.addChildren([
+      indexRoute,
+      listRoute,
+      detailRoute,
+      browseRoute,
+      catalogRoute,
+      downloadsRoute,
+      jobRoute,
+    ]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
 

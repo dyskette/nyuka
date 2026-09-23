@@ -54,9 +54,10 @@ describe('JobQueue', () => {
     const row = screen.getByRole('row', { name: /The Last Cartographer/ })
     expect(within(row).getByText('80')).toBeInTheDocument()
     expect(within(row).getByText('Ashfall Chronicle')).toBeInTheDocument()
-    expect(within(row).getByRole('link').getAttribute('href')).toContain(
-      '/library/11111111-1111-4111-8111-111111111111',
-    )
+    // The row opens the *job*. A queue row is about the work; the panel links
+    // on to the series for anyone who wanted that instead, and the reverse
+    // would leave no way to reach the job at all.
+    expect(within(row).getByRole('link').getAttribute('href')).toContain('/downloads/j-1')
   })
 
   /** Maintenance work is about nothing a reader named, so it shows its kind. */
@@ -65,8 +66,10 @@ describe('JobQueue', () => {
       <JobQueue {...props({ jobs: [job({ kind: 'prune_sessions', subject: null })] })} />,
     )
 
-    expect(screen.getByText('prune_sessions')).toBeInTheDocument()
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    // Still a link — a maintenance job has a panel too, it just has no series
+    // to name in it.
+    const link = screen.getByRole('link', { name: 'prune_sessions' })
+    expect(link.getAttribute('href')).toContain('/downloads/j-1')
   })
 
   describe('progress', () => {

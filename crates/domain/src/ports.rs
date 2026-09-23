@@ -230,6 +230,13 @@ pub trait JobQueue: Send + Sync {
 
     async fn get(&self, job: JobId) -> Result<Job>;
 
+    /// The same job, with its subject resolved.
+    ///
+    /// Separate from `get` for the reason `list_summaries` is separate from
+    /// `list` (ADR-0020): it joins two more tables, and a caller that only
+    /// needs the row should not pay for that.
+    async fn get_summary(&self, job: JobId) -> Result<JobSummary>;
+
     async fn list(&self, state: Option<JobState>, cursor: Option<&Cursor>) -> Result<Page<Job>>;
 
     /// The same list, with each download job's subject resolved.

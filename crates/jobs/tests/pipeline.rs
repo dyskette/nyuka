@@ -702,3 +702,70 @@ async fn two_jobs_for_one_chapter_both_resolve() {
         "both jobs name the same chapter, so both must resolve to it"
     );
 }
+
+/// The detail panel's job must name the same chapter the queue row named.
+///
+/// It goes through the same id parsing and lookup as the list rather than a
+/// second query shaped differently: a panel that disagreed with the row it was
+/// opened from would be worse than one that showed nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn one_job_resolves_the_same_subject_as_the_list() {
+    let Some(db) = fresh_database("nyuka_test_job_one_subject").await else {
+        return;
+    };
+    let chapter = seed_chapter(&db, "Ashfall Chronicle").await;
+    let queue = PostgresQueue::new(db.clone());
+
+    let id = queue
+        .enqueue(
+            JobKind::DownloadChapter,
+            serde_json::json!({ "chapter_id": chapter.to_string() }),
+            None,
+            None,
+            0,
+            1,
+        )
+        .await
+        .expect("enqueue");
+
+    let from_list = queue
+        .list_summaries(None, 10)
+        .await
+        .expect("list")
+        .items
+        .remove(0);
+    let alone = queue.summary(id).await.expect("summary");
+
+    assert_eq!(alone.job.id, id);
+    assert_eq!(
+        alone.subject.as_ref().map(|s| s.chapter_id),
+        from_list.subject.as_ref().map(|s| s.chapter_id),
+        "the panel and the row must agree on which chapter this is"
+    );
+    assert_eq!(
+        alone.subject.expect("a subject").manga_title,
+        "Ashfall Chronicle"
+    );
+}
+
+/// A maintenance job has no subject here either, for the same reason.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn one_maintenance_job_has_no_subject() {
+    let Some(db) = fresh_database("nyuka_test_job_one_no_subject").await else {
+        return;
+    };
+    let queue = PostgresQueue::new(db.clone());
+    let id = queue
+        .enqueue(
+            JobKind::PruneSessions,
+            serde_json::json!({}),
+            None,
+            None,
+            0,
+            1,
+        )
+        .await
+        .expect("enqueue");
+
+    assert!(queue.summary(id).await.expect("summary").subject.is_none());
+}

@@ -91,6 +91,43 @@ export function sourceFiltersQuery(sourceId: string) {
   })
 }
 
+/**
+ * One catalog entry's details, before it is in the library.
+ *
+ * `retry: false` like the catalog listing: this reaches a third party, and a
+ * source that is down stays down for longer than three attempts.
+ */
+export function catalogItemQuery(sourceId: string, externalKey: string) {
+  return queryOptions({
+    queryKey: sourceKeys.catalogItem(sourceId, externalKey),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/sources/{id}/catalog/{key}', {
+          params: { path: { id: sourceId, key: externalKey } },
+          signal,
+        }),
+      ),
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** That entry's chapters, as the source lists them. */
+export function catalogChaptersQuery(sourceId: string, externalKey: string) {
+  return queryOptions({
+    queryKey: sourceKeys.catalogChapters(sourceId, externalKey),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/sources/{id}/catalog/{key}/chapters', {
+          params: { path: { id: sourceId, key: externalKey } },
+          signal,
+        }),
+      ),
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+}
+
 /** Configured repositories. */
 export function repoListQuery() {
   return queryOptions({

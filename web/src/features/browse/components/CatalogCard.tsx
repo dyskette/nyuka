@@ -22,14 +22,28 @@ export interface CatalogCardProps {
 export function CatalogCard({ item, adding = false, onAdd }: CatalogCardProps) {
   return (
     <div className="group flex flex-col gap-2">
-      <div className="bg-surface-raised relative aspect-[2/3] overflow-hidden rounded-lg">
-        <Cover item={item} />
-        <InLibraryBadge mangaId={item.manga_id} />
-      </div>
+      {/*
+        The cover and the title open the panel, which is where a reader decides
+        whether to add. The action below stays a separate control: adding
+        without looking is the common case, and putting both on one element
+        would mean choosing which one a click means.
+      */}
+      <Link
+        to="/browse/$key"
+        params={{ key: item.external_key }}
+        search={(previous) => previous}
+        className="flex flex-col gap-2"
+        activeProps={{ 'aria-current': 'page' }}
+      >
+        <div className="bg-surface-raised relative aspect-[2/3] overflow-hidden rounded-lg">
+          <Cover item={item} />
+          <InLibraryBadge mangaId={item.manga_id} />
+        </div>
 
-      <p className="line-clamp-2 text-sm font-medium" title={item.title}>
-        {item.title}
-      </p>
+        <span className="line-clamp-2 text-sm font-medium" title={item.title}>
+          {item.title}
+        </span>
+      </Link>
 
       <Action item={item} adding={adding} onAdd={onAdd} />
     </div>

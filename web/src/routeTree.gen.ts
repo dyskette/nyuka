@@ -15,6 +15,8 @@ import { Route as DownloadsRouteImport } from './routes/downloads'
 import { Route as FollowsRouteImport } from './routes/follows'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as BrowseKeyRouteImport } from './routes/browse.$key'
+import { Route as DownloadsJobIdRouteImport } from './routes/downloads.$jobId'
 import { Route as LibraryMangaIdRouteImport } from './routes/library.$mangaId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +49,16 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BrowseKeyRoute = BrowseKeyRouteImport.update({
+  id: '/$key',
+  path: '/$key',
+  getParentRoute: () => BrowseRoute,
+} as any)
+const DownloadsJobIdRoute = DownloadsJobIdRouteImport.update({
+  id: '/$jobId',
+  path: '/$jobId',
+  getParentRoute: () => DownloadsRoute,
+} as any)
 const LibraryMangaIdRoute = LibraryMangaIdRouteImport.update({
   id: '/$mangaId',
   path: '/$mangaId',
@@ -55,30 +67,36 @@ const LibraryMangaIdRoute = LibraryMangaIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/browse': typeof BrowseRoute
-  '/downloads': typeof DownloadsRoute
+  '/browse': typeof BrowseRouteWithChildren
+  '/downloads': typeof DownloadsRouteWithChildren
   '/follows': typeof FollowsRoute
   '/library': typeof LibraryRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/browse/$key': typeof BrowseKeyRoute
+  '/downloads/$jobId': typeof DownloadsJobIdRoute
   '/library/$mangaId': typeof LibraryMangaIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/browse': typeof BrowseRoute
-  '/downloads': typeof DownloadsRoute
+  '/browse': typeof BrowseRouteWithChildren
+  '/downloads': typeof DownloadsRouteWithChildren
   '/follows': typeof FollowsRoute
   '/library': typeof LibraryRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/browse/$key': typeof BrowseKeyRoute
+  '/downloads/$jobId': typeof DownloadsJobIdRoute
   '/library/$mangaId': typeof LibraryMangaIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/browse': typeof BrowseRoute
-  '/downloads': typeof DownloadsRoute
+  '/browse': typeof BrowseRouteWithChildren
+  '/downloads': typeof DownloadsRouteWithChildren
   '/follows': typeof FollowsRoute
   '/library': typeof LibraryRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/browse/$key': typeof BrowseKeyRoute
+  '/downloads/$jobId': typeof DownloadsJobIdRoute
   '/library/$mangaId': typeof LibraryMangaIdRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +108,8 @@ export interface FileRouteTypes {
     | '/follows'
     | '/library'
     | '/settings'
+    | '/browse/$key'
+    | '/downloads/$jobId'
     | '/library/$mangaId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +119,8 @@ export interface FileRouteTypes {
     | '/follows'
     | '/library'
     | '/settings'
+    | '/browse/$key'
+    | '/downloads/$jobId'
     | '/library/$mangaId'
   id:
     | '__root__'
@@ -108,13 +130,15 @@ export interface FileRouteTypes {
     | '/follows'
     | '/library'
     | '/settings'
+    | '/browse/$key'
+    | '/downloads/$jobId'
     | '/library/$mangaId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BrowseRoute: typeof BrowseRoute
-  DownloadsRoute: typeof DownloadsRoute
+  BrowseRoute: typeof BrowseRouteWithChildren
+  DownloadsRoute: typeof DownloadsRouteWithChildren
   FollowsRoute: typeof FollowsRoute
   LibraryRoute: typeof LibraryRouteWithChildren
   SettingsRoute: typeof SettingsRoute
@@ -164,6 +188,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/browse/$key': {
+      id: '/browse/$key'
+      path: '/$key'
+      fullPath: '/browse/$key'
+      preLoaderRoute: typeof BrowseKeyRouteImport
+      parentRoute: typeof BrowseRoute
+    }
+    '/downloads/$jobId': {
+      id: '/downloads/$jobId'
+      path: '/$jobId'
+      fullPath: '/downloads/$jobId'
+      preLoaderRoute: typeof DownloadsJobIdRouteImport
+      parentRoute: typeof DownloadsRoute
+    }
     '/library/$mangaId': {
       id: '/library/$mangaId'
       path: '/$mangaId'
@@ -173,6 +211,29 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface BrowseRouteChildren {
+  BrowseKeyRoute: typeof BrowseKeyRoute
+}
+
+const BrowseRouteChildren: BrowseRouteChildren = {
+  BrowseKeyRoute: BrowseKeyRoute,
+}
+
+const BrowseRouteWithChildren =
+  BrowseRoute._addFileChildren(BrowseRouteChildren)
+
+interface DownloadsRouteChildren {
+  DownloadsJobIdRoute: typeof DownloadsJobIdRoute
+}
+
+const DownloadsRouteChildren: DownloadsRouteChildren = {
+  DownloadsJobIdRoute: DownloadsJobIdRoute,
+}
+
+const DownloadsRouteWithChildren = DownloadsRoute._addFileChildren(
+  DownloadsRouteChildren,
+)
 
 interface LibraryRouteChildren {
   LibraryMangaIdRoute: typeof LibraryMangaIdRoute
@@ -187,8 +248,8 @@ const LibraryRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BrowseRoute: BrowseRoute,
-  DownloadsRoute: DownloadsRoute,
+  BrowseRoute: BrowseRouteWithChildren,
+  DownloadsRoute: DownloadsRouteWithChildren,
   FollowsRoute: FollowsRoute,
   LibraryRoute: LibraryRouteWithChildren,
   SettingsRoute: SettingsRoute,

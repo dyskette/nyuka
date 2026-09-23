@@ -1,6 +1,6 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
 import { CatalogFilters } from '@/features/browse/components/CatalogFilters'
@@ -56,15 +56,24 @@ function BrowseScreen() {
   if (sources.length === 0) return <NoSources />
 
   return (
-    <div className="flex h-dvh flex-col">
-      <BrowseToolbar sources={sources} active={active} q={q} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {active === undefined ? (
-          <NoSources />
-        ) : (
-          <Catalog sourceId={active} q={q} filters={filters} cursor={cursor} />
-        )}
-      </div>
+    <div className="flex h-dvh">
+      <main className="flex min-w-0 flex-1 flex-col">
+        <BrowseToolbar sources={sources} active={active} q={q} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {active === undefined ? (
+            <NoSources />
+          ) : (
+            <Catalog sourceId={active} q={q} filters={filters} cursor={cursor} />
+          )}
+        </div>
+      </main>
+
+      {/* The detail panel renders here. The parent stays mounted, so the
+          grid's scroll position and the loaded page survive opening it
+          (ADR-0017). */}
+      <aside className="border-border w-[420px] shrink-0 overflow-y-auto border-l">
+        <Outlet />
+      </aside>
     </div>
   )
 }

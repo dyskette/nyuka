@@ -110,7 +110,12 @@ msgstr "Añade una fuente y explora su catálogo para añadir una serie. Todo lo
 msgid "Add repository"
 msgstr "Añadir repositorio"
 
+#: src/routes/browse.$key.tsx
+msgid "Add to library"
+msgstr "Añadir a la biblioteca"
+
 #: src/features/browse/components/CatalogCard.tsx
+#: src/routes/browse.$key.tsx
 #: src/routes/settings.tsx
 msgid "Adding…"
 msgstr "Añadiendo…"
@@ -123,6 +128,10 @@ msgstr "Todas"
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Any"
 msgstr "Cualquiera"
+
+#: src/routes/downloads.$jobId.tsx
+msgid "Attempts"
+msgstr "Intentos"
 
 #: src/features/follows/components/FollowTable.tsx
 msgid "Auto-download"
@@ -154,6 +163,7 @@ msgid "Cancel"
 msgstr "Cancelar"
 
 #: src/features/jobs/components/JobQueue.tsx
+#: src/routes/downloads.$jobId.tsx
 msgid "Cancel this job"
 msgstr "Cancelar este trabajo"
 
@@ -180,6 +190,8 @@ msgstr "Comprobar ahora"
 msgid "Clear"
 msgstr "Limpiar"
 
+#: src/routes/browse.$key.tsx
+#: src/routes/downloads.$jobId.tsx
 #: src/routes/library.$mangaId.tsx
 msgid "Close"
 msgstr "Cerrar"
@@ -203,6 +215,7 @@ msgstr "Descargar automáticamente los nuevos capítulos de {0}"
 
 #: src/features/library/components/ChapterList.tsx
 #: src/features/library/components/LibraryTable.tsx
+#: src/routes/downloads.$jobId.tsx
 msgid "Downloaded"
 msgstr "Descargados"
 
@@ -276,9 +289,17 @@ msgstr "Trabajo"
 msgid "Keep"
 msgstr "Conservar"
 
+#: src/routes/downloads.$jobId.tsx
+msgid "Kind"
+msgstr "Tipo"
+
 #: src/features/follows/components/FollowTable.tsx
 msgid "Last checked"
 msgstr "Última comprobación"
+
+#: src/routes/downloads.$jobId.tsx
+msgid "Last error"
+msgstr "Último error"
 
 #: src/features/browse/components/CatalogCard.tsx
 #: src/features/palette/components/CommandPalette.tsx
@@ -354,6 +375,7 @@ msgstr "No hay nada que coincida."
 msgid "Offline"
 msgstr "Sin conexión"
 
+#: src/routes/browse.$key.tsx
 #: src/routes/library.$mangaId.tsx
 msgid "Open at the source"
 msgstr "Abrir en la fuente"
@@ -363,6 +385,7 @@ msgid "Open chapters"
 msgstr "Abrir capítulos"
 
 #: src/features/browse/components/CatalogCard.tsx
+#: src/routes/browse.$key.tsx
 msgid "Open in library"
 msgstr "Abrir en la biblioteca"
 
@@ -374,14 +397,31 @@ msgstr "Abrir la paleta de comandos"
 msgid "Overview"
 msgstr "Resumen"
 
+#: src/routes/downloads.$jobId.tsx
+msgid "Pages"
+msgstr "Páginas"
+
+#: src/routes/browse.$key.tsx
+msgid "Pick a source to see this series."
+msgstr "Elige una fuente para ver esta serie."
+
+#: src/routes/downloads.$jobId.tsx
+msgid "Priority"
+msgstr "Prioridad"
+
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Progress"
 msgstr "Progreso"
 
 #: src/features/jobs/components/JobQueue.tsx
 #: src/features/library/components/ChapterList.tsx
+#: src/routes/downloads.$jobId.tsx
 msgid "Queued"
 msgstr "En cola"
+
+#: src/routes/browse.$key.tsx
+msgid "Reading the chapter list…"
+msgstr "Leyendo la lista de capítulos…"
 
 #: src/features/sources/components/RepoList.tsx
 msgid "Reading the index…"
@@ -426,8 +466,18 @@ msgid "Retry"
 msgstr "Reintentar"
 
 #: src/features/jobs/components/JobQueue.tsx
+#: src/routes/downloads.$jobId.tsx
 msgid "Retry this job"
 msgstr "Reintentar este trabajo"
+
+#: src/features/library/components/ChapterList.tsx
+msgid "Save"
+msgstr "Guardar"
+
+#. placeholder {0}: chapterLabel(chapter)
+#: src/features/library/components/ChapterList.tsx
+msgid "Save {0} to this device"
+msgstr "Guardar {0} en este dispositivo"
 
 #: src/routes/browse.tsx
 msgid "Search"
@@ -520,10 +570,12 @@ msgid "Sources"
 msgstr "Fuentes"
 
 #: src/features/jobs/components/JobQueue.tsx
+#: src/routes/downloads.$jobId.tsx
 msgid "Speed"
 msgstr "Velocidad"
 
 #: src/features/jobs/components/JobQueue.tsx
+#: src/routes/downloads.$jobId.tsx
 msgid "State"
 msgstr "Estado"
 
@@ -549,6 +601,10 @@ msgstr "No se pudo guardar ese ajuste."
 msgid "That source is no longer installed"
 msgstr "Esa fuente ya no está instalada"
 
+#: src/routes/browse.$key.tsx
+msgid "The chapter list could not be read."
+msgstr "No se pudo leer la lista de capítulos."
+
 #: src/routes/downloads.tsx
 msgid "The job queue could not be loaded."
 msgstr "No se pudo cargar la cola de trabajos."
@@ -565,13 +621,26 @@ msgstr "La petición falló antes de llegar a la fuente."
 msgid "These settings could not be read."
 msgstr "No se pudieron leer estos ajustes."
 
+#: src/routes/downloads.$jobId.tsx
+msgid "This job could not be loaded."
+msgstr "No se pudo cargar este trabajo."
+
+#: src/routes/downloads.$jobId.tsx
+msgid "This job could not be read."
+msgstr "No se pudo leer este trabajo."
+
 #: src/features/sources/components/RepoList.tsx
 msgid "This repository lists no sources. Refresh it to read the index again."
 msgstr "Este repositorio no lista ninguna fuente. Actualízalo para leer el índice de nuevo."
 
+#: src/routes/browse.$key.tsx
 #: src/routes/library.$mangaId.tsx
 msgid "This series could not be loaded."
 msgstr "No se pudo cargar esta serie."
+
+#: src/routes/browse.$key.tsx
+msgid "This series could not be read."
+msgstr "No se pudo leer esta serie."
 
 #: src/routes/browse.tsx
 msgid "This source could not be reached"
@@ -584,6 +653,10 @@ msgstr "Esta fuente no dio ninguna descripción."
 #: src/features/sources/components/SourceSettings.tsx
 msgid "This source has no settings."
 msgstr "Esta fuente no tiene ajustes."
+
+#: src/routes/browse.$key.tsx
+msgid "This source lists no chapters."
+msgstr "Esta fuente no lista ningún capítulo."
 
 #: src/features/browse/components/CatalogGrid.tsx
 msgid "This source returned no results. Try a different search."

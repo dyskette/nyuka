@@ -1,6 +1,6 @@
 import { Trans } from '@lingui/react/macro'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet } from '@tanstack/react-router'
 import { z } from 'zod'
 import { useCancelJob, useRetryJob } from '@/features/jobs/api/mutations'
 import { jobListQuery } from '@/features/jobs/api/queries'
@@ -44,16 +44,24 @@ function DownloadsScreen() {
   const retry = useRetryJob()
 
   return (
-    <div className="flex h-dvh flex-col">
-      <StateFilter active={state} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <JobQueue
-          jobs={data.items}
-          progress={progress}
-          onCancel={(id) => cancel.mutate(id)}
-          onRetry={(id) => retry.mutate(id)}
-        />
-      </div>
+    <div className="flex h-dvh">
+      <main className="flex min-w-0 flex-1 flex-col">
+        <StateFilter active={state} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <JobQueue
+            jobs={data.items}
+            progress={progress}
+            onCancel={(id) => cancel.mutate(id)}
+            onRetry={(id) => retry.mutate(id)}
+          />
+        </div>
+      </main>
+
+      {/* The detail panel renders here, with the queue still mounted behind it
+          (ADR-0017). */}
+      <aside className="border-border w-[380px] shrink-0 overflow-y-auto border-l">
+        <Outlet />
+      </aside>
     </div>
   )
 }

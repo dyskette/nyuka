@@ -22,6 +22,12 @@ export const sourceKeys = {
    * Keyed on the query and cursor: a search is a different listing, not a
    * filtered view of one, because the source decides what matches.
    */
+  /** One entry in a source's catalog, keyed on the source's own key for it. */
+  catalogItem: (sourceId: string, externalKey: string) =>
+    [...sourceKeys.catalogs(sourceId), 'item', externalKey] as const,
+  catalogChapters: (sourceId: string, externalKey: string) =>
+    [...sourceKeys.catalogItem(sourceId, externalKey), 'chapters'] as const,
+
   catalog: (sourceId: string, q?: string, filters?: string, cursor?: string) =>
     [
       ...sourceKeys.catalogs(sourceId),

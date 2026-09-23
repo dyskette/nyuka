@@ -129,18 +129,31 @@ function Row({
  * a uuid that answers nothing.
  */
 function JobLabel({ job }: { job: JobSummary }) {
-  if (job.subject === null || job.subject === undefined) {
-    return <span className="text-muted-foreground truncate">{job.kind}</span>
+  const { subject } = job
+
+  // The label opens the job, not the series. A row in a queue is about the
+  // work, and the panel links on to the series for anyone who wanted that
+  // instead — the reverse would leave no way to reach the job at all.
+  if (subject === null || subject === undefined) {
+    return (
+      <Link
+        to="/downloads/$jobId"
+        params={{ jobId: job.id }}
+        search={(previous) => previous}
+        className="text-muted-foreground block truncate"
+      >
+        {job.kind}
+      </Link>
+    )
   }
 
-  const { subject } = job
   const number = subject.chapter_number != null ? String(Number(subject.chapter_number)) : null
 
   return (
     <Link
-      to="/library/$mangaId"
-      params={{ mangaId: subject.manga_id }}
-      search={{ tab: 'chapters' }}
+      to="/downloads/$jobId"
+      params={{ jobId: job.id }}
+      search={(previous) => previous}
       className="flex min-w-0 items-baseline gap-1.5"
     >
       {number !== null && (

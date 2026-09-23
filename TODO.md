@@ -192,18 +192,21 @@ and the "14 new" badges were read as scope once, and were not.
 - [x] **Source filters** — `GET /sources/{id}/catalog?filters=<JSON>` reaches
       the WASM module, and Browse renders the declaration. Five control types
       cover 516 of the 534 declared across community sources.
-- [ ] **Browse detail panel.** `GET /sources/{id}/catalog/{key}` and its
-      `/chapters` are served and unreached: a catalog card offers add-or-open
-      and nothing shows a description or a chapter list before adding. The
-      mockup has this panel.
-- [ ] **Downloads detail panel.** `GET /jobs/{id}` is served and unreached.
-      The mockup shows a job's pages, worker, output path and event log; the
-      queue row shows state and progress only.
-- [ ] **Retrieving a chapter file.** `GET /downloads/{chapter_id}/file` is
-      served, ranged and ETagged, and nothing in the UI links to it — a
-      chapter can be downloaded to the server and not to the person who asked
-      for it. Interoperability (ADR-0007) covers pointing another reader at
-      the volume; it does not cover getting one file out.
+- [x] **Browse detail panel** — cover, description, tags, the source's chapter
+      list, and add-or-open. A nested route, so the grid stays mounted behind
+      it (ADR-0017).
+- [x] **Downloads detail panel** — state, attempts, live pages/bytes/speed,
+      and the last error in full, which is the one thing the row cannot show.
+      `GET /jobs/{id}` returns a `JobSummaryDto` now, so the panel names the
+      same chapter the row named.
+- [ ] **A job's per-page grid and event log**, which the mockup shows and the
+      server cannot answer for: `job.progress` carries `done`, `total` and
+      `bytes` and nothing per page, and no event history is kept — SSE has no
+      replay (ADR-0010). Closing this means persisting job events, which is a
+      decision rather than a task.
+- [x] **Retrieving a chapter file** — a link on every downloaded chapter, with
+      `Content-Disposition` naming the archive so it lands under the name other
+      readers parse rather than a uuid.
 - [ ] **A `Range` filter value on the host.** 18 of 534 declared filters are
       `range` and `FilterValue` has no variant for one, so the client names
       them as unavailable rather than rendering a control the server would

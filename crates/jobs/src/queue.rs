@@ -427,6 +427,30 @@ impl PostgresQueue {
         Ok(Page { items, next: None })
     }
 
+    /// One job, with its subject.
+    ///
+    /// Goes through the same id parsing and lookup as the list, rather than a
+    /// second query shaped differently: a panel that disagreed with the row it
+    /// was opened from would be worse than one that showed nothing.
+    pub async fn summary(&self, job: JobId) -> Result<JobSummary> {
+        let job = self.get(job).await?;
+
+        let wanted: Vec<Uuid> = if job.kind == JobKind::DownloadChapter {
+            job.payload
+                .get("chapter_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<Uuid>().ok())
+                .into_iter()
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let subjects = self.subjects_for(&wanted).await?;
+        let subject = wanted.first().and_then(|id| subjects.get(id).cloned());
+        Ok(JobSummary { job, subject })
+    }
+
     /// Looks up the series and chapter behind a set of chapter ids.
     ///
     /// Returns a map rather than a list because two jobs can name the same
@@ -567,6 +591,10 @@ impl nyuka_domain::ports::JobQueue for PostgresQueue {
         _cursor: Option<&Cursor>,
     ) -> Result<Page<JobSummary>> {
         PostgresQueue::list_summaries(self, state, 100).await
+    }
+
+    async fn get_summary(&self, job: JobId) -> Result<JobSummary> {
+        PostgresQueue::summary(self, job).await
     }
 }
 

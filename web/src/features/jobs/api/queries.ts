@@ -27,3 +27,23 @@ export function jobListQuery(state?: string) {
     staleTime: 0,
   })
 }
+
+/**
+ * One job, with its subject.
+ *
+ * `staleTime: 0` like the list: a panel open on a running job exists to be
+ * current, and every job event invalidates it.
+ */
+export function jobQuery(jobId: string) {
+  return queryOptions({
+    queryKey: jobKeys.detail(jobId),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/jobs/{id}', {
+          params: { path: { id: jobId } },
+          signal,
+        }),
+      ),
+    staleTime: 0,
+  })
+}
