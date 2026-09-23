@@ -562,6 +562,16 @@ export interface components {
             /** Format: uuid */
             manga_id: string;
         };
+        /** @description A follow with the series it watches. */
+        FollowSummaryDto: components["schemas"]["FollowDto"] & {
+            manga_title: string;
+            /**
+             * Format: int64
+             * @description Chapters not yet in the library. What a follow exists to produce.
+             */
+            missing_count: number;
+            source_name: string;
+        };
         InstallRequest: {
             /** @description The source's own id, as the repository index lists it. */
             external_id: string;
@@ -679,20 +689,16 @@ export interface components {
          *     page. Offsets are deliberately absent: they shift under inserts, and a
          *     library that gains a chapter mid-scroll would skip or repeat one.
          */
-        Paged_FollowDto: {
-            items: {
-                auto_download: boolean;
-                /** Format: int32 */
-                check_interval_secs: number;
-                /** Format: date-time */
-                created_at: string;
-                /** Format: uuid */
-                id: string;
-                /** Format: date-time */
-                last_checked_at?: string | null;
-                /** Format: uuid */
-                manga_id: string;
-            }[];
+        Paged_FollowSummaryDto: {
+            items: (components["schemas"]["FollowDto"] & {
+                manga_title: string;
+                /**
+                 * Format: int64
+                 * @description Chapters not yet in the library. What a follow exists to produce.
+                 */
+                missing_count: number;
+                source_name: string;
+            })[];
             next_cursor?: string | null;
         };
         /**
@@ -938,7 +944,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Paged_FollowDto"];
+                    "application/json": components["schemas"]["Paged_FollowSummaryDto"];
                 };
             };
         };

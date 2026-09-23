@@ -467,6 +467,19 @@ pub enum JobKind {
     ReconcileLibrary,
 }
 
+/// A follow with the series it watches.
+///
+/// The fourth of these projections — see ADR-0020. A follow's only identity is
+/// a `manga_id`, so a list of them without this is a list of uuids.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FollowSummary {
+    pub follow: Follow,
+    pub manga_title: String,
+    pub source_name: String,
+    /// Chapters not yet in the library. What a follow exists to produce.
+    pub missing_count: i64,
+}
+
 /// What a job is *about*, when that can be resolved.
 ///
 /// A queue of uuids answers nothing a person asks of it. Only download jobs

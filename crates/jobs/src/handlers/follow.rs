@@ -224,7 +224,7 @@ pub(crate) mod tests {
     use super::*;
     use nyuka_domain::model::{
         Chapter, ChapterSummary, ContentRating, Cursor, DownloadedChapter, ExternalKey, FollowId,
-        MangaStatus, Page, ReadingDirection, SourceChapter, SourceId,
+        FollowSummary, MangaStatus, Page, ReadingDirection, SourceChapter, SourceId,
     };
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -395,6 +395,9 @@ pub(crate) mod tests {
                 items: vec![],
                 next: None,
             })
+        }
+        async fn list_summaries(&self, _c: Option<&Cursor>) -> Result<Page<FollowSummary>> {
+            unimplemented!("the follows screen's list is not exercised here")
         }
         async fn due(&self, _limit: u64) -> Result<Vec<Follow>> {
             Ok(vec![])

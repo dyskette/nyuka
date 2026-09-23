@@ -14,9 +14,9 @@
 //! `routes/mod.rs`.
 
 use nyuka_domain::model::{
-    Chapter, ChapterSummary, ContentRating, Cursor, Follow, InstalledSource, Job, JobKind,
-    JobState, JobSubject, JobSummary, Manga, MangaStatus, MangaSummary, Page, ReadingDirection,
-    SourceEntry, SourceRepo,
+    Chapter, ChapterSummary, ContentRating, Cursor, Follow, FollowSummary, InstalledSource, Job,
+    JobKind, JobState, JobSubject, JobSummary, Manga, MangaStatus, MangaSummary, Page,
+    ReadingDirection, SourceEntry, SourceRepo,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -355,6 +355,28 @@ impl From<Job> for JobDto {
             // browser's.
             last_error: j.last_error,
             created_at: j.created_at,
+        }
+    }
+}
+
+/// A follow with the series it watches.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FollowSummaryDto {
+    #[serde(flatten)]
+    pub follow: FollowDto,
+    pub manga_title: String,
+    pub source_name: String,
+    /// Chapters not yet in the library. What a follow exists to produce.
+    pub missing_count: i64,
+}
+
+impl From<FollowSummary> for FollowSummaryDto {
+    fn from(s: FollowSummary) -> Self {
+        Self {
+            follow: s.follow.into(),
+            manga_title: s.manga_title,
+            source_name: s.source_name,
+            missing_count: s.missing_count,
         }
     }
 }

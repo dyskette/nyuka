@@ -1011,3 +1011,90 @@ async fn both_chapter_listings_order_identically() {
     assert_eq!(plain_ids, summary_ids);
     assert_eq!(plain.next, summaries.next);
 }
+
+/// The follows list, with what each follow is actually about.
+///
+/// `missing_count` is the number the screen exists to show: chapters with no
+/// file. A `COUNT(*)` without the `FILTER` would count every chapter, so a
+/// fully downloaded series would look like it had the most outstanding work.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_follow_summary_counts_only_the_chapters_without_files() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_follow_summary").await else {
+        return;
+    };
+
+    let chapters: Vec<SourceChapter> = (1..=5)
+        .map(|n| chapter(&format!("c{n}"), n as f32))
+        .collect();
+    let ids = repos
+        .upsert_chapters(manga, &chapters)
+        .await
+        .expect("chapters");
+
+    for (index, id) in ids.iter().take(2).enumerate() {
+        repos
+            .record_download(&DownloadedChapter {
+                chapter_id: *id,
+                relative_path: format!("Series/c{index}.cbz"),
+                size_bytes: 1,
+                checksum: "x".into(),
+                packaged_at: Utc::now(),
+            })
+            .await
+            .expect("download");
+    }
+
+    repos
+        .upsert_follow(&nyuka_domain::model::Follow {
+            id: nyuka_domain::model::FollowId(uuid::Uuid::new_v4()),
+            manga_id: manga,
+            check_interval_secs: 3600,
+            last_checked_at: None,
+            auto_download: true,
+            created_at: Utc::now(),
+        })
+        .await
+        .expect("follow");
+
+    let page = repos.list_follow_summaries(None).await.expect("summaries");
+    let summary = page.items.first().expect("one follow");
+
+    assert_eq!(summary.follow.manga_id, manga);
+    assert_eq!(
+        summary.missing_count, 3,
+        "five chapters, two downloaded — three outstanding"
+    );
+    assert_eq!(
+        summary.manga_title, "Series",
+        "a follow list shows a title, not a uuid"
+    );
+    assert_eq!(summary.source_name, "Test");
+}
+
+/// A followed series nobody has any chapters for must still appear.
+///
+/// The chapter join is a `LEFT JOIN`: a follow created before the first
+/// refresh has no chapters at all, and that is precisely when a reader is
+/// waiting to see it listed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_follow_with_no_chapters_appears_with_nothing_missing() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_follow_empty").await else {
+        return;
+    };
+
+    repos
+        .upsert_follow(&nyuka_domain::model::Follow {
+            id: nyuka_domain::model::FollowId(uuid::Uuid::new_v4()),
+            manga_id: manga,
+            check_interval_secs: 3600,
+            last_checked_at: None,
+            auto_download: false,
+            created_at: Utc::now(),
+        })
+        .await
+        .expect("follow");
+
+    let page = repos.list_follow_summaries(None).await.expect("summaries");
+    let summary = page.items.first().expect("the follow must be listed");
+    assert_eq!(summary.missing_count, 0);
+}

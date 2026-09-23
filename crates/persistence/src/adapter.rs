@@ -94,6 +94,10 @@ impl FollowRepository for Repositories {
         self.list_follows(cursor).await
     }
 
+    async fn list_summaries(&self, cursor: Option<&Cursor>) -> Result<Page<FollowSummary>> {
+        self.list_follow_summaries(cursor).await
+    }
+
     async fn due(&self, limit: u64) -> Result<Vec<Follow>> {
         self.due_follows(limit).await
     }

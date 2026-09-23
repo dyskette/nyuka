@@ -13,6 +13,11 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. placeholder {0}: data.items.length
+#: src/routes/follows.tsx
+msgid "{0} followed"
+msgstr "{0} seguidas"
+
 #. placeholder {0}: progress.done
 #. placeholder {1}: progress.total
 #: src/features/jobs/components/JobQueue.tsx
@@ -35,6 +40,7 @@ msgstr "⌘K"
 msgid "A repository is a list of sources this server can install from. Add one above."
 msgstr "Un repositorio es una lista de fuentes que este servidor puede instalar. Añade uno arriba."
 
+#: src/features/follows/components/FollowTable.tsx
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Actions"
 msgstr "Acciones"
@@ -74,6 +80,10 @@ msgstr "Todas"
 msgid "Any"
 msgstr "Cualquiera"
 
+#: src/features/follows/components/FollowTable.tsx
+msgid "Auto-download"
+msgstr "Descarga automática"
+
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Background jobs"
 msgstr "Trabajos en segundo plano"
@@ -103,6 +113,20 @@ msgstr "Cancelar este trabajo"
 msgid "Chapters"
 msgstr "Capítulos"
 
+#. placeholder {0}: follow.manga_title
+#: src/features/follows/components/FollowTable.tsx
+msgid "Check {0} every"
+msgstr "Comprobar {0} cada"
+
+#. placeholder {0}: follow.manga_title
+#: src/features/follows/components/FollowTable.tsx
+msgid "Check {0} now"
+msgstr "Comprobar {0} ahora"
+
+#: src/features/follows/components/FollowTable.tsx
+msgid "Check now"
+msgstr "Comprobar ahora"
+
 #: src/routes/library.$mangaId.tsx
 msgid "Close"
 msgstr "Cerrar"
@@ -114,6 +138,11 @@ msgstr "Conectando"
 #: src/features/library/components/ChapterList.tsx
 msgid "Download"
 msgstr "Descargar"
+
+#. placeholder {0}: follow.manga_title
+#: src/features/follows/components/FollowTable.tsx
+msgid "Download new chapters of {0} automatically"
+msgstr "Descargar automáticamente los nuevos capítulos de {0}"
 
 #: src/features/library/components/ChapterList.tsx
 #: src/features/library/components/LibraryTable.tsx
@@ -132,13 +161,26 @@ msgstr "Las descargas y el trabajo programado aparecen aquí mientras se ejecuta
 #~ msgid "Downloads is not built yet."
 #~ msgstr "Descargas todavía no está construido."
 
+#: src/features/follows/components/FollowTable.tsx
+msgid "Every"
+msgstr "Cada"
+
+#: src/features/follows/components/FollowTable.tsx
+msgid "Following a series checks it on a schedule and can download new chapters as they appear. Open a series in your library to follow it."
+msgstr "Seguir una serie la comprueba de forma periódica y puede descargar los nuevos capítulos según aparecen. Abre una serie de tu biblioteca para seguirla."
+
+#: src/routes/follows.tsx
 #: src/shared/components/AppShell.tsx
 msgid "Follows"
 msgstr "Seguimientos"
 
 #: src/routes/follows.tsx
-msgid "Follows is not built yet."
-msgstr "Seguimientos todavía no está construido."
+msgid "Follows could not be loaded."
+msgstr "No se pudieron cargar los seguimientos."
+
+#: src/routes/follows.tsx
+#~ msgid "Follows is not built yet."
+#~ msgstr "Seguimientos todavía no está construido."
 
 #: src/routes/browse.tsx
 msgid "Go to Settings"
@@ -161,6 +203,10 @@ msgstr "Trabajo"
 msgid "Keep"
 msgstr "Conservar"
 
+#: src/features/follows/components/FollowTable.tsx
+msgid "Last checked"
+msgstr "Última comprobación"
+
 #: src/features/browse/components/CatalogCard.tsx
 #: src/shared/components/AppShell.tsx
 msgid "Library"
@@ -170,9 +216,17 @@ msgstr "Biblioteca"
 msgid "Live"
 msgstr "En vivo"
 
+#: src/features/follows/components/FollowTable.tsx
+msgid "Missing"
+msgstr "Faltan"
+
 #: src/routes/settings.tsx
 msgid "Name"
 msgstr "Nombre"
+
+#: src/features/follows/components/FollowTable.tsx
+msgid "Never"
+msgstr "Nunca"
 
 #: src/features/sources/components/RepoList.tsx
 msgid "Never refreshed"
@@ -294,9 +348,17 @@ msgstr "Seleccionar {0}"
 msgid "Select every series on this page"
 msgstr "Seleccionar todas las series de esta página"
 
+#: src/features/follows/components/FollowTable.tsx
+msgid "Series"
+msgstr "Serie"
+
 #: src/features/library/components/LibraryTable.tsx
 msgid "Series in your library"
 msgstr "Series de tu biblioteca"
+
+#: src/features/follows/components/FollowTable.tsx
+msgid "Series you follow"
+msgstr "Series que sigues"
 
 #: src/shared/components/AppShell.tsx
 msgid "Settings"
@@ -314,6 +376,7 @@ msgstr "No se pudieron cargar los ajustes."
 msgid "Size"
 msgstr "Tamaño"
 
+#: src/features/follows/components/FollowTable.tsx
 #: src/features/library/components/LibraryTable.tsx
 #: src/features/library/components/LibraryToolbar.tsx
 #: src/routes/browse.tsx
@@ -336,6 +399,12 @@ msgstr "Estado"
 msgid "Status"
 msgstr "Estado"
 
+#. placeholder {0}: follow.manga_title
+#: src/features/follows/components/FollowTable.tsx
+msgid "Stop following {0}"
+msgstr "Dejar de seguir {0}"
+
+#: src/routes/follows.tsx
 #: src/routes/settings.tsx
 msgid "That did not work."
 msgstr "Eso no funcionó."
@@ -380,6 +449,10 @@ msgstr "Esta fuente no devolvió resultados. Prueba otra búsqueda."
 msgid "Title"
 msgstr "Título"
 
+#: src/features/follows/components/FollowTable.tsx
+msgid "Unfollow"
+msgstr "Dejar de seguir"
+
 #: src/features/sources/components/RepoList.tsx
 msgid "Uninstall"
 msgstr "Desinstalar"
@@ -401,6 +474,10 @@ msgstr "Actualizar {0}"
 #: src/features/library/components/LibraryTable.tsx
 msgid "Updated"
 msgstr "Actualizado"
+
+#: src/features/follows/components/FollowTable.tsx
+msgid "You follow nothing yet"
+msgstr "Todavía no sigues nada"
 
 #: src/features/library/components/LibraryTable.tsx
 msgid "Your library is empty"

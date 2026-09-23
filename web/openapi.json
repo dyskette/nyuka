@@ -268,6 +268,35 @@
         ],
         "type": "object"
       },
+      "FollowSummaryDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FollowDto"
+          },
+          {
+            "properties": {
+              "manga_title": {
+                "type": "string"
+              },
+              "missing_count": {
+                "description": "Chapters not yet in the library. What a follow exists to produce.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "source_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "manga_title",
+              "source_name",
+              "missing_count"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A follow with the series it watches."
+      },
       "InstallRequest": {
         "properties": {
           "external_id": {
@@ -619,47 +648,38 @@
         ],
         "type": "object"
       },
-      "Paged_FollowDto": {
+      "Paged_FollowSummaryDto": {
         "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
         "properties": {
           "items": {
             "items": {
-              "properties": {
-                "auto_download": {
-                  "type": "boolean"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/FollowDto"
                 },
-                "check_interval_secs": {
-                  "format": "int32",
-                  "type": "integer"
-                },
-                "created_at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "id": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "last_checked_at": {
-                  "format": "date-time",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "manga_id": {
-                  "format": "uuid",
-                  "type": "string"
+                {
+                  "properties": {
+                    "manga_title": {
+                      "type": "string"
+                    },
+                    "missing_count": {
+                      "description": "Chapters not yet in the library. What a follow exists to produce.",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "source_name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "manga_title",
+                    "source_name",
+                    "missing_count"
+                  ],
+                  "type": "object"
                 }
-              },
-              "required": [
-                "id",
-                "manga_id",
-                "check_interval_secs",
-                "auto_download",
-                "created_at"
               ],
-              "type": "object"
+              "description": "A follow with the series it watches."
             },
             "type": "array"
           },
@@ -1107,7 +1127,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Paged_FollowDto"
+                  "$ref": "#/components/schemas/Paged_FollowSummaryDto"
                 }
               }
             },

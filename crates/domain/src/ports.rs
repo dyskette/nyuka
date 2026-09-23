@@ -314,6 +314,9 @@ pub trait FollowRepository: Send + Sync {
     async fn get(&self, id: FollowId) -> Result<Follow>;
     async fn list(&self, cursor: Option<&Cursor>) -> Result<Page<Follow>>;
 
+    /// The same list, with the series each follow watches.
+    async fn list_summaries(&self, cursor: Option<&Cursor>) -> Result<Page<FollowSummary>>;
+
     /// Follows whose check interval has elapsed, oldest first.
     ///
     /// Bounded by `limit`: a library with thousands of follows must not turn

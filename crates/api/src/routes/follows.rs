@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
-use crate::routes::dto::{FollowDto, Paged, Pagination};
+use crate::routes::dto::{FollowDto, FollowSummaryDto, Paged, Pagination};
 use crate::routes::library::not_found;
 use crate::state::AppState;
 
@@ -65,14 +65,18 @@ fn validate_interval(secs: i32) -> Result<i32, ApiError> {
     path = "/follows",
     tag = "follows",
     params(Pagination),
-    responses((status = OK, body = Paged<FollowDto>)),
+    responses((status = OK, body = Paged<FollowSummaryDto>)),
 )]
 pub async fn list(
     State(state): State<Arc<AppState>>,
     Query(page): Query<Pagination>,
-) -> ApiResult<Json<Paged<FollowDto>>> {
+) -> ApiResult<Json<Paged<FollowSummaryDto>>> {
     Ok(Json(
-        state.follows.list(page.cursor().as_ref()).await?.into(),
+        state
+            .follows
+            .list_summaries(page.cursor().as_ref())
+            .await?
+            .into(),
     ))
 }
 

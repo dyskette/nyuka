@@ -182,6 +182,15 @@ fn row_to_follow(row: &sea_orm::QueryResult) -> Result<Follow> {
     })
 }
 
+fn row_to_follow_summary(row: &sea_orm::QueryResult) -> Result<FollowSummary> {
+    Ok(FollowSummary {
+        follow: row_to_follow(row)?,
+        manga_title: row.try_get("", "manga_title").map_err(db)?,
+        source_name: row.try_get("", "source_name").map_err(db)?,
+        missing_count: row.try_get("", "missing_count").map_err(db)?,
+    })
+}
+
 /// Default page size for cursor-paginated reads.
 const PAGE_SIZE: u64 = 50;
 
@@ -879,6 +888,68 @@ impl Repositories {
             .await
             .map_err(db)?;
         page_of(rows, row_to_follow, |f| f.id.0)
+    }
+
+    /// The follow list with the series each one watches.
+    ///
+    /// `missing_count` is chapters with no file — what a follow exists to
+    /// produce, and the only number on this screen a reader acts on.
+    ///
+    /// An inner join on `manga`, unlike the other projections: a follow's
+    /// `manga_id` is a foreign key with `ON DELETE CASCADE`, so a follow whose
+    /// series is gone does not exist. A `LEFT JOIN` here would be dead code
+    /// pretending to handle a state the schema forbids.
+    #[tracing::instrument(
+        skip(self, cursor),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "follow",
+        )
+    )]
+    pub async fn list_follow_summaries(
+        &self,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<FollowSummary>> {
+        let after = parse_cursor(cursor, "follow")?;
+        let select = "SELECT f.*, m.title AS manga_title, s.name AS source_name, \
+                      COUNT(c.id) FILTER (WHERE d.chapter_id IS NULL) AS missing_count \
+                      FROM follow f \
+                      JOIN manga m ON m.id = f.manga_id \
+                      JOIN source s ON s.id = m.source_id \
+                      LEFT JOIN chapter c ON c.manga_id = m.id \
+                      LEFT JOIN downloaded_chapter d ON d.chapter_id = c.id ";
+
+        let (sql, values): (String, Vec<Value>) = match after {
+            Some(id) => (
+                format!(
+                    "{select} WHERE (f.created_at, f.id) < \
+                     (SELECT created_at, id FROM follow WHERE id = $1) \
+                     GROUP BY f.id, m.title, s.name \
+                     ORDER BY f.created_at DESC, f.id DESC LIMIT $2"
+                ),
+                vec![id.into(), ((PAGE_SIZE + 1) as i64).into()],
+            ),
+            None => (
+                format!(
+                    "{select} GROUP BY f.id, m.title, s.name \
+                     ORDER BY f.created_at DESC, f.id DESC LIMIT $1"
+                ),
+                vec![((PAGE_SIZE + 1) as i64).into()],
+            ),
+        };
+
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                &sql,
+                values,
+            ))
+            .await
+            .map_err(db)?;
+
+        page_of(rows, row_to_follow_summary, |f| f.follow.id.0)
     }
 
     /// Follows whose check interval has elapsed.

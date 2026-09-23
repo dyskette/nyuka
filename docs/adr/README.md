@@ -33,10 +33,13 @@ Records are numbered in the order decisions were made, not in dependency order. 
 | [0017](0017-address-the-detail-panel-with-a-nested-route.md) | Address the detail panel with a nested route | Accepted | `/library/$mangaId` over `?selected=`, because the parent stays mounted and the panel gets route loaders and boundaries. Needs `retainSearchParams`. |
 | [0018](0018-keep-motion-in-css.md) | Keep motion in CSS | Accepted | No animation library: `@starting-style` and `allow-discrete` cover enter and exit. Use `tw-animate-css`; `tailwindcss-animate` is deprecated. |
 | [0019](0019-define-the-two-service-level-objectives.md) | Define the two service level objectives | Accepted | 99.9% service-attributable job success; 95% of user-requested downloads readable within 60s. Source faults excluded and counted separately. Settles `NOTIFY` as unnecessary and keeps `vector`/Loki unbuilt. |
+| [0020](0020-return-read-models-from-list-endpoints.md) | Return read models from list endpoints | Accepted | Four screens rendered lists of foreign keys. List endpoints return projections carrying their joined values; entity DTOs stay honest. Never cast an untrusted value in SQL — `AND` does not guard it. |
 
 ## Reading order
 
 **Backend foundations.** 0001 (framework) → 0002 (persistence) → 0003 (jobs) → 0004 (providers) → 0005 (auth) → 0007 (storage).
+
+**API shape.** 0020 (read models) sits between the backend and the frontend: it is why a list endpoint's response is not the entity behind it. Read it after 0002 and before 0009.
 
 **Frontend foundations.** 0006 (delivery) → 0008 (routing and data) → 0009 (hooks) → 0010 (live updates).
 
@@ -69,3 +72,4 @@ These are the checks without which the corresponding decision is unsafe rather t
 - **0010** — a test asserting `text/event-stream` responses are never compressed.
 - **0016** — a contrast test over *rendered* colors, in both themes, including the focus ring.
 - **0019** — the hourly `nyuka_metrics` snapshot line, which is the only thing that makes the objectives evaluable after log rotation.
+- **0020** — a database test per read model asserting its aggregates against a known fixture, *including the zero case*. An `INNER JOIN` written where a `LEFT JOIN` was meant passes every test that has a non-zero answer.
