@@ -291,11 +291,6 @@ fn list(raw: &str) -> Vec<String> {
 }
 
 /// The OIDC settings.
-///
-/// `#[allow(dead_code)]` is scoped to this struct and is temporary: the auth
-/// module that reads these fields is the next piece to land, and CI denies
-/// warnings. Remove it with that module, not later.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
     pub issuer_url: String,

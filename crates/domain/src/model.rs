@@ -238,6 +238,21 @@ pub struct Chapter {
     pub published_at: Option<DateTime<Utc>>,
 }
 
+/// A person who has signed in.
+///
+/// Identity and audit only: the library is shared, and this does not partition
+/// anyone's data (ADR-0005). Identity is `(issuer, subject)` rather than
+/// subject alone, because a subject is only unique within its issuer — and an
+/// operator can change which IdP they run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct User {
+    pub id: UserId,
+    pub issuer: String,
+    pub subject: String,
+    pub created_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+}
+
 /// A series being watched for new chapters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Follow {

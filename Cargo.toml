@@ -34,7 +34,9 @@ tower-http = { version = "0.7.1", features = [
     "trace", "compression-gzip", "compression-br", "set-header", "request-id", "limit",
 ] }
 tower_governor = "0.8.0"
-tower-sessions = "0.15.0"
+# `signed`: the session cookie carries a MAC, so a forged or tampered
+# cookie is rejected before it costs a database lookup.
+tower-sessions = { version = "0.15.0", features = ["signed"] }
 hyper = "1"
 http = "1"
 
@@ -92,6 +94,8 @@ unicode-normalization = "0.1"
 # Free-space reporting for the library root, via a safe statvfs binding.
 # Already in the dependency graph transitively, so this adds no new build.
 rustix = { version = "1.1", features = ["fs"] }
+# `tower-sessions` dates sessions with `time`; everything else uses chrono.
+time = "0.3"
 tempfile = "3"
 
 # --- Observability (ADR-0014, ADR-0015) --------------------------------------

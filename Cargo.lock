@@ -801,7 +801,12 @@ version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a373e3602691c3cdea496d2f0ee5935151e6168fe87739483c463db1b2f2f87"
 dependencies = [
+ "base64 0.22.1",
+ "hmac 0.12.1",
  "percent-encoding",
+ "rand 0.8.8",
+ "sha2 0.10.9",
+ "subtle",
  "time",
  "version_check",
 ]
@@ -2927,6 +2932,7 @@ dependencies = [
  "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.20",
+ "time",
  "tokio",
  "tokio-util",
  "tower",

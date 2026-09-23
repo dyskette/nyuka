@@ -34,6 +34,7 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 tower_governor = { workspace = true }
 tower-sessions = { workspace = true }
+time = { workspace = true }
 http = { workspace = true }
 sea-orm = { workspace = true }
 hyper = { workspace = true }

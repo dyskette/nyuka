@@ -14,12 +14,15 @@
 
 #![forbid(unsafe_code)]
 
+pub mod auth;
 pub mod client_ip;
 pub mod config;
+pub mod csrf;
 pub mod defaults;
 pub mod error;
 pub mod openapi;
 pub mod routes;
+pub mod session_store;
 pub mod sse;
 pub mod state;
 pub mod static_files;
@@ -29,7 +32,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{get, post};
 use nyuka_aidoku_runtime::adapter::SourceRuntime;
 use nyuka_aidoku_runtime::engine::{Limits, Runtime};
 use nyuka_aidoku_runtime::fetcher::{FetcherConfig, VettedFetcher};
@@ -53,7 +56,10 @@ use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
+use crate::session_store::PostgresSessionStore;
 use crate::state::{AppState, BroadcastBus, EVENT_CAPACITY};
+use tower_sessions::cookie::{Key, SameSite};
+use tower_sessions::{Expiry, SessionManagerLayer};
 
 pub async fn run(config: Config) -> anyhow::Result<()> {
     // Step 2. Nothing above this line may log.
@@ -133,6 +139,15 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             .register(source.id, source.declared_rate_limit)
             .await;
     }
+
+    // Discovered at startup, not at first sign-in: an unreachable or
+    // misconfigured issuer must fail the boot where an operator is watching
+    // (ADR-0005 follow-up 5).
+    let oidc = Some(Arc::new(
+        crate::auth::OidcClient::discover(&config.auth)
+            .await
+            .context("discovering the OIDC provider")?,
+    ));
 
     let (event_tx, _) = broadcast::channel(EVENT_CAPACITY);
     let events = Arc::new(BroadcastBus::new(event_tx.clone()));
@@ -233,7 +248,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         library,
         queue,
         events,
+        users: repositories,
         sessions,
+        oidc,
         event_tx,
     });
 
@@ -265,12 +282,48 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Builds the router.
+///
+/// Layer order is load-bearing and reads bottom-up in `.layer()` terms: the
+/// session layer must be *outside* the CSRF check, or a rejected mutation
+/// would still have loaded and saved a session.
 pub fn router(state: Arc<AppState>) -> Router {
+    let session_layer = SessionManagerLayer::new(PostgresSessionStore::new(state.sessions.clone()))
+        // `HttpOnly` so an XSS payload cannot read it; `SameSite=Lax` so a
+        // cross-site form does not carry it on a POST; `Path=/` so the cookie
+        // reaches both the API and the SPA (ADR-0005).
+        .with_http_only(true)
+        .with_same_site(SameSite::Lax)
+        .with_path("/".to_string())
+        // Not `Secure` when the bind address is loopback: a `Secure` cookie is
+        // dropped by the browser over plain HTTP, which would make local
+        // development impossible to sign in to. Production runs behind TLS.
+        .with_secure(!state.config.bind_addr.ip().is_loopback())
+        .with_expiry(Expiry::OnInactivity(time::Duration::seconds(
+            state.config.auth.session_ttl.as_secs() as i64,
+        )))
+        // Signed, so a forged or tampered cookie is rejected before it costs a
+        // database lookup — which also stops the endpoint being used as a
+        // session-id oracle. This is what makes `SESSION_KEY` load-bearing,
+        // and why changing it logs everyone out.
+        .with_signed(Key::from(state.config.auth.session_key.expose().as_bytes()));
+
+    let api = Router::new()
+        .route("/auth/login", get(auth::login))
+        .route("/auth/callback", get(auth::callback))
+        .route("/auth/logout", post(auth::logout))
+        .route("/me", get(auth::me))
+        // Applied to `/api/v1` only. The health probes below are outside it,
+        // and an orchestrator's probe cannot set a header.
+        .layer(axum::middleware::from_fn(csrf::require_csrf_header));
+
     Router::new()
+        .nest("/api/v1", api)
         // Deliberately outside `/api/v1`: a probe is not a versioned API, and
         // an orchestrator should not have to track the API version to know
         // whether the process is alive.
         .route("/healthz", get(routes::health::healthz))
         .route("/readyz", get(routes::health::readyz))
+        .layer(session_layer)
         .with_state(state)
 }

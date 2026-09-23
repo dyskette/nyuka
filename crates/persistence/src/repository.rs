@@ -140,6 +140,16 @@ fn row_to_source_repo(row: &sea_orm::QueryResult) -> Result<SourceRepo> {
     })
 }
 
+fn row_to_user(row: &sea_orm::QueryResult) -> Result<User> {
+    Ok(User {
+        id: UserId(row.try_get("", "id").map_err(db)?),
+        issuer: row.try_get("", "issuer").map_err(db)?,
+        subject: row.try_get("", "subject").map_err(db)?,
+        created_at: row.try_get("", "created_at").map_err(db)?,
+        last_seen_at: row.try_get("", "last_seen_at").map_err(db)?,
+    })
+}
+
 fn row_to_follow(row: &sea_orm::QueryResult) -> Result<Follow> {
     Ok(Follow {
         id: FollowId(row.try_get("", "id").map_err(db)?),
@@ -586,6 +596,64 @@ impl Repositories {
             .map_err(db)?
             .ok_or(DomainError::NotFound)?;
         row_to_chapter(&row)
+    }
+
+    // --- users --------------------------------------------------------------
+
+    #[tracing::instrument(
+        skip(self),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "app_user",
+        )
+    )]
+    pub async fn get_user(&self, id: UserId) -> Result<User> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT * FROM app_user WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or(DomainError::NotFound)?;
+        row_to_user(&row)
+    }
+
+    /// Records a sign-in, creating the user on first sight.
+    ///
+    /// One statement rather than select-then-insert: two sign-ins racing on a
+    /// first login would otherwise both see no row and both insert.
+    ///
+    /// The issuer and subject are not logged. They are the person's identity
+    /// at their provider, and the observability design records `user.id` —
+    /// this row's id, which means nothing outside this database — precisely so
+    /// that the subject does not end up in the log stream (ADR-0015).
+    #[tracing::instrument(
+        skip(self, issuer, subject),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "INSERT",
+            db.collection.name = "app_user",
+        )
+    )]
+    pub async fn record_sign_in(&self, issuer: &str, subject: &str) -> Result<User> {
+        let row = self
+            .db
+            .query_one_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "INSERT INTO app_user (id, issuer, subject, created_at, last_seen_at) \
+                 VALUES ($1, $2, $3, now(), now()) \
+                 ON CONFLICT (issuer, subject) DO UPDATE SET last_seen_at = now() \
+                 RETURNING *",
+                [Uuid::new_v4().into(), issuer.into(), subject.into()],
+            ))
+            .await
+            .map_err(db)?
+            .ok_or_else(|| DomainError::Internal("sign-in returned no row".into()))?;
+        row_to_user(&row)
     }
 
     // --- follows ------------------------------------------------------------

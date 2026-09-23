@@ -12,7 +12,9 @@
 
 use nyuka_domain::Result;
 use nyuka_domain::model::*;
-use nyuka_domain::ports::{ChapterRepository, FollowRepository, MangaRepository, SourceRepository};
+use nyuka_domain::ports::{
+    ChapterRepository, FollowRepository, MangaRepository, SourceRepository, UserRepository,
+};
 
 use crate::repository::Repositories;
 
@@ -156,6 +158,17 @@ impl SourceRepository for Repositories {
     }
 }
 
+#[async_trait::async_trait]
+impl UserRepository for Repositories {
+    async fn get(&self, id: UserId) -> Result<User> {
+        self.get_user(id).await
+    }
+
+    async fn record_sign_in(&self, issuer: &str, subject: &str) -> Result<User> {
+        Repositories::record_sign_in(self, issuer, subject).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,7 +184,8 @@ mod tests {
             let _: Arc<dyn MangaRepository> = shared.clone();
             let _: Arc<dyn ChapterRepository> = shared.clone();
             let _: Arc<dyn FollowRepository> = shared.clone();
-            let _: Arc<dyn SourceRepository> = shared;
+            let _: Arc<dyn SourceRepository> = shared.clone();
+            let _: Arc<dyn UserRepository> = shared;
         }
         // Never called: this is a compile-time assertion about the types.
         let _ = assert_ports;

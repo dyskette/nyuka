@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use nyuka_domain::ports::{
     ChapterRepository, EventBus, FollowRepository, JobQueue, LibraryStore, MangaRepository,
-    SourceCatalog, SourceItem, SourceRegistry, SourceRepository,
+    SourceCatalog, SourceItem, SourceRegistry, SourceRepository, UserRepository,
 };
 use sea_orm::DatabaseConnection;
 use tokio::sync::broadcast;
@@ -37,7 +37,17 @@ pub struct AppState {
     pub library: Arc<dyn LibraryStore>,
     pub queue: Arc<dyn JobQueue>,
     pub events: Arc<dyn EventBus>,
+    pub users: Arc<dyn UserRepository>,
     pub sessions: nyuka_persistence::session::SessionRepository,
+
+    /// The discovered OIDC client.
+    ///
+    /// `Option` because a route test builds a router without reaching an
+    /// identity provider. `main` always has one — an unreachable issuer fails
+    /// the boot (ADR-0005 follow-up 5) — so `None` here means "this router was
+    /// assembled for a test", and the auth routes say so rather than
+    /// pretending to work.
+    pub oidc: Option<Arc<crate::auth::OidcClient>>,
 
     /// The sender side of the SSE fan-out. Subscribers come from here.
     pub event_tx: broadcast::Sender<nyuka_domain::model::JobEvent>,

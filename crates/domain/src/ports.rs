@@ -258,6 +258,20 @@ pub trait ChapterRepository: Send + Sync {
     async fn forget_downloads(&self, missing: &[ChapterId]) -> Result<u64>;
 }
 
+/// Signed-in people, for identity and audit (ADR-0005).
+#[async_trait]
+pub trait UserRepository: Send + Sync {
+    async fn get(&self, id: UserId) -> Result<User>;
+
+    /// Records a sign-in, creating the user on first sight.
+    ///
+    /// Keyed on `(issuer, subject)`: a subject is only unique within its
+    /// issuer, so an operator who changes IdP gets new users rather than
+    /// silently handing an existing account to whoever holds the same subject
+    /// at the new provider.
+    async fn record_sign_in(&self, issuer: &str, subject: &str) -> Result<User>;
+}
+
 /// Follows.
 #[async_trait]
 pub trait FollowRepository: Send + Sync {

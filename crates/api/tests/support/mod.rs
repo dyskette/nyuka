@@ -44,6 +44,15 @@ impl Harness {
         .await
     }
 
+    /// The whole response, for tests that assert on headers.
+    pub async fn raw(&self, request: Request<Body>) -> axum::response::Response {
+        self.router
+            .clone()
+            .oneshot(request)
+            .await
+            .expect("response")
+    }
+
     pub async fn send(&self, request: Request<Body>) -> (StatusCode, serde_json::Value) {
         let response = self
             .router
@@ -127,7 +136,12 @@ pub async fn harness(name: &str) -> Option<Harness> {
         library: Arc::new(LibraryStoreAdapter::new(store)),
         queue: Arc::new(nyuka_jobs::queue::PostgresQueue::new(db.clone())),
         events: Arc::new(BroadcastBus::new(event_tx.clone())),
+        users: repositories,
         sessions: SessionRepository::new(db.clone()),
+        // No identity provider is reachable from a test, and discovery would
+        // have to contact one. The auth routes report that plainly rather than
+        // pretending to work.
+        oidc: None,
         event_tx,
     });
 
