@@ -23,11 +23,29 @@ msgstr "{0}"
 msgid "{0} followed"
 msgstr "{0} followed"
 
+#. placeholder {0}: filter.title
+#. placeholder {1}: filter.declaredType
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "{0} is not available here ({1})"
+msgstr "{0} is not available here ({1})"
+
 #. placeholder {0}: progress.done
 #. placeholder {1}: progress.total
 #: src/features/jobs/components/JobQueue.tsx
 msgid "{0} of {1} pages"
 msgstr "{0} of {1} pages"
+
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "{option}: excluded"
+msgstr "{option}: excluded"
+
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "{option}: included"
+msgstr "{option}: included"
+
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "{option}: not filtered"
+msgstr "{option}: not filtered"
 
 #: src/features/library/components/LibraryToolbar.tsx
 #~ msgid "{shown} of {total}"
@@ -158,6 +176,10 @@ msgstr "Check {0} now"
 msgid "Check now"
 msgstr "Check now"
 
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "Clear"
+msgstr "Clear"
+
 #: src/routes/library.$mangaId.tsx
 msgid "Close"
 msgstr "Close"
@@ -203,6 +225,10 @@ msgstr "esc close"
 #: src/features/follows/components/FollowTable.tsx
 msgid "Every"
 msgstr "Every"
+
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "Filters"
+msgstr "Filters"
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Follow this series"
@@ -473,6 +499,14 @@ msgstr "Settings for {0}"
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Size"
 msgstr "Size"
+
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "Sort ascending"
+msgstr "Sort ascending"
+
+#: src/features/browse/components/CatalogFilters.tsx
+msgid "Sort descending"
+msgstr "Sort descending"
 
 #: src/features/follows/components/FollowTable.tsx
 #: src/features/library/components/LibraryTable.tsx

@@ -25,15 +25,21 @@ export function sourceListQuery() {
  * party, and a source that is down stays down for longer than three retries.
  * Failing once and saying so beats three timeouts before the same message.
  */
-export function catalogQuery(sourceId: string, q?: string, cursor?: string) {
+export function catalogQuery(sourceId: string, q?: string, filters?: string, cursor?: string) {
   return queryOptions({
-    queryKey: sourceKeys.catalog(sourceId, q, cursor),
+    queryKey: sourceKeys.catalog(sourceId, q, filters, cursor),
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET('/sources/{id}/catalog', {
           params: {
             path: { id: sourceId },
-            query: { ...(q ? { q } : {}), ...(cursor ? { cursor } : {}) },
+            query: {
+              ...(q ? { q } : {}),
+              // The source's own filters, as one JSON parameter. The server
+              // refuses a value it does not recognise rather than ignoring it.
+              ...(filters ? { filters } : {}),
+              ...(cursor ? { cursor } : {}),
+            },
           },
           signal,
         }),
@@ -62,6 +68,26 @@ export function sourceSettingsQuery(sourceId: string) {
         }),
       ),
     staleTime: 0,
+  })
+}
+
+/**
+ * A source's filter declaration.
+ *
+ * Cached long: it changes only when the source is reinstalled, and that
+ * invalidates the whole source key.
+ */
+export function sourceFiltersQuery(sourceId: string) {
+  return queryOptions({
+    queryKey: sourceKeys.filters(sourceId),
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await api.GET('/sources/{id}/filters', {
+          params: { path: { id: sourceId } },
+          signal,
+        }),
+      ),
+    staleTime: 5 * 60_000,
   })
 }
 

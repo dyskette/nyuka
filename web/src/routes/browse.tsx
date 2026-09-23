@@ -3,9 +3,11 @@ import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
+import { CatalogFilters } from '@/features/browse/components/CatalogFilters'
 import { CatalogGrid } from '@/features/browse/components/CatalogGrid'
+import { parseFilters, parseState, toValues } from '@/features/browse/lib/filters'
 import { useAddToLibrary } from '@/features/sources/api/mutations'
-import { catalogQuery, sourceListQuery } from '@/features/sources/api/queries'
+import { catalogQuery, sourceFiltersQuery, sourceListQuery } from '@/features/sources/api/queries'
 import { isProblem, ProblemType, problemMessage } from '@/shared/api/problem'
 
 /**
@@ -19,6 +21,15 @@ export const Route = createFileRoute('/browse')({
   validateSearch: z.object({
     source: z.string().optional(),
     q: z.string().optional(),
+    /**
+     * The source's own filters, as the JSON array the API takes.
+     *
+     * Kept as the encoded string rather than a parsed object: it goes to the
+     * server verbatim, it is what the query is keyed on, and parsing it into
+     * the URL schema would mean re-encoding it identically on every render to
+     * avoid rewriting the address bar.
+     */
+    filters: z.string().optional(),
     cursor: z.string().optional(),
   }),
 
@@ -31,7 +42,7 @@ export const Route = createFileRoute('/browse')({
 })
 
 function BrowseScreen() {
-  const { source, q, cursor } = Route.useSearch()
+  const { source, q, filters, cursor } = Route.useSearch()
   const { data: sources } = useSuspenseQuery(sourceListQuery())
 
   // Falling back to the first installed source rather than showing an empty
@@ -48,7 +59,11 @@ function BrowseScreen() {
     <div className="flex h-dvh flex-col">
       <BrowseToolbar sources={sources} active={active} q={q} />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {active === undefined ? <NoSources /> : <Catalog sourceId={active} q={q} cursor={cursor} />}
+        {active === undefined ? (
+          <NoSources />
+        ) : (
+          <Catalog sourceId={active} q={q} filters={filters} cursor={cursor} />
+        )}
       </div>
     </div>
   )
@@ -57,25 +72,71 @@ function BrowseScreen() {
 function Catalog({
   sourceId,
   q,
+  filters,
   cursor,
 }: {
   sourceId: string
   q: string | undefined
+  filters: string | undefined
   cursor: string | undefined
 }) {
+  const navigate = Route.useNavigate()
+
+  // The declaration. `useQuery`, not suspense: a source that will not answer
+  // must not take the whole screen down, and the catalog below renders its own
+  // failure.
+  const { data: declared } = useQuery(sourceFiltersQuery(sourceId))
+  const available = parseFilters(declared)
+  const state = parseState(filters)
   // `useQuery`, not `useSuspenseQuery`: this request leaves the deployment, so
   // it fails in ways the others do not and the screen has to render that
   // rather than throw it to a route-level boundary that hides the toolbar.
-  const { data, error, isPending } = useQuery(catalogQuery(sourceId, q, cursor))
+  const { data, error, isPending } = useQuery(catalogQuery(sourceId, q, filters, cursor))
   const add = useAddToLibrary(sourceId)
 
   const adding = new Set(add.isPending && add.variables ? [add.variables] : [])
 
-  if (error) return <CatalogError error={error} />
-  if (isPending) return <CatalogSkeleton />
+  const filterBar = (
+    <CatalogFilters
+      filters={available}
+      state={state}
+      onChange={(next) => {
+        const values = toValues(available, next)
+        void navigate({
+          search: (previous) => ({
+            ...previous,
+            filters: values.length === 0 ? undefined : JSON.stringify(values),
+            // A cursor belongs to the listing it came from.
+            cursor: undefined,
+          }),
+        })
+      }}
+    />
+  )
+
+  // Rendered above whatever the catalog is doing, so changing a filter stays
+  // possible while the result is loading or failing — which is exactly when
+  // someone wants to.
+  if (error) {
+    return (
+      <>
+        {filterBar}
+        <CatalogError error={error} />
+      </>
+    )
+  }
+  if (isPending) {
+    return (
+      <>
+        {filterBar}
+        <CatalogSkeleton />
+      </>
+    )
+  }
 
   return (
     <>
+      {filterBar}
       <CatalogGrid
         items={data.items}
         adding={adding}
@@ -136,6 +197,10 @@ function BrowseToolbar({
               search: (previous) => ({
                 ...previous,
                 source: event.target.value,
+                // A filter belongs to the source that declared it. Carrying
+                // one across would send another source ids it has never heard
+                // of — refused at best, silently unmatched at worst.
+                filters: undefined,
                 cursor: undefined,
               }),
             })
