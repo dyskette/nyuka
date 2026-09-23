@@ -152,6 +152,13 @@ code that already exists. Nothing goes on this list because it seemed like a
 thing a manga server would have — an in-browser reader was listed that way and
 has been removed.
 
+**What the mockup is.** A reference for layout, density, spacing and colour —
+how the interface is distributed, not what it does. Its screens are the
+authority on *how a library table looks*; they are not a feature list. Where a
+mockup element implies a capability the API does not have, the capability is a
+separate decision and the element is not built until it is made. "Unread 32"
+and the "14 new" badges were read as scope once, and were not.
+
 - [x] Vite 8 / Rolldown scaffold, TanStack Router and Query
 - [x] Typed API client, problem+json handling, i18n negotiation
 - [x] Generated client from `openapi.json`, committed and checked by CI
@@ -202,12 +209,10 @@ has been removed.
       chosen sort column. The client orders and filters nothing.
 - [x] **Infinite scroll** — one `useInfiniteQuery` over the server's cursor,
       fetching the next page as the end comes into view.
-- [ ] **Read progress** — needs a decision, not just work. The mockup shows an
-      "Unread 32" filter and "14 new" badges, and nothing records what has been
-      read: the API tracks what is *downloaded*. Closing this means a
-      `read_chapter` table and something to write to it, which is a larger
-      question than the badges. Until it is decided, those two pieces of the
-      mockup stay unbuilt rather than being faked from download state.
+- [x] **Read progress** — decided against. There is no reader, nothing records
+      what has been read, and the mockup's "Unread 32" and "14 new" were never
+      a commitment to track it. Where a count belongs, the screens show what is
+      *downloaded*, which the server can defend.
 
 ## Documentation
 
