@@ -172,6 +172,7 @@ mod tests {
                 chapter_id: ChapterId(Uuid::new_v4()),
             },
             JobEvent::ChapterDownloaded {
+                manga_id: MangaId(Uuid::new_v4()),
                 chapter_id: ChapterId(Uuid::new_v4()),
             },
             JobEvent::SourceUpdated {

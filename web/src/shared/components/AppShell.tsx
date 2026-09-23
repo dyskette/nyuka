@@ -2,6 +2,7 @@ import { Trans } from '@lingui/react/macro'
 import { Link } from '@tanstack/react-router'
 import { BookMarked, Compass, Download, Library, type LucideIcon, Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useLiveStatus } from '@/shared/sse/LiveProvider'
 
 /**
  * The frame every screen sits in: a fixed sidebar, the screen, and a status
@@ -106,16 +107,46 @@ function SidebarLink({ item }: { item: NavItem }) {
 function StatusBar() {
   return (
     <footer className="border-border text-muted-foreground col-span-1 flex items-center gap-4 border-t px-3 py-1.5 text-xs">
-      <span className="flex items-center gap-1.5">
-        {/* The connection indicator is a dot *and* a word: colour alone would
-            leave the state unreadable to anyone who cannot distinguish it
-            (WCAG 1.4.1). */}
-        <span className="bg-success size-1.5 rounded-full" aria-hidden="true" />
-        <Trans>Live</Trans>
-      </span>
+      <LiveIndicator />
       <span className="ml-auto tabular">
         <Trans>⌘K</Trans>
       </span>
     </footer>
+  )
+}
+
+/**
+ * Whether the event stream is connected.
+ *
+ * Read from the provider rather than hard-coded: a status bar that always says
+ * "Live" is worse than none, because the one moment it matters is the one
+ * where it is wrong.
+ */
+function LiveIndicator() {
+  const status = useLiveStatus()
+
+  // The indicator is a dot *and* a word: colour alone would leave the state
+  // unreadable to anyone who cannot distinguish it (WCAG 1.4.1).
+  const dot = {
+    live: 'bg-success',
+    connecting: 'bg-warning',
+    offline: 'bg-danger',
+  }[status]
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`${dot} size-1.5 rounded-full`} aria-hidden="true" />
+      {/* `aria-live` so the change is announced: losing the connection is the
+          kind of thing a reader needs to hear rather than notice. */}
+      <span aria-live="polite">
+        {status === 'live' ? (
+          <Trans>Live</Trans>
+        ) : status === 'connecting' ? (
+          <Trans>Connecting</Trans>
+        ) : (
+          <Trans>Offline</Trans>
+        )}
+      </span>
+    </span>
   )
 }

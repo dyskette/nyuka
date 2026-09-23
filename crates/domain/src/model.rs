@@ -503,6 +503,10 @@ pub enum JobEvent {
         chapter_id: ChapterId,
     },
     ChapterDownloaded {
+        /// Carried so a client can invalidate one series rather than the whole
+        /// library. The handler already has it, and without it the only
+        /// correct reaction to this event is to refetch everything.
+        manga_id: MangaId,
         chapter_id: ChapterId,
     },
     SourceUpdated {

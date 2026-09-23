@@ -236,8 +236,10 @@ impl KindHandler for DownloadChapter {
         // Record only after the archive is in place. The reverse order would
         // leave a row claiming a download that a crash prevented.
         self.chapters.record_download(&download).await?;
-        self.events
-            .publish(JobEvent::ChapterDownloaded { chapter_id });
+        self.events.publish(JobEvent::ChapterDownloaded {
+            manga_id: manga.id,
+            chapter_id,
+        });
 
         tracing::info!(
             chapter.id = %chapter_id,

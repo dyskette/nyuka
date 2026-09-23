@@ -55,6 +55,10 @@ msgstr "Chapters"
 msgid "Close"
 msgstr "Close"
 
+#: src/shared/components/AppShell.tsx
+msgid "Connecting"
+msgstr "Connecting"
+
 #: src/features/library/components/ChapterList.tsx
 msgid "Download"
 msgstr "Download"
@@ -95,6 +99,10 @@ msgstr "No chapters yet. Refresh the series to fetch its chapter list."
 #: src/features/browse/components/MangaCard.tsx
 msgid "No cover"
 msgstr "No cover"
+
+#: src/shared/components/AppShell.tsx
+msgid "Offline"
+msgstr "Offline"
 
 #: src/routes/library.$mangaId.tsx
 msgid "Open at the source"
