@@ -248,13 +248,19 @@ async fn adding_to_the_library_is_a_post_on_the_library_path() {
         "adding from a catalog; if this landed on /sources instead, the \
          generated client would call the wrong endpoint"
     );
-    assert!(
-        !doc["paths"]["/sources"]
-            .as_object()
-            .expect("/sources")
-            .contains_key("post"),
-        "installing a source is POST /sources; adding a series must not be"
+    // `/sources` also has a POST — installing a source — and the two must be
+    // different operations rather than one having landed on the other's path.
+    // This previously asserted that `/sources` had *no* POST, which passed
+    // only because `install` was never mounted: the assertion was encoding
+    // the bug rather than catching it.
+    let sources = doc["paths"]["/sources"].as_object().expect("/sources");
+    assert!(sources.contains_key("post"), "installing a source");
+    assert_ne!(
+        manga["post"]["operationId"], sources["post"]["operationId"],
+        "adding a series and installing a source are different operations"
     );
+    assert_eq!(manga["post"]["operationId"], "addMangaToLibrary");
+    assert_eq!(sources["post"]["operationId"], "installSource");
 }
 
 /// A schema that describes a route the router does not serve is worse than no

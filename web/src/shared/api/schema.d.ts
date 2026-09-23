@@ -12,7 +12,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/chapters/{id}` */
-        get: operations["chapter"];
+        get: operations["getChapter"];
         put?: never;
         post?: never;
         delete?: never;
@@ -40,7 +40,7 @@ export interface paths {
          *     `Idempotency-Key` header is accepted and narrows that further, which is
          *     what makes a retried request from a flaky network safe.
          */
-        post: operations["request"];
+        post: operations["requestDownload"];
         delete?: never;
         options?: never;
         head?: never;
@@ -55,7 +55,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/downloads/{chapter_id}/file` */
-        get: operations["file"];
+        get: operations["getChapterFile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -72,7 +72,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/follows` */
-        get: operations["list"];
+        get: operations["listFollows"];
         /**
          * `PUT /api/v1/follows` — follow a series, or change how it is followed.
          * @description `PUT` rather than `POST` because the operation is keyed on `manga_id` and
@@ -80,7 +80,7 @@ export interface paths {
          *     creating a second follow, which is what a user pressing the button twice
          *     expects.
          */
-        put: operations["upsert"];
+        put: operations["upsertFollow"];
         post?: never;
         delete?: never;
         options?: never;
@@ -96,11 +96,11 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/follows/{id}` */
-        get: operations["get"];
+        get: operations["getFollow"];
         put?: never;
         post?: never;
         /** `DELETE /api/v1/follows/{id}` */
-        delete: operations["delete"];
+        delete: operations["deleteFollow"];
         options?: never;
         head?: never;
         patch?: never;
@@ -116,7 +116,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** `POST /api/v1/follows/{id}/check-now` */
-        post: operations["check_now"];
+        post: operations["checkFollowNow"];
         delete?: never;
         options?: never;
         head?: never;
@@ -131,7 +131,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/jobs` */
-        get: operations["list"];
+        get: operations["listJobs"];
         put?: never;
         /**
          * `POST /api/v1/jobs` — queue a maintenance job.
@@ -140,7 +140,7 @@ export interface paths {
          *     dependency in prose: it survives exactly until a column changes, and it
          *     bypasses every validation the enqueue path performs.
          */
-        post: operations["trigger"];
+        post: operations["triggerJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -155,7 +155,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/jobs/{id}` */
-        get: operations["get"];
+        get: operations["getJob"];
         put?: never;
         post?: never;
         delete?: never;
@@ -179,7 +179,7 @@ export interface paths {
          *     interrupt the attempt in flight. That is an honest limit rather than an
          *     oversight — see ADR-0003's open question on cancellation semantics.
          */
-        post: operations["cancel"];
+        post: operations["cancelJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -196,7 +196,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** `POST /api/v1/jobs/{id}/retry` */
-        post: operations["retry"];
+        post: operations["retryJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -211,7 +211,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/manga` */
-        get: operations["list"];
+        get: operations["listLibrary"];
         put?: never;
         /**
          * `POST /api/v1/manga` — add a catalog entry to the library.
@@ -219,7 +219,7 @@ export interface paths {
          *     the source, never from the client. Accepting a client's version would let
          *     anyone write any title into the library.
          */
-        post: operations["add"];
+        post: operations["addMangaToLibrary"];
         delete?: never;
         options?: never;
         head?: never;
@@ -234,7 +234,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/manga/{id}` */
-        get: operations["get"];
+        get: operations["getManga"];
         put?: never;
         post?: never;
         delete?: never;
@@ -251,7 +251,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/manga/{id}/chapters` */
-        get: operations["chapters"];
+        get: operations["listMangaChapters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -268,10 +268,10 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/source-repos` */
-        get: operations["list_repos"];
+        get: operations["listSourceRepos"];
         put?: never;
         /** `POST /api/v1/source-repos` */
-        post: operations["add_repo"];
+        post: operations["addSourceRepo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -289,7 +289,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** `DELETE /api/v1/source-repos/{id}` */
-        delete: operations["delete_repo"];
+        delete: operations["deleteSourceRepo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -303,7 +303,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/source-repos/{id}/available` */
-        get: operations["available"];
+        get: operations["listAvailableSources"];
         put?: never;
         post?: never;
         delete?: never;
@@ -322,7 +322,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** `POST /api/v1/source-repos/{id}/refresh` */
-        post: operations["refresh_repo"];
+        post: operations["refreshSourceRepo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -337,7 +337,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/sources` */
-        get: operations["list"];
+        get: operations["listSources"];
         put?: never;
         post?: never;
         delete?: never;
@@ -364,7 +364,7 @@ export interface paths {
          *     > alone — they are the user's — but nothing will know how to find them
          *     > again.
          */
-        delete: operations["uninstall"];
+        delete: operations["uninstallSource"];
         options?: never;
         head?: never;
         patch?: never;
@@ -378,7 +378,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/sources/{id}/catalog` */
-        get: operations["browse"];
+        get: operations["browseCatalog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -395,7 +395,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/sources/{id}/catalog/{key}` */
-        get: operations["details"];
+        get: operations["getCatalogItem"];
         put?: never;
         post?: never;
         delete?: never;
@@ -412,7 +412,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/sources/{id}/catalog/{key}/chapters` */
-        get: operations["chapters"];
+        get: operations["listCatalogChapters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -429,7 +429,7 @@ export interface paths {
             cookie?: never;
         };
         /** `GET /api/v1/sources/{id}/filters` */
-        get: operations["filters"];
+        get: operations["getSourceFilters"];
         put?: never;
         post?: never;
         delete?: never;
@@ -458,9 +458,9 @@ export interface paths {
          *     Decoding would mean this server guessing at a schema it does not have, and
          *     guessing wrong writes a value the source then misreads.
          */
-        get: operations["settings"];
+        get: operations["getSourceSettings"];
         /** `PUT /api/v1/sources/{id}/settings` */
-        put: operations["put_setting"];
+        put: operations["putSourceSetting"];
         post?: never;
         delete?: never;
         options?: never;
@@ -779,7 +779,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    chapter: {
+    getChapter: {
         parameters: {
             query?: never;
             header?: never;
@@ -808,7 +808,7 @@ export interface operations {
             };
         };
     };
-    request: {
+    requestDownload: {
         parameters: {
             query?: never;
             header?: never;
@@ -844,7 +844,7 @@ export interface operations {
             };
         };
     };
-    file: {
+    getChapterFile: {
         parameters: {
             query?: never;
             header?: never;
@@ -895,7 +895,7 @@ export interface operations {
             };
         };
     };
-    list: {
+    listFollows: {
         parameters: {
             query?: {
                 /** @description The `next_cursor` from a previous page. */
@@ -917,7 +917,7 @@ export interface operations {
             };
         };
     };
-    upsert: {
+    upsertFollow: {
         parameters: {
             query?: never;
             header?: never;
@@ -954,7 +954,7 @@ export interface operations {
             };
         };
     };
-    get: {
+    getFollow: {
         parameters: {
             query?: never;
             header?: never;
@@ -983,7 +983,7 @@ export interface operations {
             };
         };
     };
-    delete: {
+    deleteFollow: {
         parameters: {
             query?: never;
             header?: never;
@@ -1004,7 +1004,7 @@ export interface operations {
             };
         };
     };
-    check_now: {
+    checkFollowNow: {
         parameters: {
             query?: never;
             header?: never;
@@ -1032,7 +1032,7 @@ export interface operations {
             };
         };
     };
-    list: {
+    listJobs: {
         parameters: {
             query?: {
                 /** @description One of `queued`, `running`, `succeeded`, `failed`, `cancelled`. */
@@ -1062,7 +1062,7 @@ export interface operations {
             };
         };
     };
-    trigger: {
+    triggerJob: {
         parameters: {
             query?: never;
             header?: never;
@@ -1091,7 +1091,7 @@ export interface operations {
             };
         };
     };
-    get: {
+    getJob: {
         parameters: {
             query?: never;
             header?: never;
@@ -1120,7 +1120,7 @@ export interface operations {
             };
         };
     };
-    cancel: {
+    cancelJob: {
         parameters: {
             query?: never;
             header?: never;
@@ -1156,7 +1156,7 @@ export interface operations {
             };
         };
     };
-    retry: {
+    retryJob: {
         parameters: {
             query?: never;
             header?: never;
@@ -1191,7 +1191,7 @@ export interface operations {
             };
         };
     };
-    list: {
+    listLibrary: {
         parameters: {
             query?: {
                 /** @description The `next_cursor` from a previous page. */
@@ -1213,7 +1213,7 @@ export interface operations {
             };
         };
     };
-    add: {
+    addMangaToLibrary: {
         parameters: {
             query?: never;
             header?: never;
@@ -1251,7 +1251,7 @@ export interface operations {
             };
         };
     };
-    get: {
+    getManga: {
         parameters: {
             query?: never;
             header?: never;
@@ -1280,7 +1280,7 @@ export interface operations {
             };
         };
     };
-    chapters: {
+    listMangaChapters: {
         parameters: {
             query?: {
                 /** @description The `next_cursor` from a previous page. */
@@ -1312,7 +1312,7 @@ export interface operations {
             };
         };
     };
-    list_repos: {
+    listSourceRepos: {
         parameters: {
             query?: never;
             header?: never;
@@ -1331,7 +1331,7 @@ export interface operations {
             };
         };
     };
-    add_repo: {
+    addSourceRepo: {
         parameters: {
             query?: never;
             header?: never;
@@ -1361,7 +1361,7 @@ export interface operations {
             };
         };
     };
-    delete_repo: {
+    deleteSourceRepo: {
         parameters: {
             query?: never;
             header?: never;
@@ -1382,7 +1382,7 @@ export interface operations {
             };
         };
     };
-    available: {
+    listAvailableSources: {
         parameters: {
             query?: never;
             header?: never;
@@ -1411,7 +1411,7 @@ export interface operations {
             };
         };
     };
-    refresh_repo: {
+    refreshSourceRepo: {
         parameters: {
             query?: never;
             header?: never;
@@ -1439,7 +1439,7 @@ export interface operations {
             };
         };
     };
-    list: {
+    listSources: {
         parameters: {
             query?: never;
             header?: never;
@@ -1458,7 +1458,7 @@ export interface operations {
             };
         };
     };
-    uninstall: {
+    uninstallSource: {
         parameters: {
             query?: never;
             header?: never;
@@ -1479,7 +1479,7 @@ export interface operations {
             };
         };
     };
-    browse: {
+    browseCatalog: {
         parameters: {
             query?: {
                 /** @description Free-text search. Absent means the source's default listing. */
@@ -1519,7 +1519,7 @@ export interface operations {
             };
         };
     };
-    details: {
+    getCatalogItem: {
         parameters: {
             query?: never;
             header?: never;
@@ -1557,7 +1557,7 @@ export interface operations {
             };
         };
     };
-    chapters: {
+    listCatalogChapters: {
         parameters: {
             query?: never;
             header?: never;
@@ -1595,7 +1595,7 @@ export interface operations {
             };
         };
     };
-    filters: {
+    getSourceFilters: {
         parameters: {
             query?: never;
             header?: never;
@@ -1625,7 +1625,7 @@ export interface operations {
             };
         };
     };
-    settings: {
+    getSourceSettings: {
         parameters: {
             query?: never;
             header?: never;
@@ -1654,7 +1654,7 @@ export interface operations {
             };
         };
     };
-    put_setting: {
+    putSourceSetting: {
         parameters: {
             query?: never;
             header?: never;

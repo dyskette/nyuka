@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { lingui, linguiTransformerBabelPreset } from '@lingui/vite-plugin'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
@@ -37,6 +38,28 @@ export default defineConfig(({ command }) => ({
       // (ADR-0005, ADR-0006).
       '/api': { target: 'http://localhost:8080', changeOrigin: false },
     },
+  },
+
+  resolve: {
+    // Declared here as well as in tsconfig. The build resolved `@/` without
+    // it, but Vitest did not — and an alias that works in one and not the
+    // other is a test suite that cannot import what the application imports.
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
+
+  test: {
+    // Component tests need a DOM. Pure-logic tests run in the same
+    // environment rather than a second config: one place to look, and the
+    // cost of jsdom for a handful of logic tests is smaller than the cost of
+    // wondering which config a test ran under.
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    // No implicit globals. An imported `describe` is one a reader can follow
+    // to its definition, and it keeps the test files valid TypeScript without
+    // a types entry that has to be kept in step.
+    globals: false,
+    // Excluded because Playwright owns them and Vitest would try to run them.
+    exclude: ['node_modules/**', 'e2e/**', 'dist/**'],
   },
 
   build: {

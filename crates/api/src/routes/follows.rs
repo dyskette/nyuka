@@ -60,6 +60,7 @@ fn validate_interval(secs: i32) -> Result<i32, ApiError> {
 
 /// `GET /api/v1/follows`
 #[utoipa::path(
+    operation_id = "listFollows",
     get,
     path = "/follows",
     tag = "follows",
@@ -77,6 +78,7 @@ pub async fn list(
 
 /// `GET /api/v1/follows/{id}`
 #[utoipa::path(
+    operation_id = "getFollow",
     get,
     path = "/follows/{id}",
     tag = "follows",
@@ -105,6 +107,7 @@ pub async fn get(
 /// creating a second follow, which is what a user pressing the button twice
 /// expects.
 #[utoipa::path(
+    operation_id = "upsertFollow",
     put,
     path = "/follows",
     tag = "follows",
@@ -154,6 +157,7 @@ pub async fn upsert(
 
 /// `DELETE /api/v1/follows/{id}`
 #[utoipa::path(
+    operation_id = "deleteFollow",
     delete,
     path = "/follows/{id}",
     tag = "follows",
@@ -172,6 +176,7 @@ pub async fn delete(
 
 /// `POST /api/v1/follows/{id}/check-now`
 #[utoipa::path(
+    operation_id = "checkFollowNow",
     post,
     path = "/follows/{id}/check-now",
     tag = "follows",

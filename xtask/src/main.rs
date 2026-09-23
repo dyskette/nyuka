@@ -44,7 +44,8 @@ fn openapi_path() -> PathBuf {
 fn openapi() -> anyhow::Result<()> {
     // Pretty-printed with a trailing newline, so `git diff` on a schema
     // change shows the changed endpoint rather than one enormous line.
-    let json = serde_json::to_string_pretty(&nyuka_api::openapi_document())?;
+    let document = serde_json::to_value(nyuka_api::openapi_document())?;
+    let json = serde_json::to_string_pretty(&document)?;
     let path = openapi_path();
 
     if let Some(parent) = path.parent() {
@@ -52,7 +53,78 @@ fn openapi() -> anyhow::Result<()> {
     }
     std::fs::write(&path, format!("{json}\n"))?;
 
+    check_every_handler_is_routed(&document)?;
+
     println!("wrote {}", path.display());
+    Ok(())
+}
+
+/// Fails when a handler carries `#[utoipa::path]` but is never mounted.
+///
+/// `utoipa-axum` documents only what the router registers, so a handler that
+/// is written, annotated, and then left out of `routes!` produces no
+/// operation — it is simply absent, with nothing to notice. That is how
+/// `POST /sources` (installing a source) existed as dead code: the route test
+/// checks that every *documented* path is routed, which cannot see a path
+/// that was never documented in the first place.
+///
+/// Comparing the `operation_id` literals in the source against the generated
+/// document catches the other direction. It is a text scan rather than
+/// something the type system enforces, which is why it lives here and fails
+/// the same command that writes the file.
+fn check_every_handler_is_routed(document: &serde_json::Value) -> anyhow::Result<()> {
+    let routed: std::collections::HashSet<String> = document["paths"]
+        .as_object()
+        .map(|paths| {
+            paths
+                .values()
+                .filter_map(|item| item.as_object())
+                .flat_map(|item| item.values())
+                .filter_map(|op| op.get("operationId"))
+                .filter_map(|id| id.as_str())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let routes_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../crates/api/src/routes");
+    let mut declared = Vec::new();
+    for entry in std::fs::read_dir(&routes_dir)? {
+        let path = entry?.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path)?;
+        for line in source.lines() {
+            let Some(rest) = line.trim().strip_prefix("operation_id = \"") else {
+                continue;
+            };
+            let Some(id) = rest.split('"').next() else {
+                continue;
+            };
+            declared.push((id.to_string(), path.clone()));
+        }
+    }
+
+    let missing: Vec<String> = declared
+        .iter()
+        .filter(|(id, _)| !routed.contains(id))
+        .map(|(id, path)| {
+            format!(
+                "{id} (in {})",
+                path.file_name().unwrap_or_default().to_string_lossy()
+            )
+        })
+        .collect();
+
+    anyhow::ensure!(
+        missing.is_empty(),
+        "these handlers are annotated but never mounted, so they are \
+         unreachable and absent from the schema: {}",
+        missing.join(", ")
+    );
+
+    println!("{} operations, all routed", routed.len());
     Ok(())
 }
 

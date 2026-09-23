@@ -1,58 +1,837 @@
 {
-  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "AddRequest": {
+        "properties": {
+          "external_key": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["source_id", "external_key"],
+        "type": "object"
+      },
+      "CatalogItemDto": {
+        "description": "A catalog result, which has no local identity.",
+        "properties": {
+          "artists": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "content_rating": {
+            "type": "string"
+          },
+          "cover_url": {
+            "type": ["string", "null"]
+          },
+          "description": {
+            "type": ["string", "null"]
+          },
+          "external_key": {
+            "description": "The source's own key. This, plus the source id, is how it is added.",
+            "type": "string"
+          },
+          "manga_id": {
+            "description": "Set when this series is already in the library, so the UI can offer\n\"open\" rather than \"add\".",
+            "format": "uuid",
+            "type": ["string", "null"]
+          },
+          "reading_direction": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": [
+          "external_key",
+          "title",
+          "authors",
+          "artists",
+          "tags",
+          "status",
+          "content_rating",
+          "reading_direction"
+        ],
+        "type": "object"
+      },
+      "CatalogPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogItemDto"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items"],
+        "type": "object"
+      },
+      "ChapterDto": {
+        "properties": {
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "language": {
+            "type": ["string", "null"]
+          },
+          "manga_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "number": {
+            "format": "float",
+            "type": ["number", "null"]
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": ["string", "null"]
+          },
+          "title": {
+            "type": ["string", "null"]
+          },
+          "volume": {
+            "format": "float",
+            "type": ["number", "null"]
+          }
+        },
+        "required": ["id", "manga_id", "external_key"],
+        "type": "object"
+      },
+      "DownloadRequest": {
+        "properties": {
+          "chapter_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["chapter_id"],
+        "type": "object"
+      },
+      "FollowDto": {
+        "properties": {
+          "auto_download": {
+            "type": "boolean"
+          },
+          "check_interval_secs": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_checked_at": {
+            "format": "date-time",
+            "type": ["string", "null"]
+          },
+          "manga_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["id", "manga_id", "check_interval_secs", "auto_download", "created_at"],
+        "type": "object"
+      },
+      "FollowRequest": {
+        "properties": {
+          "auto_download": {
+            "type": "boolean"
+          },
+          "check_interval_secs": {
+            "description": "Defaults to six hours when absent.",
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "manga_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["manga_id"],
+        "type": "object"
+      },
+      "InstallRequest": {
+        "properties": {
+          "external_id": {
+            "description": "The source's own id, as the repository index lists it.",
+            "type": "string"
+          },
+          "repo_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": ["repo_id", "external_id"],
+        "type": "object"
+      },
+      "InstalledSourceDto": {
+        "properties": {
+          "declared_rate_limit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RateLimitDto",
+                "description": "Requests per period the source asked for, if it has declared one."
+              }
+            ]
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repo_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "repo_id",
+          "external_id",
+          "name",
+          "version",
+          "languages",
+          "required_capabilities"
+        ],
+        "type": "object"
+      },
+      "JobDto": {
+        "properties": {
+          "attempts": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": ["string", "null"]
+          },
+          "max_attempts": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "priority": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "priority",
+          "run_at",
+          "attempts",
+          "max_attempts",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "MangaDto": {
+        "properties": {
+          "artists": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "content_rating": {
+            "type": "string"
+          },
+          "cover_url": {
+            "type": ["string", "null"]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": ["string", "null"]
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "language": {
+            "type": ["string", "null"]
+          },
+          "reading_direction": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": [
+          "id",
+          "source_id",
+          "external_key",
+          "title",
+          "authors",
+          "artists",
+          "tags",
+          "status",
+          "content_rating",
+          "reading_direction",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "Paged_ChapterDto": {
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "external_key": {
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "language": {
+                  "type": ["string", "null"]
+                },
+                "manga_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "number": {
+                  "format": "float",
+                  "type": ["number", "null"]
+                },
+                "published_at": {
+                  "format": "date-time",
+                  "type": ["string", "null"]
+                },
+                "title": {
+                  "type": ["string", "null"]
+                },
+                "volume": {
+                  "format": "float",
+                  "type": ["number", "null"]
+                }
+              },
+              "required": ["id", "manga_id", "external_key"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items"],
+        "type": "object"
+      },
+      "Paged_FollowDto": {
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "auto_download": {
+                  "type": "boolean"
+                },
+                "check_interval_secs": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "last_checked_at": {
+                  "format": "date-time",
+                  "type": ["string", "null"]
+                },
+                "manga_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": ["id", "manga_id", "check_interval_secs", "auto_download", "created_at"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items"],
+        "type": "object"
+      },
+      "Paged_JobDto": {
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "attempts": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "last_error": {
+                  "type": ["string", "null"]
+                },
+                "max_attempts": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "priority": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "run_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "state",
+                "priority",
+                "run_at",
+                "attempts",
+                "max_attempts",
+                "created_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items"],
+        "type": "object"
+      },
+      "Paged_MangaDto": {
+        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "artists": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "authors": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "content_rating": {
+                  "type": "string"
+                },
+                "cover_url": {
+                  "type": ["string", "null"]
+                },
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "description": {
+                  "type": ["string", "null"]
+                },
+                "external_key": {
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "language": {
+                  "type": ["string", "null"]
+                },
+                "reading_direction": {
+                  "type": "string"
+                },
+                "source_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "tags": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "url": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": [
+                "id",
+                "source_id",
+                "external_key",
+                "title",
+                "authors",
+                "artists",
+                "tags",
+                "status",
+                "content_rating",
+                "reading_direction",
+                "created_at",
+                "updated_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["items"],
+        "type": "object"
+      },
+      "RateLimitDto": {
+        "properties": {
+          "period_seconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "permits": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["permits", "period_seconds"],
+        "type": "object"
+      },
+      "SettingRequest": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "description": "Base64 of the postcard-encoded value. Absent clears the setting.",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["key"],
+        "type": "object"
+      },
+      "SourceEntryDto": {
+        "properties": {
+          "base_url": {
+            "type": ["string", "null"]
+          },
+          "content_rating": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "icon_url": {
+            "type": ["string", "null"]
+          },
+          "installed_version": {
+            "description": "Absent when the entry is not installed.",
+            "format": "int32",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repo_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["repo_id", "external_id", "name", "version", "languages", "content_rating"],
+        "type": "object"
+      },
+      "SourceRepoDto": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_refreshed_at": {
+            "format": "date-time",
+            "type": ["string", "null"]
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name", "url", "created_at"],
+        "type": "object"
+      },
+      "SourceRepoRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "description": "The index URL, such as `https://example.test/index.min.json`.",
+            "type": "string"
+          }
+        },
+        "required": ["name", "url"],
+        "type": "object"
+      },
+      "SourceSettingDto": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "description": "Base64 of the postcard-encoded value, or absent when unset.",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["key"],
+        "type": "object"
+      },
+      "SourceSettingsDto": {
+        "properties": {
+          "declared": {
+            "description": "The package's `settings.json`, verbatim. A client renders it; this\nserver does not interpret it."
+          },
+          "values": {
+            "description": "What the source has actually stored, which is not necessarily what the\ndeclaration lists: a source writes keys of its own choosing.",
+            "items": {
+              "$ref": "#/components/schemas/SourceSettingDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["declared", "values"],
+        "type": "object"
+      },
+      "TriggerRequest": {
+        "properties": {
+          "kind": {
+            "description": "One of `update_sources`, `prune_jobs`, `prune_sessions`,\n`reconcile_library`.",
+            "type": "string"
+          }
+        },
+        "required": ["kind"],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "description": "An opaque, signed, HttpOnly session cookie issued by `GET /api/v1/auth/callback`. There is no bearer token: tokens from the identity provider never reach the browser.",
+        "in": "cookie",
+        "name": "id",
+        "type": "apiKey"
+      }
+    }
+  },
   "info": {
-    "title": "nyuka",
     "description": "A self-hosted manga library server.",
     "license": {
       "name": "AGPL-3.0-or-later"
     },
+    "title": "nyuka",
     "version": "0.1.0"
   },
+  "openapi": "3.1.0",
   "paths": {
     "/chapters/{id}": {
       "get": {
-        "tags": [
-          "library"
-        ],
-        "summary": "`GET /api/v1/chapters/{id}`",
-        "operationId": "chapter",
+        "operationId": "getChapter",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Chapter id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ChapterDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such chapter"
           }
-        }
+        },
+        "summary": "`GET /api/v1/chapters/{id}`",
+        "tags": ["library"]
       }
     },
     "/downloads": {
       "post": {
-        "tags": [
-          "downloads"
-        ],
-        "summary": "`POST /api/v1/downloads`",
         "description": "Returns `202` with a `Location` pointing at the job. The work is a series\nof requests to a third-party site; doing it inline would hold a connection\nopen for minutes.\n\nIdempotent on the chapter, so a double-click queues one download. An\n`Idempotency-Key` header is accepted and narrows that further, which is\nwhat makes a retried request from a flaky network safe.",
-        "operationId": "request",
+        "operationId": "requestDownload",
         "requestBody": {
           "content": {
             "application/json": {
@@ -73,34 +852,32 @@
           "409": {
             "description": "Already in the library"
           }
-        }
+        },
+        "summary": "`POST /api/v1/downloads`",
+        "tags": ["downloads"]
       }
     },
     "/downloads/{chapter_id}/file": {
       "get": {
-        "tags": [
-          "downloads"
-        ],
-        "summary": "`GET /api/v1/downloads/{chapter_id}/file`",
-        "operationId": "file",
+        "operationId": "getChapterFile",
         "parameters": [
           {
-            "name": "chapter_id",
-            "in": "path",
             "description": "Chapter id",
+            "in": "path",
+            "name": "chapter_id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "The CBZ",
             "content": {
               "application/vnd.comicbook+zip": {}
-            }
+            },
+            "description": "The CBZ"
           },
           "206": {
             "description": "The requested range"
@@ -114,50 +891,43 @@
           "416": {
             "description": "The range is outside the file"
           }
-        }
+        },
+        "summary": "`GET /api/v1/downloads/{chapter_id}/file`",
+        "tags": ["downloads"]
       }
     },
     "/follows": {
       "get": {
-        "tags": [
-          "follows"
-        ],
-        "summary": "`GET /api/v1/follows`",
-        "operationId": "list",
+        "operationId": "listFollows",
         "parameters": [
           {
-            "name": "cursor",
-            "in": "query",
             "description": "The `next_cursor` from a previous page.",
+            "in": "query",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Paged_FollowDto"
                 }
               }
-            }
+            },
+            "description": ""
           }
-        }
+        },
+        "summary": "`GET /api/v1/follows`",
+        "tags": ["follows"]
       },
       "put": {
-        "tags": [
-          "follows"
-        ],
-        "summary": "`PUT /api/v1/follows` — follow a series, or change how it is followed.",
         "description": "`PUT` rather than `POST` because the operation is keyed on `manga_id` and\nis idempotent: following an already-followed series updates it instead of\ncreating a second follow, which is what a user pressing the button twice\nexpects.",
-        "operationId": "upsert",
+        "operationId": "upsertFollow",
         "requestBody": {
           "content": {
             "application/json": {
@@ -170,14 +940,14 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FollowDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "400": {
             "description": "Invalid interval"
@@ -185,59 +955,23 @@
           "404": {
             "description": "No such series"
           }
-        }
+        },
+        "summary": "`PUT /api/v1/follows` — follow a series, or change how it is followed.",
+        "tags": ["follows"]
       }
     },
     "/follows/{id}": {
-      "get": {
-        "tags": [
-          "follows"
-        ],
-        "summary": "`GET /api/v1/follows/{id}`",
-        "operationId": "get",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Follow id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FollowDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such follow"
-          }
-        }
-      },
       "delete": {
-        "tags": [
-          "follows"
-        ],
-        "summary": "`DELETE /api/v1/follows/{id}`",
-        "operationId": "delete",
+        "operationId": "deleteFollow",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Follow id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -245,25 +979,55 @@
           "204": {
             "description": "Removed, or already absent"
           }
-        }
+        },
+        "summary": "`DELETE /api/v1/follows/{id}`",
+        "tags": ["follows"]
+      },
+      "get": {
+        "operationId": "getFollow",
+        "parameters": [
+          {
+            "description": "Follow id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "description": "No such follow"
+          }
+        },
+        "summary": "`GET /api/v1/follows/{id}`",
+        "tags": ["follows"]
       }
     },
     "/follows/{id}/check-now": {
       "post": {
-        "tags": [
-          "follows"
-        ],
-        "summary": "`POST /api/v1/follows/{id}/check-now`",
-        "operationId": "check_now",
+        "operationId": "checkFollowNow",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Follow id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -274,64 +1038,54 @@
           "404": {
             "description": "No such follow"
           }
-        }
+        },
+        "summary": "`POST /api/v1/follows/{id}/check-now`",
+        "tags": ["follows"]
       }
     },
     "/jobs": {
       "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "`GET /api/v1/jobs`",
-        "operationId": "list",
+        "operationId": "listJobs",
         "parameters": [
           {
-            "name": "state",
-            "in": "query",
             "description": "One of `queued`, `running`, `succeeded`, `failed`, `cancelled`.",
+            "in": "query",
+            "name": "state",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
           {
-            "name": "cursor",
             "in": "query",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Paged_JobDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "400": {
             "description": "Unknown state filter"
           }
-        }
+        },
+        "summary": "`GET /api/v1/jobs`",
+        "tags": ["jobs"]
       },
       "post": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "`POST /api/v1/jobs` — queue a maintenance job.",
         "description": "Exists because the alternative is a runbook that tells an operator to\n`INSERT` into the `job` table. A documented raw insert is a schema\ndependency in prose: it survives exactly until a column changes, and it\nbypasses every validation the enqueue path performs.",
-        "operationId": "trigger",
+        "operationId": "triggerJob",
         "requestBody": {
           "content": {
             "application/json": {
@@ -349,75 +1103,71 @@
           "400": {
             "description": "Not a kind that can be triggered by hand"
           }
-        }
+        },
+        "summary": "`POST /api/v1/jobs` — queue a maintenance job.",
+        "tags": ["jobs"]
       }
     },
     "/jobs/{id}": {
       "get": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "`GET /api/v1/jobs/{id}`",
-        "operationId": "get",
+        "operationId": "getJob",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Job id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such job"
           }
-        }
+        },
+        "summary": "`GET /api/v1/jobs/{id}`",
+        "tags": ["jobs"]
       }
     },
     "/jobs/{id}/cancel": {
       "post": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "`POST /api/v1/jobs/{id}/cancel`",
         "description": "Cancelling a `running` job stops it from being retried; it does not\ninterrupt the attempt in flight. That is an honest limit rather than an\noversight — see ADR-0003's open question on cancellation semantics.",
-        "operationId": "cancel",
+        "operationId": "cancelJob",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Job id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such job"
@@ -425,25 +1175,23 @@
           "409": {
             "description": "The job has already finished"
           }
-        }
+        },
+        "summary": "`POST /api/v1/jobs/{id}/cancel`",
+        "tags": ["jobs"]
       }
     },
     "/jobs/{id}/retry": {
       "post": {
-        "tags": [
-          "jobs"
-        ],
-        "summary": "`POST /api/v1/jobs/{id}/retry`",
-        "operationId": "retry",
+        "operationId": "retryJob",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Job id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -457,50 +1205,43 @@
           "409": {
             "description": "The job has not finished"
           }
-        }
+        },
+        "summary": "`POST /api/v1/jobs/{id}/retry`",
+        "tags": ["jobs"]
       }
     },
     "/manga": {
       "get": {
-        "tags": [
-          "library"
-        ],
-        "summary": "`GET /api/v1/manga`",
-        "operationId": "list",
+        "operationId": "listLibrary",
         "parameters": [
           {
-            "name": "cursor",
-            "in": "query",
             "description": "The `next_cursor` from a previous page.",
+            "in": "query",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Paged_MangaDto"
                 }
               }
-            }
+            },
+            "description": ""
           }
-        }
+        },
+        "summary": "`GET /api/v1/manga`",
+        "tags": ["library"]
       },
       "post": {
-        "tags": [
-          "catalog"
-        ],
-        "summary": "`POST /api/v1/manga` — add a catalog entry to the library.",
         "description": "The body names a source and a key, not a series: the metadata comes from\nthe source, never from the client. Accepting a client's version would let\nanyone write any title into the library.",
-        "operationId": "add",
+        "operationId": "addMangaToLibrary",
         "requestBody": {
           "content": {
             "application/json": {
@@ -513,14 +1254,14 @@
         },
         "responses": {
           "200": {
-            "description": "Added, or already present",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MangaDto"
                 }
               }
-            }
+            },
+            "description": "Added, or already present"
           },
           "404": {
             "description": "No such source or series"
@@ -528,122 +1269,111 @@
           "502": {
             "description": "The source could not be reached"
           }
-        }
+        },
+        "summary": "`POST /api/v1/manga` — add a catalog entry to the library.",
+        "tags": ["catalog"]
       }
     },
     "/manga/{id}": {
       "get": {
-        "tags": [
-          "library"
-        ],
-        "summary": "`GET /api/v1/manga/{id}`",
-        "operationId": "get",
+        "operationId": "getManga",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Series id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MangaDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such series"
           }
-        }
+        },
+        "summary": "`GET /api/v1/manga/{id}`",
+        "tags": ["library"]
       }
     },
     "/manga/{id}/chapters": {
       "get": {
-        "tags": [
-          "library"
-        ],
-        "summary": "`GET /api/v1/manga/{id}/chapters`",
-        "operationId": "chapters",
+        "operationId": "listMangaChapters",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Series id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           },
           {
-            "name": "cursor",
-            "in": "query",
             "description": "The `next_cursor` from a previous page.",
+            "in": "query",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Paged_ChapterDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such series"
           }
-        }
+        },
+        "summary": "`GET /api/v1/manga/{id}/chapters`",
+        "tags": ["library"]
       }
     },
     "/source-repos": {
       "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`GET /api/v1/source-repos`",
-        "operationId": "list_repos",
+        "operationId": "listSourceRepos",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/SourceRepoDto"
-                  }
+                  },
+                  "type": "array"
                 }
               }
-            }
+            },
+            "description": ""
           }
-        }
+        },
+        "summary": "`GET /api/v1/source-repos`",
+        "tags": ["sources"]
       },
       "post": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`POST /api/v1/source-repos`",
-        "operationId": "add_repo",
+        "operationId": "addSourceRepo",
         "requestBody": {
           "content": {
             "application/json": {
@@ -656,37 +1386,35 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SourceRepoDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "400": {
             "description": "Invalid URL"
           }
-        }
+        },
+        "summary": "`POST /api/v1/source-repos`",
+        "tags": ["sources"]
       }
     },
     "/source-repos/{id}": {
       "delete": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`DELETE /api/v1/source-repos/{id}`",
-        "operationId": "delete_repo",
+        "operationId": "deleteSourceRepo",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Repository id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -694,64 +1422,60 @@
           "204": {
             "description": "Removed, or already absent"
           }
-        }
+        },
+        "summary": "`DELETE /api/v1/source-repos/{id}`",
+        "tags": ["sources"]
       }
     },
     "/source-repos/{id}/available": {
       "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`GET /api/v1/source-repos/{id}/available`",
-        "operationId": "available",
+        "operationId": "listAvailableSources",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Repository id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/SourceEntryDto"
-                  }
+                  },
+                  "type": "array"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such repository"
           }
-        }
+        },
+        "summary": "`GET /api/v1/source-repos/{id}/available`",
+        "tags": ["sources"]
       }
     },
     "/source-repos/{id}/refresh": {
       "post": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`POST /api/v1/source-repos/{id}/refresh`",
-        "operationId": "refresh_repo",
+        "operationId": "refreshSourceRepo",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Repository id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -762,50 +1486,83 @@
           "404": {
             "description": "No such repository"
           }
-        }
+        },
+        "summary": "`POST /api/v1/source-repos/{id}/refresh`",
+        "tags": ["sources"]
       }
     },
     "/sources": {
       "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`GET /api/v1/sources`",
-        "operationId": "list",
+        "operationId": "listSources",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/InstalledSourceDto"
-                  }
+                  },
+                  "type": "array"
                 }
               }
-            }
+            },
+            "description": ""
           }
-        }
+        },
+        "summary": "`GET /api/v1/sources`",
+        "tags": ["sources"]
+      },
+      "post": {
+        "description": "Synchronous rather than a job. The client is waiting to use the source, the\nwork is one download and one compile, and the capability refusal has to\nreach the person who pressed install — a failed job they have to go and\nread reports a host gap as though it were a site problem, which ADR-0004\nnames as the worst outcome.",
+        "operationId": "installSource",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstalledSourceDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "description": "No such repository or entry"
+          },
+          "501": {
+            "description": "The source needs a capability this build lacks"
+          },
+          "502": {
+            "description": "The package could not be fetched"
+          }
+        },
+        "summary": "`POST /api/v1/sources` — install from a repository entry.",
+        "tags": ["sources"]
       }
     },
     "/sources/{id}": {
       "delete": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`DELETE /api/v1/sources/{id}`",
         "description": "> [!WARNING]\n> This cascades. Every series from this source and everything hanging off\n> them is removed from the database. Packaged files in the library are left\n> alone — they are the user's — but nothing will know how to find them\n> again.",
-        "operationId": "uninstall",
+        "operationId": "uninstallSource",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -813,61 +1570,53 @@
           "204": {
             "description": "Removed, or already absent"
           }
-        }
+        },
+        "summary": "`DELETE /api/v1/sources/{id}`",
+        "tags": ["sources"]
       }
     },
     "/sources/{id}/catalog": {
       "get": {
-        "tags": [
-          "catalog"
-        ],
-        "summary": "`GET /api/v1/sources/{id}/catalog`",
-        "operationId": "browse",
+        "operationId": "browseCatalog",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           },
           {
-            "name": "q",
-            "in": "query",
             "description": "Free-text search. Absent means the source's default listing.",
+            "in": "query",
+            "name": "q",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
           {
-            "name": "cursor",
             "in": "query",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogPage"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such source"
@@ -875,31 +1624,29 @@
           "502": {
             "description": "The source could not be reached"
           }
-        }
+        },
+        "summary": "`GET /api/v1/sources/{id}/catalog`",
+        "tags": ["catalog"]
       }
     },
     "/sources/{id}/catalog/{key}": {
       "get": {
-        "tags": [
-          "catalog"
-        ],
-        "summary": "`GET /api/v1/sources/{id}/catalog/{key}`",
-        "operationId": "details",
+        "operationId": "getCatalogItem",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           },
           {
-            "name": "key",
-            "in": "path",
             "description": "The source's own key for the series",
+            "in": "path",
+            "name": "key",
             "required": true,
             "schema": {
               "type": "string"
@@ -908,14 +1655,14 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogItemDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such source or series"
@@ -923,31 +1670,29 @@
           "502": {
             "description": "The source could not be reached"
           }
-        }
+        },
+        "summary": "`GET /api/v1/sources/{id}/catalog/{key}`",
+        "tags": ["catalog"]
       }
     },
     "/sources/{id}/catalog/{key}/chapters": {
       "get": {
-        "tags": [
-          "catalog"
-        ],
-        "summary": "`GET /api/v1/sources/{id}/catalog/{key}/chapters`",
-        "operationId": "chapters",
+        "operationId": "listCatalogChapters",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           },
           {
-            "name": "key",
-            "in": "path",
             "description": "The source's own key for the series",
+            "in": "path",
+            "name": "key",
             "required": true,
             "schema": {
               "type": "string"
@@ -956,17 +1701,17 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/ChapterDto"
-                  }
+                  },
+                  "type": "array"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such source or series"
@@ -974,94 +1719,88 @@
           "502": {
             "description": "The source could not be reached"
           }
-        }
+        },
+        "summary": "`GET /api/v1/sources/{id}/catalog/{key}/chapters`",
+        "tags": ["catalog"]
       }
     },
     "/sources/{id}/filters": {
       "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`GET /api/v1/sources/{id}/filters`",
-        "operationId": "filters",
+        "operationId": "getSourceFilters",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "The source's filter definitions",
             "content": {
               "application/json": {
                 "schema": {}
               }
-            }
+            },
+            "description": "The source's filter definitions"
           },
           "404": {
             "description": "No such source"
           }
-        }
+        },
+        "summary": "`GET /api/v1/sources/{id}/filters`",
+        "tags": ["sources"]
       }
     },
     "/sources/{id}/settings": {
       "get": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`GET /api/v1/sources/{id}/settings`",
         "description": "# Values are opaque, and that is not laziness\n\nA source's settings are read and written by its WASM module through the\n`defaults` host import, which postcard-encodes them. This server does not\nknow what a given key means to a given source — the shape is declared in\nthe package's `settings.json` and interpreted by the module.\n\nSo values go over the wire base64-encoded rather than decoded into JSON.\nDecoding would mean this server guessing at a schema it does not have, and\nguessing wrong writes a value the source then misreads.",
-        "operationId": "settings",
+        "operationId": "getSourceSettings",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SourceSettingsDto"
                 }
               }
-            }
+            },
+            "description": ""
           },
           "404": {
             "description": "No such source"
           }
-        }
+        },
+        "summary": "`GET /api/v1/sources/{id}/settings`",
+        "tags": ["sources"]
       },
       "put": {
-        "tags": [
-          "sources"
-        ],
-        "summary": "`PUT /api/v1/sources/{id}/settings`",
-        "operationId": "put_setting",
+        "operationId": "putSourceSetting",
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
             "description": "Source id",
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "format": "uuid",
+              "type": "string"
             }
           }
         ],
@@ -1085,971 +1824,24 @@
           "404": {
             "description": "No such source"
           }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "AddRequest": {
-        "type": "object",
-        "required": [
-          "source_id",
-          "external_key"
-        ],
-        "properties": {
-          "external_key": {
-            "type": "string"
-          },
-          "source_id": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
-      "CatalogItemDto": {
-        "type": "object",
-        "description": "A catalog result, which has no local identity.",
-        "required": [
-          "external_key",
-          "title",
-          "authors",
-          "artists",
-          "tags",
-          "status",
-          "content_rating",
-          "reading_direction"
-        ],
-        "properties": {
-          "artists": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "authors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "content_rating": {
-            "type": "string"
-          },
-          "cover_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "external_key": {
-            "type": "string",
-            "description": "The source's own key. This, plus the source id, is how it is added."
-          },
-          "manga_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid",
-            "description": "Set when this series is already in the library, so the UI can offer\n\"open\" rather than \"add\"."
-          },
-          "reading_direction": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "title": {
-            "type": "string"
-          },
-          "url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "CatalogPage": {
-        "type": "object",
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CatalogItemDto"
-            }
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "ChapterDto": {
-        "type": "object",
-        "required": [
-          "id",
-          "manga_id",
-          "external_key"
-        ],
-        "properties": {
-          "external_key": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "language": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "manga_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "number": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "float"
-          },
-          "published_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volume": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "float"
-          }
-        }
-      },
-      "DownloadRequest": {
-        "type": "object",
-        "required": [
-          "chapter_id"
-        ],
-        "properties": {
-          "chapter_id": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
-      "FollowDto": {
-        "type": "object",
-        "required": [
-          "id",
-          "manga_id",
-          "check_interval_secs",
-          "auto_download",
-          "created_at"
-        ],
-        "properties": {
-          "auto_download": {
-            "type": "boolean"
-          },
-          "check_interval_secs": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "last_checked_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "manga_id": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
-      "FollowRequest": {
-        "type": "object",
-        "required": [
-          "manga_id"
-        ],
-        "properties": {
-          "auto_download": {
-            "type": "boolean"
-          },
-          "check_interval_secs": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Defaults to six hours when absent."
-          },
-          "manga_id": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
-      "InstalledSourceDto": {
-        "type": "object",
-        "required": [
-          "id",
-          "repo_id",
-          "external_id",
-          "name",
-          "version",
-          "languages",
-          "required_capabilities"
-        ],
-        "properties": {
-          "declared_rate_limit": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RateLimitDto",
-                "description": "Requests per period the source asked for, if it has declared one."
-              }
-            ]
-          },
-          "external_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "languages": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "repo_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "required_capabilities": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          }
-        }
-      },
-      "JobDto": {
-        "type": "object",
-        "required": [
-          "id",
-          "kind",
-          "state",
-          "priority",
-          "run_at",
-          "attempts",
-          "max_attempts",
-          "created_at"
-        ],
-        "properties": {
-          "attempts": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "last_error": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "max_attempts": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "priority": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "run_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "state": {
-            "type": "string"
-          }
-        }
-      },
-      "MangaDto": {
-        "type": "object",
-        "required": [
-          "id",
-          "source_id",
-          "external_key",
-          "title",
-          "authors",
-          "artists",
-          "tags",
-          "status",
-          "content_rating",
-          "reading_direction",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "artists": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "authors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "content_rating": {
-            "type": "string"
-          },
-          "cover_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "external_key": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "language": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reading_direction": {
-            "type": "string"
-          },
-          "source_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "status": {
-            "type": "string"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "title": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "Paged_ChapterDto": {
-        "type": "object",
-        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "manga_id",
-                "external_key"
-              ],
-              "properties": {
-                "external_key": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "language": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "manga_id": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "number": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "float"
-                },
-                "published_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time"
-                },
-                "title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "volume": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "float"
-                }
-              }
-            }
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "Paged_FollowDto": {
-        "type": "object",
-        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "manga_id",
-                "check_interval_secs",
-                "auto_download",
-                "created_at"
-              ],
-              "properties": {
-                "auto_download": {
-                  "type": "boolean"
-                },
-                "check_interval_secs": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "last_checked_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time"
-                },
-                "manga_id": {
-                  "type": "string",
-                  "format": "uuid"
-                }
-              }
-            }
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "Paged_JobDto": {
-        "type": "object",
-        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "kind",
-                "state",
-                "priority",
-                "run_at",
-                "attempts",
-                "max_attempts",
-                "created_at"
-              ],
-              "properties": {
-                "attempts": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "kind": {
-                  "type": "string"
-                },
-                "last_error": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "max_attempts": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "priority": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "run_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "state": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "Paged_MangaDto": {
-        "type": "object",
-        "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
-        "required": [
-          "items"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "source_id",
-                "external_key",
-                "title",
-                "authors",
-                "artists",
-                "tags",
-                "status",
-                "content_rating",
-                "reading_direction",
-                "created_at",
-                "updated_at"
-              ],
-              "properties": {
-                "artists": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "authors": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "content_rating": {
-                  "type": "string"
-                },
-                "cover_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "external_key": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "language": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "reading_direction": {
-                  "type": "string"
-                },
-                "source_id": {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                "status": {
-                  "type": "string"
-                },
-                "tags": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "title": {
-                  "type": "string"
-                },
-                "updated_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              }
-            }
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RateLimitDto": {
-        "type": "object",
-        "required": [
-          "permits",
-          "period_seconds"
-        ],
-        "properties": {
-          "period_seconds": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "permits": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          }
-        }
-      },
-      "SettingRequest": {
-        "type": "object",
-        "required": [
-          "key"
-        ],
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "value": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Base64 of the postcard-encoded value. Absent clears the setting."
-          }
-        }
-      },
-      "SourceEntryDto": {
-        "type": "object",
-        "required": [
-          "repo_id",
-          "external_id",
-          "name",
-          "version",
-          "languages",
-          "content_rating"
-        ],
-        "properties": {
-          "base_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "content_rating": {
-            "type": "string"
-          },
-          "external_id": {
-            "type": "string"
-          },
-          "icon_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "installed_version": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Absent when the entry is not installed.",
-            "minimum": 0
-          },
-          "languages": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "repo_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          }
-        }
-      },
-      "SourceRepoDto": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "url",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "last_refreshed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "name": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        }
-      },
-      "SourceRepoRequest": {
-        "type": "object",
-        "required": [
-          "name",
-          "url"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "description": "The index URL, such as `https://example.test/index.min.json`."
-          }
-        }
-      },
-      "SourceSettingDto": {
-        "type": "object",
-        "required": [
-          "key"
-        ],
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "value": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Base64 of the postcard-encoded value, or absent when unset."
-          }
-        }
-      },
-      "SourceSettingsDto": {
-        "type": "object",
-        "required": [
-          "declared",
-          "values"
-        ],
-        "properties": {
-          "declared": {
-            "description": "The package's `settings.json`, verbatim. A client renders it; this\nserver does not interpret it."
-          },
-          "values": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SourceSettingDto"
-            },
-            "description": "What the source has actually stored, which is not necessarily what the\ndeclaration lists: a source writes keys of its own choosing."
-          }
-        }
-      },
-      "TriggerRequest": {
-        "type": "object",
-        "required": [
-          "kind"
-        ],
-        "properties": {
-          "kind": {
-            "type": "string",
-            "description": "One of `update_sources`, `prune_jobs`, `prune_sessions`,\n`reconcile_library`."
-          }
-        }
-      }
-    },
-    "securitySchemes": {
-      "session": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "id",
-        "description": "An opaque, signed, HttpOnly session cookie issued by `GET /api/v1/auth/callback`. There is no bearer token: tokens from the identity provider never reach the browser."
+        },
+        "summary": "`PUT /api/v1/sources/{id}/settings`",
+        "tags": ["sources"]
       }
     }
   },
   "tags": [
     {
-      "name": "library",
-      "description": "Series and chapters already in the library"
+      "description": "Series and chapters already in the library",
+      "name": "library"
     },
     {
-      "name": "follows",
-      "description": "Series watched for new chapters"
+      "description": "Series watched for new chapters",
+      "name": "follows"
     },
     {
-      "name": "jobs",
-      "description": "Background work"
+      "description": "Background work",
+      "name": "jobs"
     }
   ]
 }

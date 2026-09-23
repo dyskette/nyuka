@@ -18,6 +18,7 @@ use crate::state::AppState;
 
 /// `GET /api/v1/manga`
 #[utoipa::path(
+    operation_id = "listLibrary",
     get,
     path = "/manga",
     tag = "library",
@@ -33,6 +34,7 @@ pub async fn list(
 
 /// `GET /api/v1/manga/{id}`
 #[utoipa::path(
+    operation_id = "getManga",
     get,
     path = "/manga/{id}",
     tag = "library",
@@ -56,6 +58,7 @@ pub async fn get(
 
 /// `GET /api/v1/manga/{id}/chapters`
 #[utoipa::path(
+    operation_id = "listMangaChapters",
     get,
     path = "/manga/{id}/chapters",
     tag = "library",
@@ -89,6 +92,7 @@ pub async fn chapters(
 
 /// `GET /api/v1/chapters/{id}`
 #[utoipa::path(
+    operation_id = "getChapter",
     get,
     path = "/chapters/{id}",
     tag = "library",

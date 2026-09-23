@@ -60,6 +60,7 @@ fn field_error(field: &str, message: &str) -> ApiError {
 
 /// `GET /api/v1/source-repos`
 #[utoipa::path(
+    operation_id = "listSourceRepos",
     get,
     path = "/source-repos",
     tag = "sources",
@@ -80,6 +81,7 @@ pub async fn list_repos(State(state): State<Arc<AppState>>) -> ApiResult<Json<Ve
 
 /// `POST /api/v1/source-repos`
 #[utoipa::path(
+    operation_id = "addSourceRepo",
     post,
     path = "/source-repos",
     tag = "sources",
@@ -113,6 +115,7 @@ pub async fn add_repo(
 
 /// `DELETE /api/v1/source-repos/{id}`
 #[utoipa::path(
+    operation_id = "deleteSourceRepo",
     delete,
     path = "/source-repos/{id}",
     tag = "sources",
@@ -132,6 +135,7 @@ pub async fn delete_repo(
 
 /// `POST /api/v1/source-repos/{id}/refresh`
 #[utoipa::path(
+    operation_id = "refreshSourceRepo",
     post,
     path = "/source-repos/{id}/refresh",
     tag = "sources",
@@ -182,6 +186,7 @@ pub async fn refresh_repo(
 
 /// `GET /api/v1/source-repos/{id}/available`
 #[utoipa::path(
+    operation_id = "listAvailableSources",
     get,
     path = "/source-repos/{id}/available",
     tag = "sources",
@@ -226,6 +231,7 @@ pub async fn available(
 
 /// `GET /api/v1/sources`
 #[utoipa::path(
+    operation_id = "listSources",
     get,
     path = "/sources",
     tag = "sources",
@@ -258,6 +264,7 @@ pub struct InstallRequest {
 /// read reports a host gap as though it were a site problem, which ADR-0004
 /// names as the worst outcome.
 #[utoipa::path(
+    operation_id = "installSource",
     post,
     path = "/sources",
     tag = "sources",
@@ -297,6 +304,7 @@ pub async fn install(
 /// > alone — they are the user's — but nothing will know how to find them
 /// > again.
 #[utoipa::path(
+    operation_id = "uninstallSource",
     delete,
     path = "/sources/{id}",
     tag = "sources",
@@ -313,6 +321,7 @@ pub async fn uninstall(
 
 /// `GET /api/v1/sources/{id}/filters`
 #[utoipa::path(
+    operation_id = "getSourceFilters",
     get,
     path = "/sources/{id}/filters",
     tag = "sources",
@@ -347,6 +356,7 @@ pub async fn filters(
 /// Decoding would mean this server guessing at a schema it does not have, and
 /// guessing wrong writes a value the source then misreads.
 #[utoipa::path(
+    operation_id = "getSourceSettings",
     get,
     path = "/sources/{id}/settings",
     tag = "sources",
@@ -415,6 +425,7 @@ pub const MAX_SETTING_BYTES: usize = 64 * 1024;
 
 /// `PUT /api/v1/sources/{id}/settings`
 #[utoipa::path(
+    operation_id = "putSourceSetting",
     put,
     path = "/sources/{id}/settings",
     tag = "sources",

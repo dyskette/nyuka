@@ -44,6 +44,7 @@ pub struct DownloadRequest {
 /// `Idempotency-Key` header is accepted and narrows that further, which is
 /// what makes a retried request from a flaky network safe.
 #[utoipa::path(
+    operation_id = "requestDownload",
     post,
     path = "/downloads",
     tag = "downloads",
@@ -111,6 +112,7 @@ pub async fn request(
 
 /// `GET /api/v1/downloads/{chapter_id}/file`
 #[utoipa::path(
+    operation_id = "getChapterFile",
     get,
     path = "/downloads/{chapter_id}/file",
     tag = "downloads",

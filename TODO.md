@@ -138,10 +138,16 @@ for.
 
 Not started. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 
-- [ ] Vite 8 / Rolldown scaffold, TanStack Router and Query
-- [ ] Generated client from `openapi.json`
+- [x] Vite 8 / Rolldown scaffold, TanStack Router and Query
+- [x] Typed API client, problem+json handling, i18n negotiation
+- [x] The library grid, reading real data through a route loader
+- [ ] The rest of the screens: browse, downloads, jobs, sources, settings
+- [ ] Command palette (`cmdk`), from the mockup
+- [x] Generated client from `openapi.json`, committed and checked by CI
 - [ ] The reader
-- [ ] Lingui catalogs
+- [x] Lingui catalogs wired, English and Spanish complete
+- [ ] Virtualized list for large libraries (TanStack Virtual)
+- [ ] SSE provider and the reconnect invalidation set
 - [ ] Playwright stack with a stub OIDC container
 
 ## Documentation

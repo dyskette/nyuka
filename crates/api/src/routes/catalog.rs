@@ -80,6 +80,7 @@ pub struct CatalogQuery {
 
 /// `GET /api/v1/sources/{id}/catalog`
 #[utoipa::path(
+    operation_id = "browseCatalog",
     get,
     path = "/sources/{id}/catalog",
     tag = "catalog",
@@ -119,6 +120,7 @@ pub async fn browse(
 
 /// `GET /api/v1/sources/{id}/catalog/{key}`
 #[utoipa::path(
+    operation_id = "getCatalogItem",
     get,
     path = "/sources/{id}/catalog/{key}",
     tag = "catalog",
@@ -164,6 +166,7 @@ pub struct AddRequest {
 /// the source, never from the client. Accepting a client's version would let
 /// anyone write any title into the library.
 #[utoipa::path(
+    operation_id = "addMangaToLibrary",
     post,
     path = "/manga",
     tag = "catalog",
@@ -228,6 +231,7 @@ pub async fn add(
 
 /// `GET /api/v1/sources/{id}/catalog/{key}/chapters`
 #[utoipa::path(
+    operation_id = "listCatalogChapters",
     get,
     path = "/sources/{id}/catalog/{key}/chapters",
     tag = "catalog",

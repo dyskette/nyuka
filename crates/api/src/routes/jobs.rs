@@ -25,6 +25,7 @@ pub struct JobQuery {
 
 /// `GET /api/v1/jobs`
 #[utoipa::path(
+    operation_id = "listJobs",
     get,
     path = "/jobs",
     tag = "jobs",
@@ -84,6 +85,7 @@ pub struct TriggerRequest {
 /// dependency in prose: it survives exactly until a column changes, and it
 /// bypasses every validation the enqueue path performs.
 #[utoipa::path(
+    operation_id = "triggerJob",
     post,
     path = "/jobs",
     tag = "jobs",
@@ -149,6 +151,7 @@ pub async fn trigger(
 
 /// `GET /api/v1/jobs/{id}`
 #[utoipa::path(
+    operation_id = "getJob",
     get,
     path = "/jobs/{id}",
     tag = "jobs",
@@ -176,6 +179,7 @@ pub async fn get(
 /// interrupt the attempt in flight. That is an honest limit rather than an
 /// oversight — see ADR-0003's open question on cancellation semantics.
 #[utoipa::path(
+    operation_id = "cancelJob",
     post,
     path = "/jobs/{id}/cancel",
     tag = "jobs",
@@ -209,6 +213,7 @@ pub async fn cancel(
 
 /// `POST /api/v1/jobs/{id}/retry`
 #[utoipa::path(
+    operation_id = "retryJob",
     post,
     path = "/jobs/{id}/retry",
     tag = "jobs",

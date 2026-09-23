@@ -87,6 +87,75 @@ mod tests {
         }
     }
 
+    /// Every operation needs a unique id, and nothing enforces that by
+    /// construction.
+    ///
+    /// utoipa derives `operationId` from the Rust function name, so four
+    /// handlers all called `list` in different modules produced four
+    /// operations called `list`. `openapi-typescript` keys its generated
+    /// types by operation id, so the collision silently gave `GET /manga` the
+    /// response type of `GET /follows` — a typed client confidently returning
+    /// the wrong shape, which is worse than an untyped one.
+    ///
+    /// It was invisible until the first consumer was written. This is the
+    /// check that makes it visible at the point the collision is introduced.
+    #[test]
+    fn every_operation_id_is_unique() {
+        let doc = serde_json::to_value(crate::openapi_document()).expect("serialize");
+        let paths = doc["paths"].as_object().expect("paths");
+
+        let mut seen: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
+        for (path, item) in paths {
+            for (method, operation) in item.as_object().expect("path item") {
+                let Some(id) = operation.get("operationId").and_then(|v| v.as_str()) else {
+                    // Not a method entry — `parameters` and friends sit
+                    // alongside them.
+                    continue;
+                };
+                seen.entry(id.to_string())
+                    .or_default()
+                    .push(format!("{} {path}", method.to_uppercase()));
+            }
+        }
+
+        let collisions: Vec<_> = seen.iter().filter(|(_, at)| at.len() > 1).collect();
+        assert!(
+            collisions.is_empty(),
+            "operation ids collide, which makes the generated client return the \
+             wrong type for a route: {collisions:?}"
+        );
+        assert!(
+            seen.len() > 20,
+            "only {} operations were checked",
+            seen.len()
+        );
+    }
+
+    /// Ids are part of the API contract: they name the methods on every
+    /// generated client. Deriving them from a Rust function name means
+    /// renaming a private function is a breaking change to that client.
+    #[test]
+    fn operation_ids_do_not_leak_rust_function_names() {
+        let doc = serde_json::to_value(crate::openapi_document()).expect("serialize");
+        let paths = doc["paths"].as_object().expect("paths");
+
+        for (path, item) in paths {
+            for (method, operation) in item.as_object().expect("path item") {
+                let Some(id) = operation.get("operationId").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                assert!(
+                    !id.contains('_'),
+                    "{} {path} has operation id `{id}`; ids are camelCase and \
+                     explicit, not derived from a function name",
+                    method.to_uppercase()
+                );
+            }
+        }
+    }
+
     #[test]
     fn the_document_is_openapi_3_1() {
         let rendered = serde_json::to_value(ApiDoc::openapi()).expect("serialize");

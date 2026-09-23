@@ -352,7 +352,11 @@ fn documented_routes() -> OpenApiRouter<Arc<AppState>> {
         .routes(utoipa_axum::routes!(routes::sources::delete_repo))
         .routes(utoipa_axum::routes!(routes::sources::refresh_repo))
         .routes(utoipa_axum::routes!(routes::sources::available))
-        .routes(utoipa_axum::routes!(routes::sources::list))
+        // Both live on `/sources`, so they belong in one `routes!` call.
+        .routes(utoipa_axum::routes!(
+            routes::sources::list,
+            routes::sources::install
+        ))
         // `POST /manga` sits with the catalog rather than with the library
         // routes because it is how a catalog entry becomes a library entry.
         .routes(utoipa_axum::routes!(routes::catalog::add))
