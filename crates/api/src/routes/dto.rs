@@ -15,7 +15,7 @@
 
 use nyuka_domain::model::{
     Chapter, ContentRating, Cursor, Follow, InstalledSource, Job, JobKind, JobState, Manga,
-    MangaStatus, Page, ReadingDirection, SourceEntry, SourceRepo,
+    MangaStatus, MangaSummary, Page, ReadingDirection, SourceEntry, SourceRepo,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -124,6 +124,29 @@ impl From<Manga> for MangaDto {
             reading_direction: direction_name(m.direction).into(),
             created_at: m.created_at,
             updated_at: m.updated_at,
+        }
+    }
+}
+
+/// A library entry with the numbers the list view shows.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MangaSummaryDto {
+    #[serde(flatten)]
+    pub manga: MangaDto,
+    pub source_name: String,
+    pub chapter_count: i64,
+    /// Chapters with a file in the library. The difference from
+    /// `chapter_count` is what the progress column shows.
+    pub downloaded_count: i64,
+}
+
+impl From<MangaSummary> for MangaSummaryDto {
+    fn from(s: MangaSummary) -> Self {
+        Self {
+            manga: s.manga.into(),
+            source_name: s.source_name,
+            chapter_count: s.chapter_count,
+            downloaded_count: s.downloaded_count,
         }
     }
 }

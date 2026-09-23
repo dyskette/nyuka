@@ -11,7 +11,10 @@
             "type": "string"
           }
         },
-        "required": ["source_id", "external_key"],
+        "required": [
+          "source_id",
+          "external_key"
+        ],
         "type": "object"
       },
       "CatalogItemDto": {
@@ -33,10 +36,16 @@
             "type": "string"
           },
           "cover_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "external_key": {
             "description": "The source's own key. This, plus the source id, is how it is added.",
@@ -45,7 +54,10 @@
           "manga_id": {
             "description": "Set when this series is already in the library, so the UI can offer\n\"open\" rather than \"add\".",
             "format": "uuid",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "reading_direction": {
             "type": "string"
@@ -63,7 +75,10 @@
             "type": "string"
           },
           "url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -87,10 +102,15 @@
             "type": "array"
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "type": "object"
       },
       "ChapterDto": {
@@ -103,7 +123,10 @@
             "type": "string"
           },
           "language": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "manga_id": {
             "format": "uuid",
@@ -111,21 +134,37 @@
           },
           "number": {
             "format": "float",
-            "type": ["number", "null"]
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "published_at": {
             "format": "date-time",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "title": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "volume": {
             "format": "float",
-            "type": ["number", "null"]
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
-        "required": ["id", "manga_id", "external_key"],
+        "required": [
+          "id",
+          "manga_id",
+          "external_key"
+        ],
         "type": "object"
       },
       "DownloadRequest": {
@@ -135,7 +174,9 @@
             "type": "string"
           }
         },
-        "required": ["chapter_id"],
+        "required": [
+          "chapter_id"
+        ],
         "type": "object"
       },
       "FollowDto": {
@@ -157,14 +198,23 @@
           },
           "last_checked_at": {
             "format": "date-time",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "manga_id": {
             "format": "uuid",
             "type": "string"
           }
         },
-        "required": ["id", "manga_id", "check_interval_secs", "auto_download", "created_at"],
+        "required": [
+          "id",
+          "manga_id",
+          "check_interval_secs",
+          "auto_download",
+          "created_at"
+        ],
         "type": "object"
       },
       "FollowRequest": {
@@ -175,14 +225,19 @@
           "check_interval_secs": {
             "description": "Defaults to six hours when absent.",
             "format": "int32",
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "manga_id": {
             "format": "uuid",
             "type": "string"
           }
         },
-        "required": ["manga_id"],
+        "required": [
+          "manga_id"
+        ],
         "type": "object"
       },
       "InstallRequest": {
@@ -196,7 +251,10 @@
             "type": "string"
           }
         },
-        "required": ["repo_id", "external_id"],
+        "required": [
+          "repo_id",
+          "external_id"
+        ],
         "type": "object"
       },
       "InstalledSourceDto": {
@@ -273,7 +331,10 @@
             "type": "string"
           },
           "last_error": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "max_attempts": {
             "format": "int32",
@@ -321,14 +382,20 @@
             "type": "string"
           },
           "cover_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "created_at": {
             "format": "date-time",
             "type": "string"
           },
           "description": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "external_key": {
             "type": "string"
@@ -338,7 +405,10 @@
             "type": "string"
           },
           "language": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "reading_direction": {
             "type": "string"
@@ -364,7 +434,10 @@
             "type": "string"
           },
           "url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -383,6 +456,36 @@
         ],
         "type": "object"
       },
+      "MangaSummaryDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MangaDto"
+          },
+          {
+            "properties": {
+              "chapter_count": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "downloaded_count": {
+                "description": "Chapters with a file in the library. The difference from\n`chapter_count` is what the progress column shows.",
+                "format": "int64",
+                "type": "integer"
+              },
+              "source_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source_name",
+              "chapter_count",
+              "downloaded_count"
+            ],
+            "type": "object"
+          }
+        ],
+        "description": "A library entry with the numbers the list view shows."
+      },
       "Paged_ChapterDto": {
         "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
         "properties": {
@@ -397,7 +500,10 @@
                   "type": "string"
                 },
                 "language": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "manga_id": {
                   "format": "uuid",
@@ -405,30 +511,51 @@
                 },
                 "number": {
                   "format": "float",
-                  "type": ["number", "null"]
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "published_at": {
                   "format": "date-time",
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "title": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "volume": {
                   "format": "float",
-                  "type": ["number", "null"]
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
-              "required": ["id", "manga_id", "external_key"],
+              "required": [
+                "id",
+                "manga_id",
+                "external_key"
+              ],
               "type": "object"
             },
             "type": "array"
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "type": "object"
       },
       "Paged_FollowDto": {
@@ -454,23 +581,37 @@
                 },
                 "last_checked_at": {
                   "format": "date-time",
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "manga_id": {
                   "format": "uuid",
                   "type": "string"
                 }
               },
-              "required": ["id", "manga_id", "check_interval_secs", "auto_download", "created_at"],
+              "required": [
+                "id",
+                "manga_id",
+                "check_interval_secs",
+                "auto_download",
+                "created_at"
+              ],
               "type": "object"
             },
             "type": "array"
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "type": "object"
       },
       "Paged_JobDto": {
@@ -495,7 +636,10 @@
                   "type": "string"
                 },
                 "last_error": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "max_attempts": {
                   "format": "int32",
@@ -528,103 +672,63 @@
             "type": "array"
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "type": "object"
       },
-      "Paged_MangaDto": {
+      "Paged_MangaSummaryDto": {
         "description": "One page of results.\n\n`next_cursor` is opaque and is the only supported way to ask for the next\npage. Offsets are deliberately absent: they shift under inserts, and a\nlibrary that gains a chapter mid-scroll would skip or repeat one.",
         "properties": {
           "items": {
             "items": {
-              "properties": {
-                "artists": {
-                  "items": {
-                    "type": "string"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/MangaDto"
+                },
+                {
+                  "properties": {
+                    "chapter_count": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "downloaded_count": {
+                      "description": "Chapters with a file in the library. The difference from\n`chapter_count` is what the progress column shows.",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "source_name": {
+                      "type": "string"
+                    }
                   },
-                  "type": "array"
-                },
-                "authors": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "content_rating": {
-                  "type": "string"
-                },
-                "cover_url": {
-                  "type": ["string", "null"]
-                },
-                "created_at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "description": {
-                  "type": ["string", "null"]
-                },
-                "external_key": {
-                  "type": "string"
-                },
-                "id": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "language": {
-                  "type": ["string", "null"]
-                },
-                "reading_direction": {
-                  "type": "string"
-                },
-                "source_id": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                "title": {
-                  "type": "string"
-                },
-                "updated_at": {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                "url": {
-                  "type": ["string", "null"]
+                  "required": [
+                    "source_name",
+                    "chapter_count",
+                    "downloaded_count"
+                  ],
+                  "type": "object"
                 }
-              },
-              "required": [
-                "id",
-                "source_id",
-                "external_key",
-                "title",
-                "authors",
-                "artists",
-                "tags",
-                "status",
-                "content_rating",
-                "reading_direction",
-                "created_at",
-                "updated_at"
               ],
-              "type": "object"
+              "description": "A library entry with the numbers the list view shows."
             },
             "type": "array"
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "type": "object"
       },
       "RateLimitDto": {
@@ -640,7 +744,10 @@
             "type": "integer"
           }
         },
-        "required": ["permits", "period_seconds"],
+        "required": [
+          "permits",
+          "period_seconds"
+        ],
         "type": "object"
       },
       "SettingRequest": {
@@ -650,16 +757,24 @@
           },
           "value": {
             "description": "Base64 of the postcard-encoded value. Absent clears the setting.",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["key"],
+        "required": [
+          "key"
+        ],
         "type": "object"
       },
       "SourceEntryDto": {
         "properties": {
           "base_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "content_rating": {
             "type": "string"
@@ -668,13 +783,19 @@
             "type": "string"
           },
           "icon_url": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "installed_version": {
             "description": "Absent when the entry is not installed.",
             "format": "int32",
             "minimum": 0,
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "languages": {
             "items": {
@@ -695,7 +816,14 @@
             "type": "integer"
           }
         },
-        "required": ["repo_id", "external_id", "name", "version", "languages", "content_rating"],
+        "required": [
+          "repo_id",
+          "external_id",
+          "name",
+          "version",
+          "languages",
+          "content_rating"
+        ],
         "type": "object"
       },
       "SourceRepoDto": {
@@ -710,7 +838,10 @@
           },
           "last_refreshed_at": {
             "format": "date-time",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
@@ -719,7 +850,12 @@
             "type": "string"
           }
         },
-        "required": ["id", "name", "url", "created_at"],
+        "required": [
+          "id",
+          "name",
+          "url",
+          "created_at"
+        ],
         "type": "object"
       },
       "SourceRepoRequest": {
@@ -732,7 +868,10 @@
             "type": "string"
           }
         },
-        "required": ["name", "url"],
+        "required": [
+          "name",
+          "url"
+        ],
         "type": "object"
       },
       "SourceSettingDto": {
@@ -742,10 +881,15 @@
           },
           "value": {
             "description": "Base64 of the postcard-encoded value, or absent when unset.",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["key"],
+        "required": [
+          "key"
+        ],
         "type": "object"
       },
       "SourceSettingsDto": {
@@ -761,7 +905,10 @@
             "type": "array"
           }
         },
-        "required": ["declared", "values"],
+        "required": [
+          "declared",
+          "values"
+        ],
         "type": "object"
       },
       "TriggerRequest": {
@@ -771,7 +918,9 @@
             "type": "string"
           }
         },
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "type": "object"
       }
     },
@@ -825,7 +974,9 @@
           }
         },
         "summary": "`GET /api/v1/chapters/{id}`",
-        "tags": ["library"]
+        "tags": [
+          "library"
+        ]
       }
     },
     "/downloads": {
@@ -854,7 +1005,9 @@
           }
         },
         "summary": "`POST /api/v1/downloads`",
-        "tags": ["downloads"]
+        "tags": [
+          "downloads"
+        ]
       }
     },
     "/downloads/{chapter_id}/file": {
@@ -893,7 +1046,9 @@
           }
         },
         "summary": "`GET /api/v1/downloads/{chapter_id}/file`",
-        "tags": ["downloads"]
+        "tags": [
+          "downloads"
+        ]
       }
     },
     "/follows": {
@@ -906,7 +1061,10 @@
             "name": "cursor",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -923,7 +1081,9 @@
           }
         },
         "summary": "`GET /api/v1/follows`",
-        "tags": ["follows"]
+        "tags": [
+          "follows"
+        ]
       },
       "put": {
         "description": "`PUT` rather than `POST` because the operation is keyed on `manga_id` and\nis idempotent: following an already-followed series updates it instead of\ncreating a second follow, which is what a user pressing the button twice\nexpects.",
@@ -957,7 +1117,9 @@
           }
         },
         "summary": "`PUT /api/v1/follows` — follow a series, or change how it is followed.",
-        "tags": ["follows"]
+        "tags": [
+          "follows"
+        ]
       }
     },
     "/follows/{id}": {
@@ -981,7 +1143,9 @@
           }
         },
         "summary": "`DELETE /api/v1/follows/{id}`",
-        "tags": ["follows"]
+        "tags": [
+          "follows"
+        ]
       },
       "get": {
         "operationId": "getFollow",
@@ -1013,7 +1177,9 @@
           }
         },
         "summary": "`GET /api/v1/follows/{id}`",
-        "tags": ["follows"]
+        "tags": [
+          "follows"
+        ]
       }
     },
     "/follows/{id}/check-now": {
@@ -1040,7 +1206,9 @@
           }
         },
         "summary": "`POST /api/v1/follows/{id}/check-now`",
-        "tags": ["follows"]
+        "tags": [
+          "follows"
+        ]
       }
     },
     "/jobs": {
@@ -1053,7 +1221,10 @@
             "name": "state",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
@@ -1061,7 +1232,10 @@
             "name": "cursor",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1081,7 +1255,9 @@
           }
         },
         "summary": "`GET /api/v1/jobs`",
-        "tags": ["jobs"]
+        "tags": [
+          "jobs"
+        ]
       },
       "post": {
         "description": "Exists because the alternative is a runbook that tells an operator to\n`INSERT` into the `job` table. A documented raw insert is a schema\ndependency in prose: it survives exactly until a column changes, and it\nbypasses every validation the enqueue path performs.",
@@ -1105,7 +1281,9 @@
           }
         },
         "summary": "`POST /api/v1/jobs` — queue a maintenance job.",
-        "tags": ["jobs"]
+        "tags": [
+          "jobs"
+        ]
       }
     },
     "/jobs/{id}": {
@@ -1139,7 +1317,9 @@
           }
         },
         "summary": "`GET /api/v1/jobs/{id}`",
-        "tags": ["jobs"]
+        "tags": [
+          "jobs"
+        ]
       }
     },
     "/jobs/{id}/cancel": {
@@ -1177,7 +1357,9 @@
           }
         },
         "summary": "`POST /api/v1/jobs/{id}/cancel`",
-        "tags": ["jobs"]
+        "tags": [
+          "jobs"
+        ]
       }
     },
     "/jobs/{id}/retry": {
@@ -1207,7 +1389,9 @@
           }
         },
         "summary": "`POST /api/v1/jobs/{id}/retry`",
-        "tags": ["jobs"]
+        "tags": [
+          "jobs"
+        ]
       }
     },
     "/manga": {
@@ -1220,7 +1404,10 @@
             "name": "cursor",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1229,7 +1416,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Paged_MangaDto"
+                  "$ref": "#/components/schemas/Paged_MangaSummaryDto"
                 }
               }
             },
@@ -1237,7 +1424,9 @@
           }
         },
         "summary": "`GET /api/v1/manga`",
-        "tags": ["library"]
+        "tags": [
+          "library"
+        ]
       },
       "post": {
         "description": "The body names a source and a key, not a series: the metadata comes from\nthe source, never from the client. Accepting a client's version would let\nanyone write any title into the library.",
@@ -1271,7 +1460,9 @@
           }
         },
         "summary": "`POST /api/v1/manga` — add a catalog entry to the library.",
-        "tags": ["catalog"]
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/manga/{id}": {
@@ -1305,7 +1496,9 @@
           }
         },
         "summary": "`GET /api/v1/manga/{id}`",
-        "tags": ["library"]
+        "tags": [
+          "library"
+        ]
       }
     },
     "/manga/{id}/chapters": {
@@ -1328,7 +1521,10 @@
             "name": "cursor",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1348,7 +1544,9 @@
           }
         },
         "summary": "`GET /api/v1/manga/{id}/chapters`",
-        "tags": ["library"]
+        "tags": [
+          "library"
+        ]
       }
     },
     "/source-repos": {
@@ -1370,7 +1568,9 @@
           }
         },
         "summary": "`GET /api/v1/source-repos`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       },
       "post": {
         "operationId": "addSourceRepo",
@@ -1400,7 +1600,9 @@
           }
         },
         "summary": "`POST /api/v1/source-repos`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/source-repos/{id}": {
@@ -1424,7 +1626,9 @@
           }
         },
         "summary": "`DELETE /api/v1/source-repos/{id}`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/source-repos/{id}/available": {
@@ -1461,7 +1665,9 @@
           }
         },
         "summary": "`GET /api/v1/source-repos/{id}/available`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/source-repos/{id}/refresh": {
@@ -1488,7 +1694,9 @@
           }
         },
         "summary": "`POST /api/v1/source-repos/{id}/refresh`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/sources": {
@@ -1510,7 +1718,9 @@
           }
         },
         "summary": "`GET /api/v1/sources`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       },
       "post": {
         "description": "Synchronous rather than a job. The client is waiting to use the source, the\nwork is one download and one compile, and the capability refusal has to\nreach the person who pressed install — a failed job they have to go and\nread reports a host gap as though it were a site problem, which ADR-0004\nnames as the worst outcome.",
@@ -1547,7 +1757,9 @@
           }
         },
         "summary": "`POST /api/v1/sources` — install from a repository entry.",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/sources/{id}": {
@@ -1572,7 +1784,9 @@
           }
         },
         "summary": "`DELETE /api/v1/sources/{id}`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/sources/{id}/catalog": {
@@ -1595,7 +1809,10 @@
             "name": "q",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
@@ -1603,7 +1820,10 @@
             "name": "cursor",
             "required": false,
             "schema": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -1626,7 +1846,9 @@
           }
         },
         "summary": "`GET /api/v1/sources/{id}/catalog`",
-        "tags": ["catalog"]
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/sources/{id}/catalog/{key}": {
@@ -1672,7 +1894,9 @@
           }
         },
         "summary": "`GET /api/v1/sources/{id}/catalog/{key}`",
-        "tags": ["catalog"]
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/sources/{id}/catalog/{key}/chapters": {
@@ -1721,7 +1945,9 @@
           }
         },
         "summary": "`GET /api/v1/sources/{id}/catalog/{key}/chapters`",
-        "tags": ["catalog"]
+        "tags": [
+          "catalog"
+        ]
       }
     },
     "/sources/{id}/filters": {
@@ -1753,7 +1979,9 @@
           }
         },
         "summary": "`GET /api/v1/sources/{id}/filters`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/sources/{id}/settings": {
@@ -1788,7 +2016,9 @@
           }
         },
         "summary": "`GET /api/v1/sources/{id}/settings`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       },
       "put": {
         "operationId": "putSourceSetting",
@@ -1826,7 +2056,9 @@
           }
         },
         "summary": "`PUT /api/v1/sources/{id}/settings`",
-        "tags": ["sources"]
+        "tags": [
+          "sources"
+        ]
       }
     }
   },

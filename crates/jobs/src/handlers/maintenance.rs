@@ -259,6 +259,15 @@ mod tests {
         async fn upsert(&self, _manga: &Manga) -> Result<MangaId> {
             Err(DomainError::NotFound)
         }
+        async fn list_summaries(
+            &self,
+            _cursor: Option<&Cursor>,
+        ) -> Result<nyuka_domain::model::Page<nyuka_domain::model::MangaSummary>> {
+            Ok(nyuka_domain::model::Page {
+                items: vec![],
+                next: None,
+            })
+        }
         async fn list(&self, _cursor: Option<&Cursor>) -> Result<nyuka_domain::model::Page<Manga>> {
             Ok(nyuka_domain::model::Page {
                 items: self.0.clone(),

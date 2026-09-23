@@ -339,7 +339,15 @@ export interface paths {
         /** `GET /api/v1/sources` */
         get: operations["listSources"];
         put?: never;
-        post?: never;
+        /**
+         * `POST /api/v1/sources` — install from a repository entry.
+         * @description Synchronous rather than a job. The client is waiting to use the source, the
+         *     work is one download and one compile, and the capability refusal has to
+         *     reach the person who pressed install — a failed job they have to go and
+         *     read reports a host gap as though it were a site problem, which ADR-0004
+         *     names as the worst outcome.
+         */
+        post: operations["installSource"];
         delete?: never;
         options?: never;
         head?: never;
@@ -544,6 +552,12 @@ export interface components {
             /** Format: uuid */
             manga_id: string;
         };
+        InstallRequest: {
+            /** @description The source's own id, as the repository index lists it. */
+            external_id: string;
+            /** Format: uuid */
+            repo_id: string;
+        };
         InstalledSourceDto: {
             declared_rate_limit?: null | components["schemas"]["RateLimitDto"];
             external_id: string;
@@ -595,6 +609,18 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             url?: string | null;
+        };
+        /** @description A library entry with the numbers the list view shows. */
+        MangaSummaryDto: components["schemas"]["MangaDto"] & {
+            /** Format: int64 */
+            chapter_count: number;
+            /**
+             * Format: int64
+             * @description Chapters with a file in the library. The difference from
+             *     `chapter_count` is what the progress column shows.
+             */
+            downloaded_count: number;
+            source_name: string;
         };
         /**
          * @description One page of results.
@@ -678,29 +704,18 @@ export interface components {
          *     page. Offsets are deliberately absent: they shift under inserts, and a
          *     library that gains a chapter mid-scroll would skip or repeat one.
          */
-        Paged_MangaDto: {
-            items: {
-                artists: string[];
-                authors: string[];
-                content_rating: string;
-                cover_url?: string | null;
-                /** Format: date-time */
-                created_at: string;
-                description?: string | null;
-                external_key: string;
-                /** Format: uuid */
-                id: string;
-                language?: string | null;
-                reading_direction: string;
-                /** Format: uuid */
-                source_id: string;
-                status: string;
-                tags: string[];
-                title: string;
-                /** Format: date-time */
-                updated_at: string;
-                url?: string | null;
-            }[];
+        Paged_MangaSummaryDto: {
+            items: (components["schemas"]["MangaDto"] & {
+                /** Format: int64 */
+                chapter_count: number;
+                /**
+                 * Format: int64
+                 * @description Chapters with a file in the library. The difference from
+                 *     `chapter_count` is what the progress column shows.
+                 */
+                downloaded_count: number;
+                source_name: string;
+            })[];
             next_cursor?: string | null;
         };
         RateLimitDto: {
@@ -1208,7 +1223,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Paged_MangaDto"];
+                    "application/json": components["schemas"]["Paged_MangaSummaryDto"];
                 };
             };
         };
@@ -1455,6 +1470,50 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InstalledSourceDto"][];
                 };
+            };
+        };
+    };
+    installSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstalledSourceDto"];
+                };
+            };
+            /** @description No such repository or entry */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source needs a capability this build lacks */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The package could not be fetched */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

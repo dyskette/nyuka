@@ -13,7 +13,7 @@ use nyuka_domain::model::{ChapterId, MangaId};
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
-use crate::routes::dto::{ChapterDto, MangaDto, Paged, Pagination};
+use crate::routes::dto::{ChapterDto, MangaDto, MangaSummaryDto, Paged, Pagination};
 use crate::state::AppState;
 
 /// `GET /api/v1/manga`
@@ -23,13 +23,22 @@ use crate::state::AppState;
     path = "/manga",
     tag = "library",
     params(Pagination),
-    responses((status = OK, body = Paged<MangaDto>)),
+    responses((status = OK, body = Paged<MangaSummaryDto>)),
 )]
 pub async fn list(
     State(state): State<Arc<AppState>>,
     Query(page): Query<Pagination>,
-) -> ApiResult<Json<Paged<MangaDto>>> {
-    Ok(Json(state.manga.list(page.cursor().as_ref()).await?.into()))
+) -> ApiResult<Json<Paged<MangaSummaryDto>>> {
+    // Summaries rather than bare series: the list view shows chapter and
+    // download counts, and fetching those per row would be one query per
+    // series on a page of fifty.
+    Ok(Json(
+        state
+            .manga
+            .list_summaries(page.cursor().as_ref())
+            .await?
+            .into(),
+    ))
 }
 
 /// `GET /api/v1/manga/{id}`

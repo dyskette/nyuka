@@ -166,6 +166,24 @@ pub struct SourceManga {
     pub chapters: Option<Vec<SourceChapter>>,
 }
 
+/// A library entry with the numbers the list view shows.
+///
+/// A projection, not an entity: `chapter_count` and `downloaded_count` are
+/// aggregates over other tables, and `source_name` belongs to the source.
+/// Putting them on [`Manga`] would mean every caller that loads a series pays
+/// for three joins it does not need, and would make "how many chapters" a
+/// property of the series rather than a question about the database.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MangaSummary {
+    pub manga: Manga,
+    /// The installed source's display name, so a list does not show a uuid.
+    pub source_name: String,
+    pub chapter_count: i64,
+    /// Chapters with a file in the library. The difference from
+    /// `chapter_count` is what the progress column shows.
+    pub downloaded_count: i64,
+}
+
 /// A chapter as a source describes it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SourceChapter {

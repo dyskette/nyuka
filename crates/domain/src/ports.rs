@@ -226,6 +226,13 @@ pub trait MangaRepository: Send + Sync {
     async fn find_by_external(&self, source: SourceId, key: &ExternalKey) -> Result<Option<Manga>>;
     async fn upsert(&self, manga: &Manga) -> Result<MangaId>;
     async fn list(&self, cursor: Option<&Cursor>) -> Result<Page<Manga>>;
+
+    /// The library list, with its aggregates.
+    ///
+    /// A separate method rather than a flag on `list`, because the two have
+    /// different costs: this one joins the source and counts chapters, and a
+    /// caller that only needs the series should not pay for that by default.
+    async fn list_summaries(&self, cursor: Option<&Cursor>) -> Result<Page<MangaSummary>>;
 }
 
 #[async_trait]

@@ -322,6 +322,15 @@ pub(crate) mod tests {
             self.upserted.lock().expect("lock").push(manga.clone());
             Ok(manga.id)
         }
+        async fn list_summaries(
+            &self,
+            _cursor: Option<&Cursor>,
+        ) -> Result<Page<nyuka_domain::model::MangaSummary>> {
+            Ok(Page {
+                items: vec![],
+                next: None,
+            })
+        }
         async fn list(&self, _c: Option<&Cursor>) -> Result<Page<Manga>> {
             Ok(Page {
                 items: vec![],

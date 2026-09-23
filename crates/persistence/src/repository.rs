@@ -76,6 +76,15 @@ fn row_to_manga(row: &sea_orm::QueryResult) -> Result<Manga> {
     })
 }
 
+fn row_to_manga_summary(row: &sea_orm::QueryResult) -> Result<MangaSummary> {
+    Ok(MangaSummary {
+        manga: row_to_manga(row)?,
+        source_name: row.try_get("", "source_name").map_err(db)?,
+        chapter_count: row.try_get("", "chapter_count").map_err(db)?,
+        downloaded_count: row.try_get("", "downloaded_count").map_err(db)?,
+    })
+}
+
 fn row_to_chapter(row: &sea_orm::QueryResult) -> Result<Chapter> {
     Ok(Chapter {
         id: ChapterId(row.try_get("", "id").map_err(db)?),
@@ -325,6 +334,77 @@ impl Repositories {
             .await
             .map_err(db)?;
         page_of(rows, row_to_manga, |m| m.id.0)
+    }
+
+    /// The library list with its aggregates.
+    ///
+    /// One statement rather than a query per row, which on a page of fifty is
+    /// the difference between one query and a hundred and one.
+    ///
+    /// `COUNT(DISTINCT …)` is **defensive, not currently load-bearing**, and
+    /// the distinction is worth recording because the obvious justification
+    /// for it is wrong. `downloaded_chapter.chapter_id` is that table's
+    /// primary key, so the second `LEFT JOIN` is strictly one-to-one and
+    /// cannot multiply rows: a series with 80 chapters produces 80 rows
+    /// whether or not any are downloaded, and a plain `COUNT(c.id)` gives the
+    /// right answer today. Removing the `DISTINCT` was tried, and the tests
+    /// still passed.
+    ///
+    /// It stays because it costs nothing and the property it guards is not
+    /// visible from here: a third join, or a schema change allowing more than
+    /// one download per chapter, would silently multiply both counts into
+    /// plausible-looking larger numbers.
+    #[tracing::instrument(
+        skip(self, cursor),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "manga",
+        )
+    )]
+    pub async fn list_manga_summaries(
+        &self,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<MangaSummary>> {
+        let after = parse_cursor(cursor, "manga")?;
+        let select = "SELECT m.*, s.name AS source_name, \
+                      COUNT(DISTINCT c.id) AS chapter_count, \
+                      COUNT(DISTINCT d.chapter_id) AS downloaded_count \
+                      FROM manga m \
+                      JOIN source s ON s.id = m.source_id \
+                      LEFT JOIN chapter c ON c.manga_id = m.id \
+                      LEFT JOIN downloaded_chapter d ON d.chapter_id = c.id ";
+
+        let (sql, values): (String, Vec<Value>) = match after {
+            Some(id) => (
+                format!(
+                    "{select} WHERE (m.created_at, m.id) < \
+                     (SELECT created_at, id FROM manga WHERE id = $1) \
+                     GROUP BY m.id, s.name \
+                     ORDER BY m.created_at DESC, m.id DESC LIMIT $2"
+                ),
+                vec![id.into(), ((PAGE_SIZE + 1) as i64).into()],
+            ),
+            None => (
+                format!(
+                    "{select} GROUP BY m.id, s.name \
+                     ORDER BY m.created_at DESC, m.id DESC LIMIT $1"
+                ),
+                vec![((PAGE_SIZE + 1) as i64).into()],
+            ),
+        };
+
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                &sql,
+                values,
+            ))
+            .await
+            .map_err(db)?;
+
+        page_of(rows, row_to_manga_summary, |s| s.manga.id.0)
     }
 
     // --- chapters -----------------------------------------------------------

@@ -856,3 +856,73 @@ async fn an_empty_index_clears_the_catalog() {
             .is_empty()
     );
 }
+
+/// The library list's aggregates.
+///
+/// Asserts the counts are right and independent of each other. It does *not*
+/// demonstrate that `COUNT(DISTINCT …)` is required — removing the `DISTINCT`
+/// was tried and this still passed, because `downloaded_chapter.chapter_id`
+/// is a primary key and that join cannot multiply rows. The `DISTINCT` is
+/// defence against a schema change, and this test would not notice its
+/// removal.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_library_summary_counts_chapters_and_downloads_independently() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_summary").await else {
+        return;
+    };
+
+    // Five chapters, three of them downloaded. If the joins multiplied, the
+    // chapter count would come back as 15.
+    let chapters: Vec<SourceChapter> = (1..=5)
+        .map(|n| chapter(&format!("c{n}"), n as f32))
+        .collect();
+    let ids = repos
+        .upsert_chapters(manga, &chapters)
+        .await
+        .expect("chapters");
+    assert_eq!(ids.len(), 5);
+
+    for (index, id) in ids.iter().take(3).enumerate() {
+        repos
+            .record_download(&DownloadedChapter {
+                chapter_id: *id,
+                relative_path: format!("Series/c{index}.cbz"),
+                size_bytes: 1,
+                checksum: "x".into(),
+                packaged_at: Utc::now(),
+            })
+            .await
+            .expect("download");
+    }
+
+    let page = repos.list_manga_summaries(None).await.expect("summaries");
+    let summary = page.items.first().expect("one series");
+
+    assert_eq!(
+        summary.chapter_count, 5,
+        "five chapters, not five times three"
+    );
+    assert_eq!(summary.downloaded_count, 3);
+    assert_eq!(summary.manga.id, manga);
+    assert_eq!(
+        summary.source_name, "Test",
+        "the list shows a source's name, not its uuid"
+    );
+}
+
+/// A series nobody has downloaded from must still appear, with zeroes. An
+/// `INNER JOIN` on chapters would drop it entirely — a freshly added series
+/// vanishing from the library until its first chapter arrives.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_series_with_no_chapters_still_appears_with_zero_counts() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_summary_empty").await else {
+        return;
+    };
+
+    let page = repos.list_manga_summaries(None).await.expect("summaries");
+    let summary = page.items.first().expect("the seeded series");
+
+    assert_eq!(summary.manga.id, manga);
+    assert_eq!(summary.chapter_count, 0);
+    assert_eq!(summary.downloaded_count, 0);
+}
