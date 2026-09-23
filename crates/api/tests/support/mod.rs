@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use axum::body::{Body, to_bytes};
+use axum::extract::ConnectInfo;
 use axum::http::{Request, StatusCode};
 use nyuka_api::config::{Config, RawConfig};
 use nyuka_api::state::{AppState, BroadcastBus, EVENT_CAPACITY};
@@ -21,6 +22,7 @@ use nyuka_packaging::adapter::LibraryStoreAdapter;
 use nyuka_persistence::repository::Repositories;
 use nyuka_persistence::session::SessionRepository;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
+use std::net::SocketAddr;
 use tower::ServiceExt;
 
 pub struct Harness {
@@ -45,7 +47,17 @@ impl Harness {
     }
 
     /// The whole response, for tests that assert on headers.
-    pub async fn raw(&self, request: Request<Body>) -> axum::response::Response {
+    ///
+    /// `ConnectInfo` is inserted because the real service is built with
+    /// `into_make_service_with_connect_info`, and the rate limiter keys on the
+    /// peer address. A `oneshot` router has no connection behind it, so
+    /// without this every rate-limited route answers 500 here while working in
+    /// production — the test would be measuring the harness.
+    pub async fn raw(&self, mut request: Request<Body>) -> axum::response::Response {
+        request.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+            std::net::IpAddr::from([127, 0, 0, 1]),
+            40000,
+        )));
         self.router
             .clone()
             .oneshot(request)
@@ -54,12 +66,7 @@ impl Harness {
     }
 
     pub async fn send(&self, request: Request<Body>) -> (StatusCode, serde_json::Value) {
-        let response = self
-            .router
-            .clone()
-            .oneshot(request)
-            .await
-            .expect("response");
+        let response = self.raw(request).await;
         let status = response.status();
         let bytes = to_bytes(response.into_body(), 1024 * 1024)
             .await

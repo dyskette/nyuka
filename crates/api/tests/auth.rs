@@ -162,6 +162,75 @@ async fn the_session_cookie_is_http_only_and_same_site_lax() {
     assert!(cookie.contains("Path=/"), "cookie was: {cookie}");
 }
 
+/// The limit must actually fire, or it is a layer that costs allocations and
+/// reports a control that is not there (ADR-0005 follow-up 6).
+#[tokio::test(flavor = "multi_thread")]
+async fn the_auth_endpoints_are_rate_limited() {
+    let Some(h) = support::harness("nyuka_test_auth_rate_limit").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let mut limited = false;
+    for _ in 0..60 {
+        let (status, _) = h.send(mutation("/api/v1/auth/logout", true)).await;
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            limited = true;
+            break;
+        }
+    }
+
+    assert!(
+        limited,
+        "sixty logout requests from one address must hit the limit"
+    );
+}
+
+/// And the callback specifically, which ADR-0005 names because limiting only
+/// the login half leaves the expensive one open: the callback performs a token
+/// exchange against the identity provider.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_callback_is_rate_limited_too() {
+    let Some(h) = support::harness("nyuka_test_auth_rate_limit_callback").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let mut limited = false;
+    for _ in 0..60 {
+        let (status, _) = h.get("/api/v1/auth/callback?code=x&state=y").await;
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            limited = true;
+            break;
+        }
+    }
+
+    assert!(
+        limited,
+        "an unlimited callback is a way to make this server \
+        hammer the identity provider"
+    );
+}
+
+/// The library routes are not rate-limited: a reader paging through a series
+/// makes many requests in a row and must not be throttled for it.
+#[tokio::test(flavor = "multi_thread")]
+async fn ordinary_routes_are_not_rate_limited() {
+    let Some(h) = support::harness("nyuka_test_auth_rate_limit_scope").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    for _ in 0..60 {
+        let (status, _) = h.get("/api/v1/manga").await;
+        assert_ne!(
+            status,
+            StatusCode::TOO_MANY_REQUESTS,
+            "reading is not an authentication attempt"
+        );
+    }
+}
+
 /// Not covered here, recorded so the gap is not mistaken for coverage.
 ///
 /// These need a token exchange, which needs a provider. They belong to the

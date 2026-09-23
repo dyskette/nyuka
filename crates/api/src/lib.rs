@@ -21,6 +21,7 @@ pub mod csrf;
 pub mod defaults;
 pub mod error;
 pub mod openapi;
+pub mod rate_limit;
 pub mod routes;
 pub mod session_store;
 pub mod sse;
@@ -30,6 +31,7 @@ pub mod telemetry;
 
 use std::sync::Arc;
 
+use crate::rate_limit::TrustedIpKeyExtractor;
 use anyhow::Context;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -54,6 +56,8 @@ use nyuka_persistence::repository::Repositories;
 use nyuka_persistence::session::SessionRepository;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
+use tower_governor::GovernorLayer;
+use tower_governor::governor::GovernorConfigBuilder;
 use tower_http::compression::CompressionLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -259,7 +263,10 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     });
 
     // Step 6.
-    let app = router(state);
+    // `into_make_service_with_connect_info` rather than a bare router: the
+    // rate limiter keys on the peer address, and without `ConnectInfo` in the
+    // extensions it cannot extract one.
+    let app = router(state).into_make_service_with_connect_info::<std::net::SocketAddr>();
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .with_context(|| format!("binding {bind_addr}"))?;
@@ -308,6 +315,21 @@ pub fn compression_layer() -> CompressionLayer {
 /// session layer must be *outside* the CSRF check, or a rejected mutation
 /// would still have loaded and saved a session.
 pub fn router(state: Arc<AppState>) -> Router {
+    // Built here rather than passed in: the governor holds per-key state, so
+    // one config per router is what makes the limit apply across requests.
+    let auth_governor = Arc::new(
+        GovernorConfigBuilder::default()
+            .key_extractor(TrustedIpKeyExtractor::new(
+                state.config.trusted_proxies.clone(),
+            ))
+            .per_second(rate_limit::AUTH_PER_SECOND)
+            .burst_size(rate_limit::AUTH_BURST)
+            .finish()
+            // The builder only returns `None` for a zero period or burst, and
+            // both are constants above.
+            .expect("the auth rate limit constants are valid"),
+    );
+
     let session_layer = SessionManagerLayer::new(PostgresSessionStore::new(state.sessions.clone()))
         // `HttpOnly` so an XSS payload cannot read it; `SameSite=Lax` so a
         // cross-site form does not carry it on a POST; `Path=/` so the cookie
@@ -379,10 +401,18 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/events", get(sse::events))
         .layer(axum::middleware::from_fn(auth::require_session));
 
-    let api = Router::new()
+    // Rate-limited as a group. The callback is included deliberately: it
+    // performs a token exchange against the identity provider, so leaving it
+    // open is a way to make this server hammer someone else's (ADR-0005
+    // follow-up 6).
+    let auth_routes = Router::new()
         .route("/auth/login", get(auth::login))
         .route("/auth/callback", get(auth::callback))
         .route("/auth/logout", post(auth::logout))
+        .layer(GovernorLayer::new(auth_governor));
+
+    let api = Router::new()
+        .merge(auth_routes)
         .route("/me", get(auth::me))
         .route(
             "/openapi.json",

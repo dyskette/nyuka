@@ -51,8 +51,10 @@ recommendation in its own ADR that can simply be adopted.
 - [ ] **Telemetry ingest** — `POST /telemetry` (ADR-0013)
 - [ ] **Embedded SPA** — `rust-embed` over `web/dist`, with the route
       precedence rules (ADR-0006)
-- [ ] **Rate limiting** with `tower_governor`, covering `/auth/callback` as
-      well as `/auth/login` (ADR-0005 follow-up 6)
+- [x] **Rate limiting** with `tower_governor`, covering `/auth/callback` as
+      well as `/auth/login` (ADR-0005 follow-up 6). Uses a custom key
+      extractor: the shipped `SmartIpKeyExtractor` trusts `X-Forwarded-For`
+      unconditionally, so anyone could opt out of the limit by forging it.
 - [ ] **Request tracing layer** — `axum-tracing-opentelemetry`, so `trace_id`
       reaches every request line
 

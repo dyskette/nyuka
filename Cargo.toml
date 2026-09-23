@@ -33,7 +33,9 @@ tower = { version = "0.5.3", features = ["util", "timeout"] }
 tower-http = { version = "0.7.1", features = [
     "trace", "compression-gzip", "compression-br", "set-header", "request-id", "limit",
 ] }
-tower_governor = "0.8.0"
+# `tonic` is a default feature and pulls the gRPC stack, which nothing here
+# uses. `axum` is the only integration needed.
+tower_governor = { version = "0.8.0", default-features = false, features = ["axum"] }
 # `signed`: the session cookie carries a MAC, so a forged or tampered
 # cookie is rejected before it costs a database lookup.
 tower-sessions = { version = "0.15.0", features = ["signed"] }
