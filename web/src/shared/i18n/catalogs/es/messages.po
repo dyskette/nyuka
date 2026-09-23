@@ -259,6 +259,10 @@ msgstr "Biblioteca"
 msgid "Live"
 msgstr "En vivo"
 
+#: src/features/library/components/LibraryTable.tsx
+msgid "Loading more…"
+msgstr "Cargando más…"
+
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Maintenance"
 msgstr "Mantenimiento"

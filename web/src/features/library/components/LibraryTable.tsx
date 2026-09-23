@@ -1,6 +1,7 @@
 import { Trans, useLingui } from '@lingui/react/macro'
 import { Link } from '@tanstack/react-router'
-import { useEffect, useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useEffect, useRef, useState } from 'react'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
 
@@ -10,13 +11,30 @@ type MangaSummary = components['schemas']['MangaSummaryDto']
 export type SortKey = 'title' | 'chapters' | 'updated'
 
 export interface LibraryTableProps {
+  /** Every row loaded so far, across pages. */
   items: MangaSummary[]
   sort: SortKey | 'added'
   dir: 'asc' | 'desc'
   selected: ReadonlySet<string>
   onToggle: (id: string) => void
   onToggleAll: () => void
+  /** Asks for the next page. Called once as the end comes into view. */
+  onReachEnd?: (() => void) | undefined
+  /** True while that request is in flight, so the footer can say so. */
+  loadingMore?: boolean
+  /** Whether the server has more under the current filters. */
+  hasMore?: boolean
 }
+
+/**
+ * Row height in pixels, and the number kept rendered outside the viewport.
+ *
+ * The height has to match what `h-row` resolves to, or the virtualizer's
+ * arithmetic disagrees with the layout and rows drift as you scroll. It is
+ * measured rather than assumed — see `useRowHeight`, which reads the token
+ * instead of hard-coding 40, because the density control changes it.
+ */
+const OVERSCAN = 8
 
 /**
  * The library, as a dense table.
@@ -37,44 +55,139 @@ export function LibraryTable({
   selected,
   onToggle,
   onToggleAll,
+  onReachEnd,
+  loadingMore = false,
+  hasMore = false,
 }: LibraryTableProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const rowHeight = useRowHeight(scrollRef)
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => rowHeight,
+    overscan: OVERSCAN,
+  })
+
+  const virtualRows = virtualizer.getVirtualItems()
+  const total = virtualizer.getTotalSize()
+  const first = virtualRows[0]
+  const last = virtualRows[virtualRows.length - 1]
+
+  // Padding rows rather than absolute positioning: a `<tr>` taken out of flow
+  // stops being a row of its table, and the column headers no longer apply to
+  // its cells. Two spacers keep every rendered row a real one.
+  const padTop = first ? first.start : 0
+  const padBottom = last ? total - last.end : 0
+
+  // Asked for while the last loaded row is still some way off, so the next
+  // page usually arrives before the reader reaches it. Guarded on
+  // `loadingMore`, or every scroll event during the request asks again.
+  useEffect(() => {
+    if (!hasMore || loadingMore || onReachEnd === undefined) return
+    if (last !== undefined && last.index >= items.length - OVERSCAN) onReachEnd()
+  }, [hasMore, loadingMore, onReachEnd, last, items.length])
+
   if (items.length === 0) return <EmptyLibrary />
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <caption className="sr-only">
-        <Trans>Series in your library</Trans>
-      </caption>
-      <thead>
-        <tr className="border-border text-muted-foreground border-b text-left">
-          <th scope="col" className="px-cell h-row w-0">
-            <SelectAll items={items} selected={selected} onToggleAll={onToggleAll} />
-          </th>
-          <Th sortKey="title" sort={sort} dir={dir}>
-            <Trans>Title</Trans>
-          </Th>
-          <Th>
-            <Trans>Source</Trans>
-          </Th>
-          <Th sortKey="chapters" sort={sort} dir={dir} align="right">
-            <Trans>Chapters</Trans>
-          </Th>
-          <Th>
-            <Trans>Downloaded</Trans>
-          </Th>
-          <Th sortKey="updated" sort={sort} dir={dir}>
-            <Trans>Updated</Trans>
-          </Th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((manga) => (
-          <Row key={manga.id} manga={manga} selected={selected.has(manga.id)} onToggle={onToggle} />
-        ))}
-      </tbody>
-    </table>
+    <div ref={scrollRef} className="h-full overflow-y-auto">
+      <table
+        className="w-full border-collapse text-sm"
+        // The real size, not the rendered one. Without these a screen reader
+        // announces "row 3 of 12" in a library of five hundred, because twelve
+        // is all that exists in the DOM.
+        aria-rowcount={items.length}
+      >
+        <caption className="sr-only">
+          <Trans>Series in your library</Trans>
+        </caption>
+        <thead>
+          <tr className="border-border text-muted-foreground border-b text-left">
+            <th scope="col" className="px-cell h-row w-0">
+              <SelectAll items={items} selected={selected} onToggleAll={onToggleAll} />
+            </th>
+            <Th sortKey="title" sort={sort} dir={dir}>
+              <Trans>Title</Trans>
+            </Th>
+            <Th>
+              <Trans>Source</Trans>
+            </Th>
+            <Th sortKey="chapters" sort={sort} dir={dir} align="right">
+              <Trans>Chapters</Trans>
+            </Th>
+            <Th>
+              <Trans>Downloaded</Trans>
+            </Th>
+            <Th sortKey="updated" sort={sort} dir={dir}>
+              <Trans>Updated</Trans>
+            </Th>
+          </tr>
+        </thead>
+        <tbody>
+          {padTop > 0 && (
+            <tr aria-hidden="true">
+              <td colSpan={7} style={{ height: padTop }} />
+            </tr>
+          )}
+          {virtualRows.map((virtual) => {
+            const manga = items[virtual.index]
+            if (manga === undefined) return null
+            return (
+              <Row
+                key={manga.id}
+                manga={manga}
+                // One-based, and counted from the whole list rather than the
+                // rendered window — the two differ by everything scrolled past.
+                rowIndex={virtual.index + 1}
+                height={rowHeight}
+                selected={selected.has(manga.id)}
+                onToggle={onToggle}
+              />
+            )
+          })}
+          {padBottom > 0 && (
+            <tr aria-hidden="true">
+              <td colSpan={7} style={{ height: padBottom }} />
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {loadingMore && (
+        <p className="text-muted-foreground p-4 text-center text-xs" role="status">
+          <Trans>Loading more…</Trans>
+        </p>
+      )}
+    </div>
   )
 }
+
+/**
+ * The row height the stylesheet is actually using.
+ *
+ * `--row-h` is remapped by the density control (spec-design.md), so a
+ * hard-coded 40 would put the virtualizer's arithmetic out of step with the
+ * layout in compact mode — rows would drift further out of place the further
+ * you scrolled. Read from the element so one source stays authoritative.
+ */
+function useRowHeight(ref: React.RefObject<HTMLElement | null>): number {
+  const [height, setHeight] = useState(FALLBACK_ROW_HEIGHT)
+
+  useEffect(() => {
+    const element = ref.current
+    if (element === null) return
+    const value = getComputedStyle(element).getPropertyValue('--row-h').trim()
+    const parsed = Number.parseFloat(value)
+    // A stylesheet that has not loaded gives an empty string, and `NaN` as a
+    // row height silently collapses the whole list to zero.
+    if (Number.isFinite(parsed) && parsed > 0) setHeight(parsed)
+  }, [ref])
+
+  return height
+}
+
+/** Matches `--row-h` in `theme.css` at the default density. */
+const FALLBACK_ROW_HEIGHT = 40
 
 /**
  * The header checkbox.
@@ -186,10 +299,14 @@ function naturalDirection(sortKey: SortKey): 'asc' | 'desc' {
 
 function Row({
   manga,
+  rowIndex,
+  height,
   selected,
   onToggle,
 }: {
   manga: MangaSummary
+  rowIndex: number
+  height: number
   selected: boolean
   onToggle: (id: string) => void
 }) {
@@ -197,6 +314,10 @@ function Row({
 
   return (
     <tr
+      aria-rowindex={rowIndex}
+      // Fixed, because the virtualizer's arithmetic assumes it. A row that
+      // grew to fit its content would push every later row out of position.
+      style={{ height }}
       className={`border-border hover:bg-surface-raised border-b ${
         selected ? 'bg-accent-soft' : ''
       }`}

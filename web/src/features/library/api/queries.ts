@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
 import { api } from '@/shared/api/client'
 import { type LibraryListParams, libraryKeys } from './keys'
 
@@ -61,6 +61,42 @@ function defined(params: LibraryListParams): Record<string, string> {
   return Object.fromEntries(
     Object.entries(params).filter((entry): entry is [string, string] => entry[1] !== undefined),
   )
+}
+
+/**
+ * The library as one growing list.
+ *
+ * The cursor is the page parameter, so it is deliberately *not* part of the
+ * query key here: every page belongs to one cache entry, and that entry is
+ * what survives opening the detail panel. Keying on the cursor as
+ * `libraryListQuery` does would make each page its own entry and scrolling
+ * back would refetch.
+ *
+ * `initialPageParam` is `undefined` — the server's first page is the absence
+ * of a cursor, not a cursor with a special value.
+ */
+export function libraryInfiniteQuery(params: Omit<LibraryListParams, 'cursor'> = {}) {
+  return infiniteQueryOptions({
+    queryKey: libraryKeys.list(params),
+    queryFn: async ({ pageParam, signal }) =>
+      unwrap(
+        await api.GET('/manga', {
+          params: {
+            query: {
+              ...defined(params),
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
+          signal,
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    // `next_cursor` absent is the end. Returning `undefined` is what tells
+    // Query there is no next page; returning `null` would be a page parameter
+    // of null and one more request that returns nothing.
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
+    staleTime: 30_000,
+  })
 }
 
 /** One series. */

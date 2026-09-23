@@ -59,6 +59,43 @@ beforeAll(() => {
   // a real error in that stream should still stand out.
   window.scrollTo = () => {}
 
+  // jsdom performs no layout, so every element measures 0 x 0. A virtualizer
+  // asks its scroll container how tall it is, concludes nothing is visible,
+  // and renders no rows at all — the table appears empty while every other
+  // assertion about it still holds.
+  //
+  // TanStack Virtual reads `offsetWidth`/`offsetHeight`, not
+  // `getBoundingClientRect`, so shimming only the latter leaves it measuring
+  // zero. Both are given a fixed viewport size.
+  //
+  // This means a test here can assert *what* is rendered and never *where*:
+  // nothing in this environment measures anything, and a test that appeared
+  // to check a position would be checking these constants.
+  for (const [property, value] of [
+    ['offsetWidth', 1024],
+    ['offsetHeight', 768],
+    ['clientWidth', 1024],
+    ['clientHeight', 768],
+  ] as const) {
+    Object.defineProperty(HTMLElement.prototype, property, {
+      configurable: true,
+      get: () => value,
+    })
+  }
+
+  Element.prototype.getBoundingClientRect = () =>
+    ({
+      width: 1024,
+      height: 768,
+      top: 0,
+      left: 0,
+      bottom: 768,
+      right: 1024,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect
+
   // Also absent for want of layout: `cmdk` scrolls the highlighted item into
   // view every time the selection moves, so without this every keyboard
   // interaction in the palette throws.

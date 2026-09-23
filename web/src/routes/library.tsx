@@ -1,9 +1,9 @@
 import { Trans } from '@lingui/react/macro'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, retainSearchParams } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { z } from 'zod'
-import { libraryListQuery } from '@/features/library/api/queries'
+import { libraryInfiniteQuery } from '@/features/library/api/queries'
 import { LibraryTable } from '@/features/library/components/LibraryTable'
 import { type LibraryFilters, LibraryToolbar } from '@/features/library/components/LibraryToolbar'
 import { sourceListQuery } from '@/features/sources/api/queries'
@@ -56,13 +56,16 @@ export const Route = createFileRoute('/library')({
   // Everything the server uses. Sort and direction are here now: they change
   // what the server returns, so a loader that ignored them would prime the
   // cache with a differently ordered page than the component asks for.
+  //
+  // The cursor is absent: pages accumulate in one infinite query, and a
+  // cursor in the URL would name a position in a list that no longer starts
+  // where it did.
   loaderDeps: ({ search }) => ({
     q: search.q,
     status: search.status,
     source_id: search.source,
     sort: search.sort,
     dir: search.dir,
-    cursor: search.cursor,
   }),
 
   // Primes the cache so the table has data on first paint. The loader returns
@@ -71,7 +74,7 @@ export const Route = createFileRoute('/library')({
   // (ADR-0008).
   loader: ({ context, deps }) =>
     Promise.all([
-      context.queryClient.ensureQueryData(libraryListQuery(deps)),
+      context.queryClient.ensureInfiniteQueryData(libraryInfiniteQuery(deps)),
       context.queryClient.ensureQueryData(sourceListQuery()),
     ]),
 
@@ -85,17 +88,20 @@ function LibraryLayout() {
   const navigate = Route.useNavigate()
   // The server orders and filters. There is nothing left to do here, and
   // anything done here would apply to one page rather than to the library.
-  const { data } = useSuspenseQuery(
-    libraryListQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useSuspenseInfiniteQuery(
+    libraryInfiniteQuery({
       q: search.q,
       status: search.status,
       source_id: search.source,
       sort: search.sort,
       dir: search.dir,
-      cursor: search.cursor,
     }),
   )
-  const items = data.items
+
+  // Flattened once per data change rather than on every render: the
+  // virtualizer indexes into this array, and a new array identity each render
+  // would make every memo below it recompute.
+  const items = useMemo(() => data.pages.flatMap((page) => page.items), [data.pages])
 
   // Offered from what is on the page rather than from a fixed list: a source
   // the reader has not installed is not a filter worth showing, and an
@@ -158,7 +164,7 @@ function LibraryLayout() {
           sources={sources}
           statuses={STATUSES}
           shown={items.length}
-          hasMore={data.next_cursor !== null && data.next_cursor !== undefined}
+          hasMore={hasNextPage}
           onChange={onFilterChange}
         />
         <div className="flex-1 overflow-y-auto">
@@ -169,6 +175,9 @@ function LibraryLayout() {
             selected={selected}
             onToggle={onToggle}
             onToggleAll={onToggleAll}
+            onReachEnd={fetchNextPage}
+            loadingMore={isFetchingNextPage}
+            hasMore={hasNextPage}
           />
         </div>
       </main>

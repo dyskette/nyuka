@@ -175,4 +175,116 @@ describe('LibraryTable', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(screen.getByText(/library is empty/i)).toBeInTheDocument()
   })
+
+  describe('virtualization', () => {
+    function many(count: number) {
+      return Array.from({ length: count }, (_, index) =>
+        summary({ id: `id-${index}`, title: `Series ${index}` }),
+      )
+    }
+
+    /**
+     * The point of the whole thing. Five hundred rows in the DOM is what
+     * ADR-0017 chose a virtualizer to avoid, and a virtualizer that renders
+     * everything is indistinguishable from none until the library is large.
+     */
+    it('renders a window, not the whole list', async () => {
+      const { container } = await renderWithProviders(
+        <LibraryTable {...props({ items: many(500) })} />,
+      )
+
+      const rows = container.querySelectorAll('tbody tr[aria-rowindex]')
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows.length).toBeLessThan(100)
+    })
+
+    /**
+     * A screen reader is told the size of the list, not the size of the
+     * window. Without these it announces "row 3 of 27" in a library of five
+     * hundred, because twenty-seven is all that exists in the DOM.
+     */
+    it('reports the real size and the absolute position', async () => {
+      const { container } = await renderWithProviders(
+        <LibraryTable {...props({ items: many(500) })} />,
+      )
+
+      expect(screen.getByRole('table')).toHaveAttribute('aria-rowcount', '500')
+
+      // Every rendered row, not just the first: asserting only that row one
+      // says "1" passes against an index hard-coded to 1, which is what a
+      // window-relative index degenerates to at the top of the list.
+      const indices = [...container.querySelectorAll('tbody tr[aria-rowindex]')].map((row) =>
+        Number(row.getAttribute('aria-rowindex')),
+      )
+      expect(indices.length).toBeGreaterThan(3)
+      expect(indices).toEqual(indices.map((_, offset) => offset + 1))
+    })
+
+    /**
+     * The spacers are what keep the scrollbar the right length while most
+     * rows are absent. They carry no data, so a screen reader must not walk
+     * into them.
+     */
+    it('hides the spacer rows from the accessibility tree', async () => {
+      const { container } = await renderWithProviders(
+        <LibraryTable {...props({ items: many(500) })} />,
+      )
+
+      const spacers = container.querySelectorAll('tbody tr[aria-hidden="true"]')
+      expect(spacers.length).toBeGreaterThan(0)
+      for (const spacer of spacers) {
+        expect(spacer.querySelector('td')).toHaveAttribute('colspan', '7')
+      }
+    })
+  })
+
+  describe('paging', () => {
+    function many(count: number) {
+      return Array.from({ length: count }, (_, index) =>
+        summary({ id: `id-${index}`, title: `Series ${index}` }),
+      )
+    }
+
+    it('asks for more once the end is in view', async () => {
+      const onReachEnd = vi.fn()
+      // Few enough that the last row is inside the rendered window.
+      await renderWithProviders(
+        <LibraryTable {...props({ items: many(5), onReachEnd, hasMore: true })} />,
+      )
+
+      expect(onReachEnd).toHaveBeenCalled()
+    })
+
+    /**
+     * Without this every scroll event during the request asks again, and a
+     * slow page turns into a burst of identical requests.
+     */
+    it('does not ask again while a page is already loading', async () => {
+      const onReachEnd = vi.fn()
+      await renderWithProviders(
+        <LibraryTable
+          {...props({ items: many(5), onReachEnd, hasMore: true, loadingMore: true })}
+        />,
+      )
+
+      expect(onReachEnd).not.toHaveBeenCalled()
+    })
+
+    it('does not ask when the server has nothing more', async () => {
+      const onReachEnd = vi.fn()
+      await renderWithProviders(
+        <LibraryTable {...props({ items: many(5), onReachEnd, hasMore: false })} />,
+      )
+
+      expect(onReachEnd).not.toHaveBeenCalled()
+    })
+
+    it('says a page is on its way', async () => {
+      await renderWithProviders(
+        <LibraryTable {...props({ items: many(5), loadingMore: true, hasMore: true })} />,
+      )
+
+      expect(screen.getByRole('status')).toHaveTextContent('Loading more')
+    })
+  })
 })
