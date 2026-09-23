@@ -152,13 +152,20 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
       download progress and freshness per row, multi-select, sortable headers
       and a filter bar. Ordering and filters live in search params; selection
       does not.
-- [ ] Browse — the catalog grid exists as a component; the screen that loads a
-      source's catalog into it does not
+- [x] **Browse** — a source's catalog in the cover grid, with search, paging,
+      and add-to-library driven by the `manga_id` the server already sets.
 - [x] **Downloads** — the job queue with live progress, per-row cancel and
       retry, and a URL-driven state filter. Maintenance jobs appear alongside
       downloads rather than being hidden: a stuck prune is what an operator
       needs to see.
-- [ ] The rest of the screens: sources, settings
+- [x] **Settings** — repositories and the sources installed from them: add,
+      refresh, remove, install, update, uninstall.
+- [ ] Follows screen — the route is still a stub, and `/follows` is the one
+      API surface with no UI at all
+- [ ] Per-source settings (`GET`/`PUT /sources/{id}/settings`) and filters
+      (`GET /sources/{id}/filters`). Both are served and neither is rendered;
+      the values are opaque postcard bytes, so this needs a form built from
+      the filter descriptors rather than a generic editor.
 - [x] Detail panel (`/library/$mangaId`) — header, URL-driven tabs, and the
       chapter list with a per-row download action
 - [ ] Command palette (`cmdk`), from the mockup
