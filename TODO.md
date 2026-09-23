@@ -182,10 +182,14 @@ and the "14 new" badges were read as scope once, and were not.
       with a postcard codec held to the Rust serializer by printed vectors.
       Five control types cover 95 of the 136 declared across community
       sources; the rest are named as unavailable rather than hidden.
-- [ ] **Source filters.** `GET /sources/{id}/filters` is served and 121 of 136
-      sources declare them, but `GET /sources/{id}/catalog` accepts only `q`
-      and `cursor` — rendered filter controls would have nowhere to send their
-      values. Needs the catalog endpoint to accept filter state first.
+- [x] **Source filters** — `GET /sources/{id}/catalog?filters=<JSON>` reaches
+      the WASM module, and Browse renders the declaration. Five control types
+      cover 516 of the 534 declared across community sources.
+- [ ] **A `Range` filter value on the host.** 18 of 534 declared filters are
+      `range` and `FilterValue` has no variant for one, so the client names
+      them as unavailable rather than rendering a control the server would
+      refuse. Adding it means a guest-ABI change, so it waits for a source
+      that needs it.
 - [x] Detail panel (`/library/$mangaId`) — header, URL-driven tabs, and the
       chapter list with a per-row download action
 - [x] **Command palette** (`cmdk`), from the mockup — library search,
