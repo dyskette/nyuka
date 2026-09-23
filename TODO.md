@@ -19,10 +19,13 @@ recommendation in its own ADR that can simply be adopted.
       downloads readable within 60s, both monthly, evaluated from an hourly
       `nyuka_metrics` snapshot line. Settles `NOTIFY` as unnecessary — it buys
       at most 2% of the budget — and keeps `vector`/Loki unbuilt.
-- [ ] **Pick the target `.aix` sources for v1** (ADR-0004 follow-up 1). Their
-      required imports, not the full ABI, define tier-1 and tier-2 scope.
-      ADR-0004 calls this the single highest-leverage step in the project and
-      it is still open.
+- [x] **The v1 source commitment** (ADR-0004 follow-up 1). Resolved as
+      capability-defined rather than a named list: v1 supports any source
+      whose imports are tier 1 (`net`, `std`, `html`, `defaults`) — 108 of 136
+      community sources, 79%. The install check already enforces that
+      boundary, so the promise and the enforcement are one mechanism. Seven
+      proven sources are the regression set; `canvas` (16%, concentrated in
+      Japanese and Vietnamese) is deferred and refused at install by name.
 - [x] **Cancellation semantics** (ADR-0003 follow-up 6, ADR-0007 follow-up 5).
       Resolved by adopting ADR-0007's own recommendation: delete the staging
       directory on cancel, treat resume as a future feature. Already true in
@@ -105,6 +108,12 @@ for.
       (ADR-0013 follow-up 4).
 
 ## Build and release
+
+- [x] **Scheduled live-source run** — `cargo xtask fetch-sources` plus the
+      live test, nightly and report-only (ADR-0004). Not a pull-request gate:
+      a failure there cannot distinguish a host regression from markup drift,
+      which is what the conformance fixture settles.
+
 
 - [x] **`cargo xtask openapi`** writing `web/openapi.json`, and the CI
       freshness check that fails when it is stale (ADR-0008, ADR-0009)

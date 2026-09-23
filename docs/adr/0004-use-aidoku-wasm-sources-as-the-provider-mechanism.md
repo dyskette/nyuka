@@ -170,6 +170,48 @@ Scanning all 136 community sources, folding in the 17 shared templates they buil
 
 Three templates need `canvas` (`mangareader`, `wpcomics`, `gigaviewer`), so it is not only a standalone-source concern.
 
+### Resolved: the v1 source commitment
+
+Follow-up 1 asked for the target `.aix` list, on the reasoning that it, rather than the full ABI, defines tier-1 and tier-2 scope. The spike inverted that: the import analysis across all 136 sources is already done, so what remained was not *which imports* but *what this project is accountable for*.
+
+**v1 supports any source whose required imports are tier 1** — `net`, `std`, `html`, `defaults`. That is 108 of 136 community sources, 79%.
+
+This is deliberately a capability commitment rather than a named list, because the install-time check already enforces exactly that boundary. A promise phrased as "these twenty sources" would say less than the host does, date on the next upstream release, and need a code change to stay current. Phrased as a capability, the promise and the enforcement are the same mechanism, and a tier-1 source published upstream tomorrow works with no change here.
+
+Seven sources are the named regression set, chosen because the spike proved them end to end rather than because they are the most popular:
+
+| Source | Shape | Entries |
+|---|---|---|
+| `en.dankefurslesen` | JSON API | 20 |
+| `en.hivescans` | JSON API | 18 |
+| `en.guya` | JSON API | 6 |
+| `ar.aasq` | HTML scrape | 21 |
+| `en.asurascans` | HTML scrape | 20 |
+| `en.flamecomics` | HTML scrape | 167 |
+| `en.weebcentral` | HTML scrape | 31 |
+
+Both shapes are represented on purpose. The `abs:` bug was invisible in JSON sources and fatal in every HTML one, so a regression set of only the first kind would have passed straight through it.
+
+#### What is deferred, and how it fails
+
+| Capability | Sources | v1 |
+|---|---|---|
+| `js` context | 3 (2.2%) | Feature-gated behind `js`, off by default |
+| `canvas` | 22 (16.2%) | Not implemented |
+| `js` webview | 3 (2.2%) | Not implemented |
+
+`canvas` is the expensive omission, and the decision is to take the cost visibly. Those sources use `canvas::ImageRef` to descramble page images, so without it they would produce unreadable pages — but the install-time check refuses them outright, naming the capability. A user sees *this build does not provide canvas* before installing, rather than a series that installs and then renders scrambled. This ADR already identifies the second outcome as the worst one available, and refusing at install is what the check was built for.
+
+The concentration matters more than the percentage: the 22 are mostly Japanese and Vietnamese sources, plus `multi.mangaplus` and `en.mangago`, and three shared templates (`mangareader`, `wpcomics`, `gigaviewer`). Deferring `canvas` is therefore a decision about which languages v1 serves well, not an even 16% haircut. Revisit on demand rather than on principle.
+
+`js` context stays behind a cargo feature because enabling it puts a script engine in every deployment so that two sources work, and a script engine is a real widening of what a hostile package can attempt. The two are `zh.copymanga` and `zh.dm5`.
+
+#### Verification: fixture per commit, live on a schedule
+
+The conformance `.aix` is the per-commit gate and runs with no network. The seven real sources run on a schedule, report-only.
+
+That split follows from this ADR's own negative result. A host cannot be developed against live sites, because a failure there does not distinguish *the host regressed* from *the site changed its markup* — and this ADR expects the second to happen routinely. Making a live run block a merge would import someone else's deployment schedule into this project's; making it report instead turns markup drift into an issue to triage, which is what it is.
+
 ### Source-declared rate limits are real
 
 `en.asurascans` called `net::set_rate_limit(2, 2, 0)` during `start`. This confirms the interaction with ADR-0003: take the stricter of the declared limit and the configured cap.
@@ -237,7 +279,7 @@ It is also worth recording what the spike did **not** find. The throwaway `html`
 
 ### Follow-up work this decision creates
 
-1. **Pick the target sources first.** Choose the specific `.aix` sources v1 must support, then read their required imports. That list, not the full ABI, defines the tier-1 and tier-2 scope. Doing this before writing host code is the single highest-leverage step in the project.
+1. ~~**Pick the target sources first.**~~ **Resolved: the commitment is capability-defined.** See [Resolved: the v1 source commitment](#resolved-the-v1-source-commitment). The spike's import analysis across all 136 sources made a named list the wrong shape — the install check already enforces the tier boundary, so the promise and the enforcement are one mechanism.
 2. **Record the aidoku-rs SHA and add `HOST_ABI_VERSION`** to the module cache key, in the first commit that touches the runtime.
 3. **Build the conformance `.aix`** and wire it into CI.
 4. ~~**Choose and validate the mutable DOM.**~~ **Resolved: `dom_query`.**

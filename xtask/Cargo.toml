@@ -8,5 +8,9 @@ publish = false
 
 [dependencies]
 nyuka-api = { path = "../crates/api" }
+nyuka-aidoku-runtime = { path = "../crates/aidoku-runtime" }
+reqwest = { workspace = true, features = ["blocking"] }
+serde = { workspace = true }
+url = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }

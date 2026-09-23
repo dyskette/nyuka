@@ -6718,8 +6718,12 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nyuka-aidoku-runtime",
  "nyuka-api",
+ "reqwest 0.13.5",
+ "serde",
  "serde_json",
+ "url",
 ]
 
 [[package]]

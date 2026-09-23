@@ -1,0 +1,60 @@
+# The ADR-0004 regression set, run against live sites.
+#
+# Deliberately not part of the pull-request gate. ADR-0004's most useful
+# finding was that a host cannot be developed against live sites: a failure
+# here does not distinguish "the host regressed" from "the site changed its
+# markup", and the ADR expects the second to happen routinely. Blocking a
+# merge on it would import someone else's deployment schedule into this
+# project's.
+#
+# The conformance `.aix` with fixed fixture HTML is the per-commit gate. This
+# is end-to-end evidence that the host runs real packages, reported rather
+# than enforced.
+name: Live sources
+
+on:
+  schedule:
+    # Nightly, off the hour so it does not land with everything else.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+# Only one at a time: these reach third-party sites, and a queue of concurrent
+# runs would look like traffic worth blocking.
+concurrency:
+  group: live-sources
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fetch the regression set
+        run: cargo xtask fetch-sources
+
+      - name: Run against live sites
+        id: live
+        run: |
+          set -o pipefail
+          NYUKA_LIVE_AIX_DIR="$PWD/target/aix" \
+            cargo test -p nyuka-aidoku-runtime --test live_sources \
+            -- --ignored --nocapture 2>&1 | tee live.log
+
+      - name: Report drift
+        if: failure()
+        run: |
+          echo "::warning::A source in the ADR-0004 regression set stopped returning entries."
+          echo "This is information, not a broken build: it is either markup drift"
+          echo "upstream or a host regression, and the conformance fixture is what"
+          echo "tells the two apart. Run it locally before assuming the host is at fault."
+          tail -40 live.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-sources-log
+          path: live.log
+          retention-days: 14
