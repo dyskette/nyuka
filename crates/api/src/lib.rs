@@ -369,6 +369,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .routes(utoipa_axum::routes!(routes::catalog::browse))
         .routes(utoipa_axum::routes!(routes::catalog::details))
         .routes(utoipa_axum::routes!(routes::catalog::chapters))
+        .routes(utoipa_axum::routes!(routes::downloads::request))
+        .routes(utoipa_axum::routes!(routes::downloads::file))
         .split_for_parts();
 
     let protected = protected

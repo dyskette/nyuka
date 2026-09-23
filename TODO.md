@@ -45,8 +45,8 @@ recommendation in its own ADR that can simply be adopted.
       (per-source settings still to do: the `defaults` key-value surface)
 - [x] **Catalog** — browse a source, item details, item chapters
 - [x] **Add to library** — `POST /manga` from a catalog entry
-- [ ] **Downloads** — `POST /downloads` with `Idempotency-Key`, 202 + `Location`
-- [ ] **Chapter file** — `GET /downloads/{chapter_id}/file`, ranged, ETag from
+- [x] **Downloads** — `POST /downloads` with `Idempotency-Key`, 202 + `Location`
+- [x] **Chapter file** — `GET /downloads/{chapter_id}/file`, ranged, ETag from
       the stored checksum
 - [ ] **Telemetry ingest** — `POST /telemetry` (ADR-0013)
 - [ ] **Embedded SPA** — `rust-embed` over `web/dist`, with the route

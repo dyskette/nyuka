@@ -28,6 +28,7 @@
 //! — ADR-0005 requires a test that a mutation without the header is rejected.
 
 pub mod catalog;
+pub mod downloads;
 pub mod dto;
 pub mod follows;
 pub mod health;
