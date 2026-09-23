@@ -167,10 +167,14 @@ has been removed.
       refresh, remove, install, update, uninstall.
 - [x] **Follows** — the schedule table: missing-chapter count, interval,
       auto-download, check-now and unfollow. Every API surface now has a UI.
-- [ ] Per-source settings (`GET`/`PUT /sources/{id}/settings`) and filters
-      (`GET /sources/{id}/filters`). Both are served and neither is rendered;
-      the values are opaque postcard bytes, so this needs a form built from
-      the filter descriptors rather than a generic editor.
+- [x] **Per-source settings** — rendered from the package's own declaration,
+      with a postcard codec held to the Rust serializer by printed vectors.
+      Five control types cover 95 of the 136 declared across community
+      sources; the rest are named as unavailable rather than hidden.
+- [ ] **Source filters.** `GET /sources/{id}/filters` is served and 121 of 136
+      sources declare them, but `GET /sources/{id}/catalog` accepts only `q`
+      and `cursor` — rendered filter controls would have nowhere to send their
+      values. Needs the catalog endpoint to accept filter state first.
 - [x] Detail panel (`/library/$mangaId`) — header, URL-driven tabs, and the
       chapter list with a per-row download action
 - [x] **Command palette** (`cmdk`), from the mockup — library search,
@@ -212,6 +216,26 @@ has been removed.
 - [x] **README and CHANGELOG** — README corrected against the code (it
       claimed `/readyz` reports FlareSolverr reachability and referenced a
       span that does not exist); CHANGELOG brought up to date.
+
+## Blocking defect
+
+- [ ] **An installed source is unusable after a restart.** The compiled module
+      lives only in `SourceRuntime`'s in-memory map, and `runtime.install` is
+      the only thing that puts it there. Startup registers rate limits and
+      loads nothing, and the `.aix` bytes are not persisted — no column, no
+      file. So after any restart every installed source is listed by
+      `GET /sources` and returns 404 from `/catalog`, `/filters` and
+      `/settings`, with the misleading detail "No source matches that
+      identifier". Browse, download and follow checks are all affected.
+
+      A second, compounding bug: `install` loads the module under a freshly
+      generated id while `upsert` returns the existing row's id, so
+      *reinstalling* a source leaves the new module unreachable and the old
+      one stale under a key nothing looks up.
+
+      Found by trying to verify the settings editor against a real source.
+      Needs a decision on where package bytes live before it can be fixed —
+      see the report in the conversation.
 
 ## Known gaps recorded in code
 
