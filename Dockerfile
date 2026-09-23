@@ -9,7 +9,18 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM rust:1.98-slim AS build
+# The Debian release here and in the final stage must match.
+#
+# This binary links against the builder's glibc, and distroless only has the
+# one its own Debian release ships. Built on trixie (glibc 2.41) and run on
+# `cc-debian12` (bookworm, glibc 2.36), the image builds cleanly and the
+# binary does not start at all:
+#
+#     /nyuka-api: /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.38' not found
+#
+# Both are pinned to a named release rather than a floating tag, so a base
+# image moving to the next Debian cannot separate them silently.
+FROM rust:1.98.1-slim-trixie AS build
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends \
       pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
@@ -32,7 +43,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release -p nyuka-api && \
     cp target/release/nyuka-api /nyuka-api
 
-FROM gcr.io/distroless/cc-debian12
+# Trixie, matching the builder above. See the note there before changing
+# either one.
+FROM gcr.io/distroless/cc-debian13
 COPY --from=build /nyuka-api /nyuka-api
 USER nonroot:nonroot
 EXPOSE 8080
