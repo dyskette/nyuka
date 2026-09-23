@@ -143,6 +143,11 @@ for.
 
 In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 
+Every item below traces to an ADR, the mockup in `docs/design/`, or a gap in
+code that already exists. Nothing goes on this list because it seemed like a
+thing a manga server would have — an in-browser reader was listed that way and
+has been removed.
+
 - [x] Vite 8 / Rolldown scaffold, TanStack Router and Query
 - [x] Typed API client, problem+json handling, i18n negotiation
 - [x] Generated client from `openapi.json`, committed and checked by CI
@@ -169,7 +174,6 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 - [x] Detail panel (`/library/$mangaId`) — header, URL-driven tabs, and the
       chapter list with a per-row download action
 - [ ] Command palette (`cmdk`), from the mockup
-- [ ] The reader
 - [ ] Virtualized list for large libraries (TanStack Virtual)
 - [x] SSE provider and the reconnect invalidation set — one `EventSource` at
       the root, an invalidation table per event, and invalidate-on-connect for
@@ -180,10 +184,12 @@ In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
       loaded keyset page, so they describe what is on screen rather than the
       library. Fine at a few hundred series and wrong past that — the fix is
       ordering and predicates in `GET /manga`, not a bigger page.
-- [ ] **Read progress**, which nothing records. The API tracks what is
-      downloaded, not what is read, so the mockup's "Unread" filter and its
-      "14 new" badges have no source. Needs a `read_chapter` table before any
-      of that UI can be honest.
+- [ ] **Read progress** — needs a decision, not just work. The mockup shows an
+      "Unread 32" filter and "14 new" badges, and nothing records what has been
+      read: the API tracks what is *downloaded*. Closing this means a
+      `read_chapter` table and something to write to it, which is a larger
+      question than the badges. Until it is decided, those two pieces of the
+      mockup stay unbuilt rather than being faked from download state.
 
 ## Documentation
 
