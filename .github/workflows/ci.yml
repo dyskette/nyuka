@@ -133,11 +133,24 @@ jobs:
       - name: Lingui catalogs current
         run: npm run i18n:check
 
+      # ADR-0009: the typed client is generated from the committed schema. A
+      # stale one describes a server that no longer exists, and the mismatch
+      # surfaces as a runtime 404 rather than a type error — which is the
+      # whole thing generating it was meant to prevent.
+      - name: API client current
+        run: |
+          set -euo pipefail
+          npm run gen:api
+          git diff --exit-code -- src/shared/api/schema.d.ts \
+            || { echo "::error::src/shared/api/schema.d.ts is stale; run 'npm run gen:api' and commit the result"; exit 1; }
+
       # ADR-0008: routeTree.gen.ts is generated and committed.
       - name: Route tree current
         run: |
           set -euo pipefail
-          echo "TODO(scaffold): npx tsr generate && git diff --exit-code src/routeTree.gen.ts"
+          npx tsr generate
+          git diff --exit-code -- src/routeTree.gen.ts \
+            || { echo "::error::src/routeTree.gen.ts is stale; run 'npx tsr generate' and commit the result"; exit 1; }
 
       - name: Test
         run: npx vitest run

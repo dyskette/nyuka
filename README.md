@@ -80,14 +80,49 @@ speak h2c, so TLS is what gets you HTTP/2. See ADR-0010.
 Logs are JSON on stdout, and every line carries `trace_id`:
 
 ```bash
-docker logs nyuka-api | jq 'select(.trace_id=="<id>")'     # one causal chain
-docker logs nyuka-api | jq 'select(.target=="metrics")' | tail -1
+docker logs nyuka-api | jq 'select(.span.trace_id=="<id>")'   # one causal chain
 docker logs nyuka-api | jq 'select(.level=="ERROR")'
+docker logs nyuka-api | jq 'select(.target=="nyuka_metrics")' | tail -1
 ```
 
-The trace ID shown on the application's crash page is the one to grep. A
+The trace ID shown on the application's crash page is the one to grep, and it
+also comes back on the `x-trace-id` response header of every request. A
 browser interaction, the API request it caused, and the job that ran minutes
 later all share it.
+
+### Evaluating the objectives
+
+The two SLOs are defined in [ADR-0019](docs/adr/0019-define-the-two-service-level-objectives.md)
+and evaluated from the hourly `nyuka_metrics` line, because a monthly window
+outlives the log rotation.
+
+```bash
+# SLO-1 — service-attributable job success rate over the retained window.
+# Source faults are excluded on purpose: a site removing a chapter is not a
+# failure this service can act on.
+docker logs nyuka-api \
+  | jq -c 'select(.target=="nyuka_metrics") | .metrics | fromjson' \
+  | jq -s '{
+      succeeded:      (map(.jobs_succeeded)      | add),
+      failed_service: (map(.jobs_failed_service) | add),
+      failed_source:  (map(.jobs_failed_source)  | add)
+    } | . + {
+      rate: (.succeeded / ((.succeeded + .failed_service) | if . == 0 then 1 else . end))
+    }'
+
+# SLO-2 — the worst hourly p95 in the window. Target: 60000 ms.
+# `ttfp_truncated` matters: a true there means that hour's p95 is a lower
+# bound, not a measurement.
+docker logs nyuka-api \
+  | jq -c 'select(.target=="nyuka_metrics") | .metrics | fromjson' \
+  | jq -s 'map(select(.ttfp_samples > 0))
+           | max_by(.ttfp_p95_ms)
+           | {ttfp_p95_ms, ttfp_samples, ttfp_truncated}'
+```
+
+An hour with no attributable outcomes reports no rate rather than a perfect
+one — an idle hour is not a good hour, and averaging a fabricated 100% across
+a month would hide a real dip.
 
 ### Backups: the library and the database fail differently
 
@@ -95,8 +130,50 @@ later all share it.
 failure loses downloaded files while the database still references them. Back
 up `/library` separately.
 
-After restoring a partial library, the `reconcile_library` job marks rows whose
-files are missing so the UI stops offering reads that will fail.
+```bash
+docker compose exec postgres pg_dump -U nyuka nyuka | gzip > nyuka-$(date -I).sql.gz
+tar -C /library -czf library-$(date -I).tar.gz .
+```
+
+The two do not need to be consistent with each other. A library newer than the
+database has files nothing references, which costs disk and nothing else. A
+database newer than the library references files that are gone, which
+`reconcile_library` repairs.
+
+#### Restoring
+
+```bash
+gunzip -c nyuka-2026-09-22.sql.gz | docker compose exec -T postgres psql -U nyuka nyuka
+tar -C /library -xzf library-2026-09-22.tar.gz
+docker compose restart nyuka-api
+```
+
+Then reconcile, so the database stops claiming chapters the restore did not
+bring back. There is **no endpoint to trigger a maintenance job by hand** —
+the scheduler owns them — so either wait for the daily run or queue one
+directly:
+
+```bash
+docker compose exec postgres psql -U nyuka -c \
+  "INSERT INTO job (id, kind, payload, state, priority, run_at, attempts,
+                    max_attempts, created_at, updated_at)
+   VALUES (gen_random_uuid(), 'reconcile_library', '{}'::jsonb, 'queued',
+           20, now(), 0, 1, now(), now());"
+```
+
+A worker picks it up within a poll interval.
+
+`reconcile_library` clears the download record for any chapter whose file is
+missing, so the UI stops offering a read that would fail. It **refuses to run
+at all if the library root is unreadable** — an unmounted volume looks exactly
+like an emptied one, and treating the first as the second would clear every
+download record during a five-minute outage.
+
+> [!WARNING]
+> Restore the library **before** starting the service, or start it with the
+> volume already mounted. The reconciliation is safe against an unreadable
+> root but not against a mounted-and-empty one: an empty volume is
+> indistinguishable from a wiped library, and the records will be cleared.
 
 ### Disk full
 
@@ -107,17 +184,58 @@ library as not writable. Free space and restart the affected jobs.
 ### A source stops working
 
 Expected periodically: sites change markup, and Cloudflare challenge handling
-is adversarial by nature. Check `/readyz` for FlareSolverr reachability, then
-look for `nyuka.cf.challenge` spans. If a source needs a host capability this
-build does not implement, installation is refused with the capability named —
-that is a host gap, not a site problem.
+is adversarial by nature.
+
+```bash
+docker logs nyuka-api | jq 'select(.target=="nyuka_jobs" and .level=="WARN")'
+```
+
+If a source needs a host capability this build does not implement,
+installation is refused with the capability named — that is a host gap, not a
+site problem. `canvas` is the common one: about 16% of the community catalog
+uses it to descramble page images, and v1 does not implement it. See
+[ADR-0004](docs/adr/0004-use-aidoku-wasm-sources-as-the-provider-mechanism.md).
+
+> [!NOTE]
+> `FLARESOLVERR_URL` is read and validated at startup but **nothing uses it
+> yet**. Cloudflare challenge handling is not implemented, so a source behind
+> one fails as an ordinary source error. `/readyz` reports the database,
+> migration state, and the library volume — not FlareSolverr.
 
 ### Revoking access
 
-`POST /api/v1/auth/logout` ends one session. Note the gap: if the identity
-provider disables an account, this application's session stays valid until it
-expires or is deleted, because sessions have their own lifetime. To force a
-logout, delete the session rows. See ADR-0005.
+`POST /api/v1/auth/logout` ends one session, immediately — the row is deleted
+rather than left to expire.
+
+> [!IMPORTANT]
+> **There is a revocation gap, and it is deliberate.** Sessions have their own
+> lifetime and are not tied to identity-provider token expiry. If the provider
+> disables an account, this application's session stays valid until it expires
+> or someone deletes it. `SESSION_TTL_HOURS` bounds the window — it defaults
+> to 720, which is 30 days. ADR-0005 accepts this as the cost of not requesting
+> `offline_access`; shorten the TTL if the window matters more than the
+> sign-in frequency.
+
+To force a logout before then, delete the user's sessions:
+
+```bash
+# Find the user. `subject` is their identifier at the identity provider.
+docker compose exec postgres psql -U nyuka -c \
+  "SELECT id, issuer, subject, last_seen_at FROM app_user ORDER BY last_seen_at DESC;"
+
+# End every session they hold. Takes effect on their next request: expiry is
+# enforced on read, so there is no cache to wait out.
+docker compose exec postgres psql -U nyuka -c \
+  "DELETE FROM session WHERE user_id = '<uuid>';"
+```
+
+Deleting the `app_user` row instead does **not** revoke access — it removes
+the audit record while the session rows survive, and the next sign-in simply
+recreates the user. Delete sessions, not users.
+
+To lock someone out permanently, remove them from `AUTH_ALLOWED_SUBJECTS` or
+`AUTH_ALLOWED_GROUPS` and restart. The allow-list is checked at the callback,
+so an existing session still has to be deleted as well.
 
 ### Rollback
 

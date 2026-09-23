@@ -55,6 +55,10 @@ recommendation in its own ADR that can simply be adopted.
 - [x] **Telemetry ingest** — `POST /telemetry` (ADR-0013), OTLP/JSON only.
       Protobuf is refused by content type with 415 rather than fed to a JSON
       parser, so whoever hits it is not sent looking in the wrong place.
+- [ ] **Trigger a maintenance job by hand** — there is no endpoint for it, so
+      the runbook's restore procedure inserts a row with `psql`. A
+      `POST /jobs` restricted to the maintenance kinds would be better than
+      documenting a raw insert.
 - [ ] **OTLP/protobuf ingest** — the other half of ADR-0013's accepted
       encodings. The browser SDK can be configured for JSON, so this is a
       convenience rather than a blocker.
@@ -142,14 +146,17 @@ Not started. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 
 ## Documentation
 
-- [ ] **Library runbook** (ADR-0007 follow-up 6) — what to back up, how to
-      restore, how to recover when the database references a missing file
-- [ ] **IdP-revocation gap** in the runbook (ADR-0005 follow-up 7), with the
-      operator action for forcing a logout. `delete_for_user` exists; the
-      procedure is not written down.
-- [ ] **`jq` recipes** in the runbook (ADR-0014 follow-up 5) — follow one
-      trace, list failed jobs in the last hour, find slow WASM calls
-- [ ] **README and CHANGELOG** — purpose, setup, env vars, runbook links
+- [x] **Library runbook** (ADR-0007 follow-up 6) — backup, restore, and
+      reconciliation, in `README.md`. The restore procedure warns that an
+      empty mounted volume is indistinguishable from a wiped library.
+- [x] **IdP-revocation gap** in the runbook (ADR-0005 follow-up 7), with the
+      SQL for forcing a logout and a note that deleting the `app_user` row
+      revokes nothing.
+- [x] **`jq` recipes** in the runbook (ADR-0014 follow-up 5), including the
+      monthly evaluation for both objectives from ADR-0019.
+- [x] **README and CHANGELOG** — README corrected against the code (it
+      claimed `/readyz` reports FlareSolverr reachability and referenced a
+      span that does not exist); CHANGELOG brought up to date.
 
 ## Known gaps recorded in code
 
