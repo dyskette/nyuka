@@ -3,10 +3,10 @@
 Work remaining on nyuka, and the decisions still open. Items trace back to the
 ADR that created them, so the reason for each is one link away.
 
-Status as of the last commit: the backend is complete below the HTTP layer —
-`domain`, `persistence`, `aidoku-runtime`, `packaging` and `jobs` all have
-every port implemented. `api` serves health, auth, SSE, and the library,
-follows and jobs routes.
+Status as of the last commit: the backend is complete — `domain`,
+`persistence`, `aidoku-runtime`, `packaging` and `jobs` have every port
+implemented, and `api` serves all 31 operations. The frontend has its shell
+and its Library screen; the other screens are stubs that say so.
 
 ## Decisions that need an answer
 
@@ -133,22 +133,43 @@ for.
       (ADR-0003 follow-up 2; the partial index and retention job are done)
 - [ ] **Review the 60s time-to-first-page budget** after a month of real
       snapshots (ADR-0019 follow-up 5). It is an estimate until then.
+- [ ] **Rendered-contrast check over the built CSS** in both themes, including
+      the focus ring (ADR-0016 follow-up). The token comments are a first pass
+      measured by hand; five colours are gamut-mapped by the browser, so the
+      rendered value is not the specified one. `axe-core` is the authority and
+      it is not wired yet.
 
 ## Frontend
 
-Not started. ADR-0006 and ADR-0008 through ADR-0018 cover it.
+In progress. ADR-0006 and ADR-0008 through ADR-0018 cover it.
 
 - [x] Vite 8 / Rolldown scaffold, TanStack Router and Query
 - [x] Typed API client, problem+json handling, i18n negotiation
-- [x] The library grid, reading real data through a route loader
-- [ ] The rest of the screens: browse, downloads, jobs, sources, settings
-- [ ] Command palette (`cmdk`), from the mockup
 - [x] Generated client from `openapi.json`, committed and checked by CI
-- [ ] The reader
 - [x] Lingui catalogs wired, English and Spanish complete
+- [x] App shell — sidebar, status bar, and a route per navigation target
+- [x] **Library** — the dense table from the mockup: source, chapter count,
+      download progress and freshness per row, multi-select, sortable headers
+      and a filter bar. Ordering and filters live in search params; selection
+      does not.
+- [ ] Browse — the catalog grid exists as a component; the screen that loads a
+      source's catalog into it does not
+- [ ] The rest of the screens: downloads, jobs, sources, settings
+- [ ] Detail panel (`/library/$mangaId`), which ADR-0017 designed and nothing
+      yet renders — the `<aside>` is mounted with an empty `Outlet`
+- [ ] Command palette (`cmdk`), from the mockup
+- [ ] The reader
 - [ ] Virtualized list for large libraries (TanStack Virtual)
 - [ ] SSE provider and the reconnect invalidation set
 - [ ] Playwright stack with a stub OIDC container
+- [ ] **Server-side sort, filter and search.** All three are applied to the
+      loaded keyset page, so they describe what is on screen rather than the
+      library. Fine at a few hundred series and wrong past that — the fix is
+      ordering and predicates in `GET /manga`, not a bigger page.
+- [ ] **Read progress**, which nothing records. The API tracks what is
+      downloaded, not what is read, so the mockup's "Unread" filter and its
+      "14 new" badges have no source. Needs a `read_chapter` table before any
+      of that UI can be honest.
 
 ## Documentation
 
