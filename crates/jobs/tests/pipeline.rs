@@ -21,6 +21,12 @@ use nyuka_persistence::migration::{Migrator, MigratorTrait};
 use nyuka_persistence::session::{SessionRecord, SessionRepository};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 
+/// A fresh metrics sink. Tests that do not assert on it still need one,
+/// because the pool records into it (ADR-0019).
+fn metrics() -> Arc<nyuka_jobs::metrics::JobMetrics> {
+    Arc::new(nyuka_jobs::metrics::JobMetrics::new())
+}
+
 async fn fresh_database(name: &str) -> Option<DatabaseConnection> {
     let base = std::env::var("DATABASE_URL").ok().or_else(|| {
         eprintln!("skipping: set DATABASE_URL to run pipeline tests");
@@ -93,6 +99,7 @@ async fn a_scheduled_job_runs_and_its_effect_lands() {
     let scheduler = Scheduler::new(
         queue.clone(),
         follows(&db),
+        metrics(),
         SchedulerConfig {
             schedule: vec![Periodic {
                 kind: JobKind::PruneSessions,
@@ -108,6 +115,7 @@ async fn a_scheduled_job_runs_and_its_effect_lands() {
     let pool = WorkerPool::start(
         queue.clone(),
         Arc::new(registry),
+        metrics(),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -158,6 +166,7 @@ async fn an_unhandled_kind_fails_once_and_stops() {
         queue.clone(),
         // Deliberately empty: this stands for a build with no source runtime.
         Arc::new(Registry::new()),
+        metrics(),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -179,5 +188,193 @@ async fn an_unhandled_kind_fails_once_and_stops() {
             .is_some_and(|e| e.contains("no handler registered")),
         "the reason must name the problem, got {:?}",
         job.last_error
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The objectives (ADR-0019)
+// ---------------------------------------------------------------------------
+
+struct FailingHandler {
+    error: fn() -> nyuka_domain::DomainError,
+}
+
+#[async_trait::async_trait]
+impl nyuka_jobs::worker::JobHandler for FailingHandler {
+    async fn handle(&self, _job: nyuka_domain::model::Job) -> nyuka_domain::Result<()> {
+        Err((self.error)())
+    }
+}
+
+async fn run_one(
+    db: &DatabaseConnection,
+    handler: Arc<dyn nyuka_jobs::worker::JobHandler>,
+    metrics: Arc<nyuka_jobs::metrics::JobMetrics>,
+    priority: i16,
+    max_attempts: i32,
+) {
+    let queue = Arc::new(PostgresQueue::new(db.clone()));
+    queue
+        .enqueue(
+            JobKind::DownloadChapter,
+            serde_json::json!({}),
+            None,
+            None,
+            priority,
+            max_attempts,
+        )
+        .await
+        .expect("enqueue");
+
+    let pool = WorkerPool::start(
+        queue,
+        handler,
+        metrics,
+        WorkerConfig {
+            workers: 1,
+            poll_interval: Duration::from_millis(20),
+            drain_timeout: Duration::from_secs(5),
+        },
+    );
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    pool.shutdown().await;
+}
+
+/// The classification has to hold through a real worker, not just in a unit
+/// test: the worker is what decides whether a failure is even reported.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_source_failure_is_reported_but_excluded_from_the_objective() {
+    let Some(db) = fresh_database("nyuka_test_slo_source").await else {
+        return;
+    };
+    let metrics = metrics();
+
+    run_one(
+        &db,
+        Arc::new(FailingHandler {
+            error: || nyuka_domain::DomainError::Source {
+                message: "the site removed it".into(),
+                retryable: false,
+            },
+        }),
+        metrics.clone(),
+        0,
+        1,
+    )
+    .await;
+
+    let snapshot = metrics.take(3600);
+    assert_eq!(snapshot.jobs_failed_source, 1);
+    assert_eq!(
+        snapshot.jobs_failed_service, 0,
+        "a site removing a chapter is not this service's fault"
+    );
+    assert_eq!(
+        snapshot.service_success_rate(),
+        None,
+        "and it must not create an attributable outcome to divide by"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_storage_failure_counts_against_the_objective() {
+    let Some(db) = fresh_database("nyuka_test_slo_service").await else {
+        return;
+    };
+    let metrics = metrics();
+
+    run_one(
+        &db,
+        Arc::new(FailingHandler {
+            error: || nyuka_domain::DomainError::Storage("disk".into()),
+        }),
+        metrics.clone(),
+        0,
+        1,
+    )
+    .await;
+
+    let snapshot = metrics.take(3600);
+    assert_eq!(snapshot.jobs_failed_service, 1);
+    assert_eq!(snapshot.jobs_failed_source, 0);
+    assert_eq!(snapshot.service_success_rate(), Some(0.0));
+}
+
+/// A retry that will happen is not an outcome. Counting each attempt would
+/// make the rate depend on how many retries are configured, which is a knob
+/// rather than a measurement.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_job_that_will_retry_is_not_counted_yet() {
+    let Some(db) = fresh_database("nyuka_test_slo_retry").await else {
+        return;
+    };
+    let metrics = metrics();
+
+    run_one(
+        &db,
+        Arc::new(FailingHandler {
+            // Retryable, with attempts remaining.
+            error: || nyuka_domain::DomainError::Storage("transient".into()),
+        }),
+        metrics.clone(),
+        0,
+        5,
+    )
+    .await;
+
+    let snapshot = metrics.take(3600);
+    assert_eq!(
+        snapshot.attributable_total(),
+        0,
+        "the job is going to run again; it has not had an outcome yet"
+    );
+}
+
+/// SLO-2 times user-requested downloads from when the request was accepted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_user_requested_download_is_timed_and_a_background_one_is_not() {
+    let Some(db) = fresh_database("nyuka_test_slo_ttfp").await else {
+        return;
+    };
+
+    struct Ok_;
+    #[async_trait::async_trait]
+    impl nyuka_jobs::worker::JobHandler for Ok_ {
+        async fn handle(&self, _job: nyuka_domain::model::Job) -> nyuka_domain::Result<()> {
+            Ok(())
+        }
+    }
+
+    let interactive = metrics();
+    run_one(
+        &db,
+        Arc::new(Ok_),
+        interactive.clone(),
+        nyuka_jobs::metrics::PRIORITY_INTERACTIVE,
+        5,
+    )
+    .await;
+    let snapshot = interactive.take(3600);
+    assert_eq!(snapshot.jobs_succeeded, 1);
+    assert_eq!(
+        snapshot.ttfp_samples, 1,
+        "someone pressed the button and waited"
+    );
+
+    let background = metrics();
+    run_one(
+        &db,
+        Arc::new(Ok_),
+        background.clone(),
+        nyuka_jobs::metrics::PRIORITY_BACKGROUND,
+        5,
+    )
+    .await;
+    let snapshot = background.take(3600);
+    assert_eq!(snapshot.jobs_succeeded, 1);
+    assert_eq!(
+        snapshot.ttfp_samples, 0,
+        "nobody is waiting for a follow sweep's download, and timing it would \
+         measure the scheduler's pacing"
     );
 }

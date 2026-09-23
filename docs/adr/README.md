@@ -32,6 +32,7 @@ Records are numbered in the order decisions were made, not in dependency order. 
 | [0016](0016-use-a-single-accent-neutral-color-system.md) | Use a single-accent neutral color system | **Accepted, with required token corrections** | One accent hue; semantics as dots and bars, never fills. Measurement found the focus ring at 1.92:1 in light mode and three other failing tokens. |
 | [0017](0017-address-the-detail-panel-with-a-nested-route.md) | Address the detail panel with a nested route | Accepted | `/library/$mangaId` over `?selected=`, because the parent stays mounted and the panel gets route loaders and boundaries. Needs `retainSearchParams`. |
 | [0018](0018-keep-motion-in-css.md) | Keep motion in CSS | Accepted | No animation library: `@starting-style` and `allow-discrete` cover enter and exit. Use `tw-animate-css`; `tailwindcss-animate` is deprecated. |
+| [0019](0019-define-the-two-service-level-objectives.md) | Define the two service level objectives | Accepted | 99.9% service-attributable job success; 95% of user-requested downloads readable within 60s. Source faults excluded and counted separately. Settles `NOTIFY` as unnecessary and keeps `vector`/Loki unbuilt. |
 
 ## Reading order
 
@@ -39,7 +40,7 @@ Records are numbered in the order decisions were made, not in dependency order. 
 
 **Frontend foundations.** 0006 (delivery) → 0008 (routing and data) → 0009 (hooks) → 0010 (live updates).
 
-**Observability.** 0015 (instrumentation model) → 0014 (backend sink) → 0013 (frontend ingest). In that order; 0015 is numbered last but underpins the other two.
+**Observability.** 0015 (instrumentation model) → 0014 (backend sink) → 0013 (frontend ingest) → 0019 (objectives). In that order; 0015 is numbered last but underpins the other two, and 0019 closes what 0003 and 0014 deferred.
 
 **Design system.** 0016 (color) → 0017 (master–detail) → 0018 (motion).
 
@@ -67,3 +68,4 @@ These are the checks without which the corresponding decision is unsafe rather t
 - **0009** and **0012** — the GritQL rule banning inline query-key arrays.
 - **0010** — a test asserting `text/event-stream` responses are never compressed.
 - **0016** — a contrast test over *rendered* colors, in both themes, including the focus ring.
+- **0019** — the hourly `nyuka_metrics` snapshot line, which is the only thing that makes the objectives evaluable after log rotation.

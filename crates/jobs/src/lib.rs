@@ -19,6 +19,7 @@
 
 pub mod handlers;
 pub mod limiter;
+pub mod metrics;
 pub mod queue;
 pub mod scheduler;
 pub mod worker;

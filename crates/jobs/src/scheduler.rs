@@ -34,6 +34,7 @@ use nyuka_domain::ports::FollowRepository;
 use nyuka_domain::{DomainError, Result};
 use tokio_util::sync::CancellationToken;
 
+use crate::metrics::JobMetrics;
 use crate::queue::{PostgresQueue, kind_to_str};
 
 /// A job kind the scheduler enqueues on a fixed period.
@@ -95,6 +96,13 @@ pub fn period_key(prefix: &str, every: Duration, now: DateTime<Utc>) -> String {
 #[derive(Debug, Clone)]
 pub struct SchedulerConfig {
     pub tick: Duration,
+    /// How often the metrics snapshot is emitted (ADR-0019).
+    ///
+    /// Hourly, so a month of windows is at most 744 lines — small enough that
+    /// the monthly evaluation is one `jq` sum, and coarse enough that a
+    /// five-minute dip inside a good hour is invisible in the summary. The
+    /// raw lines still show it while they exist, which is the trade.
+    pub metrics_window: Duration,
     /// How long a `running` row may sit untouched before it is assumed to
     /// belong to a process that died without draining.
     pub stale_after: Duration,
@@ -108,6 +116,7 @@ impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
             tick: Duration::from_secs(60),
+            metrics_window: HOUR,
             stale_after: Duration::from_secs(900),
             follow_batch: 200,
             schedule: default_schedule(),
@@ -127,19 +136,58 @@ pub struct TickReport {
 pub struct Scheduler {
     queue: Arc<PostgresQueue>,
     follows: Arc<dyn FollowRepository>,
+    metrics: Arc<JobMetrics>,
     config: SchedulerConfig,
+    /// When the current metrics window opened.
+    window_started: std::sync::Mutex<std::time::Instant>,
 }
 
 impl Scheduler {
     pub fn new(
         queue: Arc<PostgresQueue>,
         follows: Arc<dyn FollowRepository>,
+        metrics: Arc<JobMetrics>,
         config: SchedulerConfig,
     ) -> Self {
         Self {
             queue,
             follows,
+            metrics,
             config,
+            window_started: std::sync::Mutex::new(std::time::Instant::now()),
+        }
+    }
+
+    /// Emits the metrics snapshot when the window has elapsed (ADR-0019).
+    ///
+    /// Driven by the scheduler's existing tick rather than a timer of its
+    /// own: a second timer is a second thing to shut down, and the tick
+    /// already runs often enough that the window closes within a minute of
+    /// its nominal length.
+    ///
+    /// Emitted even when the window was idle. A missing line is
+    /// indistinguishable from a stopped process, and "no jobs ran this hour"
+    /// is a thing an operator reading back through the logs needs to be able
+    /// to see.
+    fn emit_metrics_if_due(&self) {
+        let elapsed = {
+            let mut started = self.window_started.lock().expect("window lock");
+            if started.elapsed() < self.config.metrics_window {
+                return;
+            }
+            let elapsed = started.elapsed();
+            *started = std::time::Instant::now();
+            elapsed
+        };
+
+        let snapshot = self.metrics.take(elapsed.as_secs());
+        match serde_json::to_value(&snapshot) {
+            Ok(fields) => tracing::info!(
+                target: "nyuka_metrics",
+                metrics = %fields,
+                "window"
+            ),
+            Err(e) => tracing::error!(error = %e, "the metrics snapshot could not be serialized"),
         }
     }
 
@@ -175,6 +223,8 @@ impl Scheduler {
 
     /// One pass. Public so the behaviour is testable without waiting a minute.
     pub async fn tick(&self) -> Result<TickReport> {
+        self.emit_metrics_if_due();
+
         let now = Utc::now();
         let mut report = TickReport {
             recovered: self.queue.recover_stale(self.config.stale_after).await?,

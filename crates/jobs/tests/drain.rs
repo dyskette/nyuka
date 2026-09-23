@@ -19,6 +19,12 @@ use nyuka_jobs::worker::{JobHandler, WorkerConfig, WorkerPool};
 use nyuka_persistence::migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 
+/// A fresh metrics sink. Tests that do not assert on it still need one,
+/// because the pool records into it (ADR-0019).
+fn metrics() -> Arc<nyuka_jobs::metrics::JobMetrics> {
+    Arc::new(nyuka_jobs::metrics::JobMetrics::new())
+}
+
 async fn fresh_database(name: &str) -> Option<DatabaseConnection> {
     let base = std::env::var("DATABASE_URL").ok().or_else(|| {
         eprintln!("skipping: set DATABASE_URL to run drain tests");
@@ -105,6 +111,7 @@ async fn shutdown_finishes_in_flight_work_and_stops_claiming() {
             started: started.clone(),
             finished: finished.clone(),
         }),
+        metrics(),
         WorkerConfig {
             workers: 2,
             poll_interval: Duration::from_millis(20),
@@ -171,6 +178,7 @@ async fn work_that_outlasts_the_drain_returns_to_queued() {
             started: started.clone(),
             finished: finished.clone(),
         }),
+        metrics(),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -225,6 +233,7 @@ async fn a_panicking_handler_does_not_block_shutdown() {
     let pool = WorkerPool::start(
         queue.clone(),
         Arc::new(PanicHandler),
+        metrics(),
         WorkerConfig {
             workers: 1,
             poll_interval: Duration::from_millis(20),
@@ -280,6 +289,7 @@ async fn a_retryable_failure_is_rescheduled_and_a_permanent_one_is_not() {
         let pool = WorkerPool::start(
             queue.clone(),
             Arc::new(FailHandler { retryable }),
+            metrics(),
             WorkerConfig {
                 workers: 1,
                 poll_interval: Duration::from_millis(20),

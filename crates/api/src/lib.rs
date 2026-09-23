@@ -220,9 +220,14 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         );
 
     // Step 5.
+    // Shared by the pool that records outcomes and the scheduler that
+    // reports them (ADR-0019).
+    let metrics = Arc::new(nyuka_jobs::metrics::JobMetrics::new());
+
     let pool = WorkerPool::start(
         queue.clone(),
         Arc::new(handlers),
+        metrics.clone(),
         WorkerConfig {
             workers: config.jobs.workers,
             poll_interval: config.jobs.poll_interval,
@@ -235,6 +240,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         Scheduler::new(
             queue.clone(),
             repositories.clone(),
+            metrics,
             SchedulerConfig {
                 stale_after: config.jobs.stale_lock,
                 ..SchedulerConfig::default()

@@ -13,11 +13,12 @@ follows and jobs routes.
 These block work rather than being work. Two need the project owner; one has a
 recommendation in its own ADR that can simply be adopted.
 
-- [ ] **Define the two SLOs** — job success rate and time-to-first-page
-      (ADR-0003 follow-up 5, ADR-0014 follow-up 1). Time-to-first-page is the
-      input that decides whether Postgres `NOTIFY` is ever needed. If either
-      needs window-based evaluation, that is evidence for the `vector`/Loki
-      step sooner rather than later.
+- [x] **Define the two SLOs** — done in
+      [ADR-0019](docs/adr/0019-define-the-two-service-level-objectives.md).
+      99.9% service-attributable job success and 95% of user-requested
+      downloads readable within 60s, both monthly, evaluated from an hourly
+      `nyuka_metrics` snapshot line. Settles `NOTIFY` as unnecessary — it buys
+      at most 2% of the budget — and keeps `vector`/Loki unbuilt.
 - [ ] **Pick the target `.aix` sources for v1** (ADR-0004 follow-up 1). Their
       required imports, not the full ABI, define tier-1 and tier-2 scope.
       ADR-0004 calls this the single highest-leverage step in the project and
@@ -117,6 +118,8 @@ for.
       (ADR-0014 follow-up 2)
 - [ ] **Tune the `job` table** — lower `autovacuum_vacuum_scale_factor`
       (ADR-0003 follow-up 2; the partial index and retention job are done)
+- [ ] **Review the 60s time-to-first-page budget** after a month of real
+      snapshots (ADR-0019 follow-up 5). It is an estimate until then.
 
 ## Frontend
 

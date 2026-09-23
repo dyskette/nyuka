@@ -25,6 +25,7 @@ use nyuka_domain::model::Job;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
+use crate::metrics::{self, JobMetrics};
 use crate::queue::PostgresQueue;
 
 /// Runs one job.
@@ -75,6 +76,7 @@ impl WorkerPool {
     pub fn start(
         queue: Arc<PostgresQueue>,
         handler: Arc<dyn JobHandler>,
+        metrics: Arc<JobMetrics>,
         config: WorkerConfig,
     ) -> Self {
         let cancel = CancellationToken::new();
@@ -83,10 +85,11 @@ impl WorkerPool {
         for index in 0..config.workers.max(1) {
             let queue = queue.clone();
             let handler = handler.clone();
+            let metrics = metrics.clone();
             let cancel = cancel.clone();
             let poll = config.poll_interval;
             tasks.spawn(async move {
-                run_worker(index, queue, handler, cancel, poll).await;
+                run_worker(index, queue, handler, metrics, cancel, poll).await;
                 index
             });
         }
@@ -181,6 +184,7 @@ async fn run_worker(
     index: usize,
     queue: Arc<PostgresQueue>,
     handler: Arc<dyn JobHandler>,
+    metrics: Arc<JobMetrics>,
     cancel: CancellationToken,
     poll: Duration,
 ) {
@@ -193,15 +197,36 @@ async fn run_worker(
         match queue.claim(&name).await {
             Ok(Some(job)) => {
                 let id = job.id;
+                // Measured from when the job was created rather than from
+                // when it was claimed: ADR-0019 starts the clock when the
+                // request was accepted, and the wait in the queue is part of
+                // what a person experienced.
+                let created_at = job.created_at;
+                let interactive = metrics::is_interactive(job.kind, job.priority);
+
                 // The job runs to completion even if shutdown starts: dropping
                 // it here is what the drain exists to avoid.
                 match handler.handle(job).await {
                     Ok(()) => {
                         let _ = queue.complete(id).await;
+                        metrics.record(metrics::Outcome::Succeeded);
+
+                        if interactive
+                            && let Ok(elapsed) = (chrono::Utc::now() - created_at).to_std()
+                        {
+                            metrics.record_time_to_first_page(elapsed);
+                        }
                     }
                     Err(e) => {
                         let retryable = e.is_retryable();
-                        let _ = queue.fail(id, &e.to_string(), retryable).await;
+                        // Counted only once the job is out of attempts. A
+                        // retry that later succeeds is not a failed outcome,
+                        // and counting each attempt would make the rate
+                        // depend on how many retries are configured.
+                        match queue.fail(id, &e.to_string(), retryable).await {
+                            Ok(Some(_next_run_at)) => {}
+                            _ => metrics.record(metrics::classify(&e)),
+                        }
                     }
                 }
             }

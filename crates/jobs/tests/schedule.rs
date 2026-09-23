@@ -17,6 +17,12 @@ use nyuka_persistence::migration::{Migrator, MigratorTrait};
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement};
 use uuid::Uuid;
 
+/// A fresh metrics sink. Tests that do not assert on it still need one,
+/// because the pool records into it (ADR-0019).
+fn metrics() -> Arc<nyuka_jobs::metrics::JobMetrics> {
+    Arc::new(nyuka_jobs::metrics::JobMetrics::new())
+}
+
 async fn fresh_database(name: &str) -> Option<DatabaseConnection> {
     let base = std::env::var("DATABASE_URL").ok().or_else(|| {
         eprintln!("skipping: set DATABASE_URL to run scheduler tests");
@@ -120,7 +126,12 @@ async fn repeated_ticks_within_a_period_enqueue_once() {
         return;
     };
     let queue = Arc::new(PostgresQueue::new(db.clone()));
-    let scheduler = Scheduler::new(queue.clone(), follows(&db), SchedulerConfig::default());
+    let scheduler = Scheduler::new(
+        queue.clone(),
+        follows(&db),
+        metrics(),
+        SchedulerConfig::default(),
+    );
 
     let first = scheduler.tick().await.expect("first tick");
     assert_eq!(
@@ -168,7 +179,7 @@ async fn a_new_period_enqueues_again() {
         }],
         ..Default::default()
     };
-    let scheduler = Scheduler::new(queue.clone(), follows(&db), config);
+    let scheduler = Scheduler::new(queue.clone(), follows(&db), metrics(), config);
 
     scheduler.tick().await.expect("first tick");
     // Long enough to cross a one-second bucket boundary from anywhere inside
@@ -194,7 +205,12 @@ async fn a_never_checked_follow_is_due_and_a_freshly_checked_one_is_not() {
     insert_follow(&db, 3600, Some("now() - interval '2 hours'")).await;
 
     let queue = Arc::new(PostgresQueue::new(db.clone()));
-    let scheduler = Scheduler::new(queue.clone(), follows(&db), SchedulerConfig::default());
+    let scheduler = Scheduler::new(
+        queue.clone(),
+        follows(&db),
+        metrics(),
+        SchedulerConfig::default(),
+    );
 
     let report = scheduler.tick().await.expect("tick");
     assert_eq!(
@@ -222,7 +238,12 @@ async fn follows_are_keyed_independently() {
         insert_follow(&db, 3600, None).await;
     }
     let queue = Arc::new(PostgresQueue::new(db.clone()));
-    let scheduler = Scheduler::new(queue.clone(), follows(&db), SchedulerConfig::default());
+    let scheduler = Scheduler::new(
+        queue.clone(),
+        follows(&db),
+        metrics(),
+        SchedulerConfig::default(),
+    );
 
     assert_eq!(scheduler.tick().await.expect("tick").follows, 4);
 }
@@ -239,6 +260,7 @@ async fn the_follow_batch_bounds_one_tick() {
     let scheduler = Scheduler::new(
         queue.clone(),
         follows(&db),
+        metrics(),
         SchedulerConfig {
             follow_batch: 2,
             ..Default::default()
@@ -279,7 +301,12 @@ async fn a_tick_recovers_rows_stranded_by_a_hard_kill() {
     )
     .await;
 
-    let scheduler = Scheduler::new(queue.clone(), follows(&db), SchedulerConfig::default());
+    let scheduler = Scheduler::new(
+        queue.clone(),
+        follows(&db),
+        metrics(),
+        SchedulerConfig::default(),
+    );
     let report = scheduler.tick().await.expect("tick");
 
     assert_eq!(report.recovered, 1);
@@ -311,10 +338,15 @@ async fn a_tick_leaves_a_live_worker_alone() {
         .expect("enqueue");
     let job = queue.claim("busy").await.expect("claim").expect("a job");
 
-    let report = Scheduler::new(queue.clone(), follows(&db), SchedulerConfig::default())
-        .tick()
-        .await
-        .expect("tick");
+    let report = Scheduler::new(
+        queue.clone(),
+        follows(&db),
+        metrics(),
+        SchedulerConfig::default(),
+    )
+    .tick()
+    .await
+    .expect("tick");
 
     assert_eq!(report.recovered, 0);
     assert_eq!(
