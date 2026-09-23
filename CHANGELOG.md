@@ -40,6 +40,10 @@ API serves its full route surface; the frontend is scaffolded but not built.
 
 - OIDC authorization-code flow with PKCE, server-side sessions in PostgreSQL,
   and signed `HttpOnly` cookies. Tokens never reach the browser.
+- `AUTH_MODE=none` for a barebones self-host: every request is served as a
+  single seeded local user, with no identity provider, client secret or
+  allow-list. Cheap because nothing in the application is partitioned by
+  user — `session.user_id` is the only foreign key to `app_user`.
 - CSRF as a middleware invariant, rate limiting on `/auth/*` keyed on a
   trust-aware client address, and problem+json (RFC 9457) for every error.
 - REST surface for the library, follows, jobs, source repositories, sources,

@@ -47,6 +47,34 @@ impl From<String> for Secret {
     }
 }
 
+/// How requests are authenticated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthMode {
+    /// The OIDC flow. The default, and what a deployment anyone else can
+    /// reach should use.
+    Oidc,
+    /// No authentication at all.
+    ///
+    /// For a barebones self-host: one person, one machine, no identity
+    /// provider to stand up. Every request is treated as a single seeded
+    /// local user, so nothing downstream needs a second code path.
+    None,
+}
+
+impl AuthMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "oidc" => Some(Self::Oidc),
+            "none" => Some(Self::None),
+            _ => None,
+        }
+    }
+
+    pub fn is_disabled(self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
 /// Every problem found, so one restart surfaces all of them.
 #[derive(Debug)]
 pub struct ConfigError {
@@ -136,6 +164,13 @@ pub struct RawConfig {
     #[serde(default)]
     pub library_root: String,
 
+    /// `oidc` or `none`.
+    ///
+    /// Explicit rather than inferred from an empty issuer: a typo in
+    /// `OIDC_ISSUER_URL` must fail the boot, not silently serve an
+    /// unauthenticated instance.
+    #[serde(default = "default_auth_mode")]
+    pub auth_mode: String,
     #[serde(default)]
     pub oidc_issuer_url: String,
     #[serde(default)]
@@ -200,6 +235,7 @@ impl Default for RawConfig {
             database_url: String::new(),
             bind_addr: default_bind(),
             library_root: String::new(),
+            auth_mode: default_auth_mode(),
             oidc_issuer_url: String::new(),
             oidc_client_id: String::new(),
             oidc_client_secret: String::new(),
@@ -230,6 +266,9 @@ impl Default for RawConfig {
 
 fn default_bind() -> String {
     "0.0.0.0:8080".into()
+}
+fn default_auth_mode() -> String {
+    "oidc".into()
 }
 fn default_session_ttl() -> u32 {
     720
@@ -277,6 +316,20 @@ fn default_sse_retry() -> u64 {
     5_000
 }
 
+/// A random key for a run with no configured one.
+///
+/// Built from UUIDv4 bytes, which come from the platform CSPRNG. Only reached
+/// with `AUTH_MODE=none`, where losing sessions on restart costs nothing
+/// because there is no sign-in to lose.
+fn ephemeral_session_key() -> String {
+    let mut key = String::with_capacity(SESSION_KEY_BYTES * 2);
+    while key.len() < SESSION_KEY_BYTES * 2 {
+        key.push_str(&uuid::Uuid::new_v4().simple().to_string());
+    }
+    key.truncate(SESSION_KEY_BYTES * 2);
+    key
+}
+
 /// Splits a comma-separated list, dropping blanks.
 ///
 /// Trailing commas and stray whitespace are ordinary in a `.env` file and
@@ -293,6 +346,7 @@ fn list(raw: &str) -> Vec<String> {
 /// The OIDC settings.
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
+    pub mode: AuthMode,
     pub issuer_url: String,
     pub client_id: String,
     pub client_secret: Secret,
@@ -313,6 +367,13 @@ impl AuthConfig {
     /// system denies regardless. Only one of those survives someone adding a
     /// `--skip-validation` flag.
     pub fn permits(&self, subject: &str, groups: &[String]) -> bool {
+        // Not reachable with authentication off — there is no callback to
+        // check — but answering honestly matters more than being unreachable,
+        // because an unreachable branch that returns the wrong thing is one
+        // refactor away from being reachable.
+        if self.mode.is_disabled() {
+            return true;
+        }
         self.allowed_subjects.iter().any(|s| s == subject)
             || groups
                 .iter()
@@ -405,45 +466,75 @@ impl RawConfig {
             problems.push("LIBRARY_ROOT is required".into());
         }
 
-        for (name, value) in [
-            ("OIDC_ISSUER_URL", &self.oidc_issuer_url),
-            ("OIDC_CLIENT_ID", &self.oidc_client_id),
-            ("OIDC_CLIENT_SECRET", &self.oidc_client_secret),
-            ("OIDC_REDIRECT_URL", &self.oidc_redirect_url),
-        ] {
-            if value.trim().is_empty() {
-                problems.push(format!("{name} is required"));
+        let mode = match AuthMode::parse(&self.auth_mode) {
+            Some(mode) => mode,
+            None => {
+                problems.push(format!(
+                    "AUTH_MODE `{}` is not recognised; expected `oidc` or `none`",
+                    self.auth_mode
+                ));
+                // Assume the secure mode while collecting the rest, so a
+                // typo does not also suppress every OIDC problem below it.
+                AuthMode::Oidc
             }
-        }
-
-        for (name, value) in [
-            ("OIDC_ISSUER_URL", &self.oidc_issuer_url),
-            ("OIDC_REDIRECT_URL", &self.oidc_redirect_url),
-        ] {
-            if !value.trim().is_empty() && url::Url::parse(value).is_err() {
-                problems.push(format!("{name} is not a url"));
-            }
-        }
+        };
 
         let allowed_subjects = list(&self.auth_allowed_subjects);
         let allowed_groups = list(&self.auth_allowed_groups);
-        if allowed_subjects.is_empty() && allowed_groups.is_empty() {
-            problems.push(
-                "AUTH_ALLOWED_SUBJECTS and AUTH_ALLOWED_GROUPS are both empty, which denies \
-                 everyone including you; set at least one"
-                    .into(),
-            );
-        }
+        let session_key = self.session_key.trim().to_string();
 
-        let session_key = self.session_key.trim();
-        if session_key.is_empty() {
+        // Only required when something authenticates. With `AUTH_MODE=none`
+        // there is no flow to configure, and demanding an issuer, a client
+        // secret and an allow-list for a deployment that uses none of them is
+        // the friction that makes people pick the insecure option and then
+        // fake the values.
+        if mode == AuthMode::Oidc {
+            for (name, value) in [
+                ("OIDC_ISSUER_URL", &self.oidc_issuer_url),
+                ("OIDC_CLIENT_ID", &self.oidc_client_id),
+                ("OIDC_CLIENT_SECRET", &self.oidc_client_secret),
+                ("OIDC_REDIRECT_URL", &self.oidc_redirect_url),
+            ] {
+                if value.trim().is_empty() {
+                    problems.push(format!("{name} is required when AUTH_MODE is `oidc`"));
+                }
+            }
+
+            for (name, value) in [
+                ("OIDC_ISSUER_URL", &self.oidc_issuer_url),
+                ("OIDC_REDIRECT_URL", &self.oidc_redirect_url),
+            ] {
+                if !value.trim().is_empty() && url::Url::parse(value).is_err() {
+                    problems.push(format!("{name} is not a url"));
+                }
+            }
+
+            if allowed_subjects.is_empty() && allowed_groups.is_empty() {
+                problems.push(
+                    "AUTH_ALLOWED_SUBJECTS and AUTH_ALLOWED_GROUPS are both empty, which denies \
+                     everyone including you; set at least one"
+                        .into(),
+                );
+            }
+
+            if session_key.is_empty() {
+                problems.push(format!(
+                    "SESSION_KEY is required when AUTH_MODE is `oidc`; generate one with \
+                     `openssl rand -hex {SESSION_KEY_BYTES}`"
+                ));
+            } else if session_key.len() < SESSION_KEY_BYTES {
+                problems.push(format!(
+                    "SESSION_KEY is {} characters; at least {SESSION_KEY_BYTES} are required, and \
+                     restarting with a different one logs everyone out",
+                    session_key.len()
+                ));
+            }
+        } else if !session_key.is_empty() && session_key.len() < SESSION_KEY_BYTES {
+            // Optional here, but a short one is still a mistake worth naming
+            // rather than silently replacing.
             problems.push(format!(
-                "SESSION_KEY is required; generate one with `openssl rand -hex {SESSION_KEY_BYTES}`"
-            ));
-        } else if session_key.len() < SESSION_KEY_BYTES {
-            problems.push(format!(
-                "SESSION_KEY is {} characters; at least {SESSION_KEY_BYTES} are required, and \
-                 restarting with a different one logs everyone out",
+                "SESSION_KEY is {} characters; at least {SESSION_KEY_BYTES} are required, or \
+                 leave it unset and one will be generated for this run",
                 session_key.len()
             ));
         }
@@ -514,13 +605,22 @@ impl RawConfig {
             bind_addr: bind_addr.expect("checked above"),
             library_root: PathBuf::from(self.library_root),
             auth: AuthConfig {
+                mode,
                 issuer_url: self.oidc_issuer_url,
                 client_id: self.oidc_client_id,
                 client_secret: self.oidc_client_secret.into(),
                 redirect_url: self.oidc_redirect_url,
                 allowed_subjects,
                 allowed_groups,
-                session_key: session_key.to_string().into(),
+                // With authentication off and no key supplied, one is
+                // generated per run. Sessions then carry nothing that
+                // survives a restart — which is correct, because with no
+                // sign-in there is no state in them worth keeping.
+                session_key: if session_key.is_empty() {
+                    ephemeral_session_key().into()
+                } else {
+                    session_key.into()
+                },
                 session_ttl: Duration::from_secs(u64::from(self.session_ttl_hours) * 3600),
             },
             jobs: JobsConfig {
@@ -632,10 +732,135 @@ mod tests {
         );
     }
 
+    fn barebones() -> RawConfig {
+        RawConfig {
+            database_url: "postgres://u:p@localhost:5432/nyuka".into(),
+            library_root: "/library".into(),
+            auth_mode: "none".into(),
+            ..RawConfig::default()
+        }
+    }
+
+    /// The point of the mode: a barebones deployment needs a database, a
+    /// library, and nothing else.
+    #[test]
+    fn no_auth_needs_no_oidc_settings_and_no_secret() {
+        let config = barebones().validate().expect("should be valid");
+        assert_eq!(config.auth.mode, AuthMode::None);
+        assert!(config.auth.allowed_subjects.is_empty());
+    }
+
+    /// Generated per run. Sessions carry nothing that survives a restart
+    /// because there is no sign-in to lose.
+    #[test]
+    fn no_auth_generates_a_session_key_when_none_is_given() {
+        let first = barebones().validate().expect("valid");
+        let second = barebones().validate().expect("valid");
+
+        assert!(first.auth.session_key.expose().len() >= SESSION_KEY_BYTES);
+        assert_ne!(
+            first.auth.session_key.expose(),
+            second.auth.session_key.expose(),
+            "a fixed fallback key would be a published secret"
+        );
+    }
+
+    #[test]
+    fn a_supplied_session_key_is_still_used_with_no_auth() {
+        let config = RawConfig {
+            session_key: "a".repeat(SESSION_KEY_BYTES),
+            ..barebones()
+        }
+        .validate()
+        .expect("valid");
+        assert_eq!(
+            config.auth.session_key.expose(),
+            "a".repeat(SESSION_KEY_BYTES)
+        );
+    }
+
+    /// A short key is a mistake either way, and silently replacing it would
+    /// hide it.
+    #[test]
+    fn a_short_session_key_is_still_refused_with_no_auth() {
+        let problems = problems(RawConfig {
+            session_key: "short".into(),
+            ..barebones()
+        });
+        assert!(mentions(&problems, "SESSION_KEY"));
+    }
+
+    /// The mode is explicit precisely so a typo cannot disable
+    /// authentication. An unrecognised value must fail, not fall back.
+    #[test]
+    fn an_unrecognised_auth_mode_is_refused() {
+        for value in ["", "off", "disabled", "no", "oidc none", "0"] {
+            let problems = problems(RawConfig {
+                auth_mode: value.into(),
+                ..valid()
+            });
+            assert!(
+                mentions(&problems, "AUTH_MODE"),
+                "{value:?} must be refused rather than guessed at"
+            );
+        }
+    }
+
+    /// Case and surrounding whitespace are tolerated: a trailing space in a
+    /// `.env` file is ordinary, and failing the boot over one would be
+    /// friction with no safety in it.
+    #[test]
+    fn the_mode_is_case_insensitive_and_trimmed() {
+        for value in ["oidc", "OIDC", "Oidc", " oidc ", "oidc\t"] {
+            assert!(
+                RawConfig {
+                    auth_mode: value.into(),
+                    ..valid()
+                }
+                .validate()
+                .is_ok(),
+                "{value} should be accepted"
+            );
+        }
+        for value in ["none", "NONE", "None", " none "] {
+            assert!(
+                RawConfig {
+                    auth_mode: value.into(),
+                    ..barebones()
+                }
+                .validate()
+                .is_ok(),
+                "{value} should be accepted"
+            );
+        }
+    }
+
+    /// A bad mode must not also suppress the OIDC problems underneath it, or
+    /// fixing the typo reveals four more failures one restart later.
+    #[test]
+    fn an_unrecognised_mode_still_reports_the_oidc_problems() {
+        let problems = problems(RawConfig {
+            auth_mode: "nope".into(),
+            oidc_issuer_url: String::new(),
+            ..valid()
+        });
+        assert!(mentions(&problems, "AUTH_MODE"));
+        assert!(mentions(&problems, "OIDC_ISSUER_URL"));
+    }
+
+    /// Unreachable while authentication is off, but an unreachable branch
+    /// that returns the wrong thing is one refactor from being reachable.
+    #[test]
+    fn permits_admits_everyone_when_authentication_is_off() {
+        let config = barebones().validate().expect("valid");
+        assert!(config.auth.permits("anybody", &[]));
+    }
+
     /// The runtime check stays fail-closed independently of the startup one.
     #[test]
     fn an_empty_allow_list_permits_nobody() {
         let auth = AuthConfig {
+            mode: AuthMode::Oidc,
             issuer_url: String::new(),
             client_id: String::new(),
             client_secret: String::new().into(),
@@ -651,6 +876,7 @@ mod tests {
     #[test]
     fn a_permitted_subject_or_group_is_admitted_and_others_are_not() {
         let auth = AuthConfig {
+            mode: AuthMode::Oidc,
             issuer_url: String::new(),
             client_id: String::new(),
             client_secret: String::new().into(),

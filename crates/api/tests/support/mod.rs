@@ -104,6 +104,23 @@ pub async fn fresh_database(name: &str) -> Option<DatabaseConnection> {
 }
 
 pub fn config(library_root: &std::path::Path) -> Config {
+    raw_config(library_root)
+        .validate()
+        .expect("valid test config")
+}
+
+/// The barebones configuration: a database, a library, and no identity
+/// provider.
+pub fn no_auth_config(library_root: &std::path::Path) -> Config {
+    RawConfig {
+        auth_mode: "none".into(),
+        ..raw_config(library_root)
+    }
+    .validate()
+    .expect("valid test config")
+}
+
+fn raw_config(library_root: &std::path::Path) -> RawConfig {
     RawConfig {
         database_url: "postgres://u:p@localhost:5432/nyuka".into(),
         library_root: library_root.display().to_string(),
@@ -115,8 +132,6 @@ pub fn config(library_root: &std::path::Path) -> Config {
         session_key: "0".repeat(64),
         ..RawConfig::default()
     }
-    .validate()
-    .expect("the test configuration must be valid")
 }
 
 /// Builds a router over a fresh, **unmigrated** database.
@@ -124,14 +139,51 @@ pub fn config(library_root: &std::path::Path) -> Config {
 /// Unmigrated on purpose: readiness has to be observable before the schema is
 /// current, and a test that migrated first could not see that state.
 pub async fn harness(name: &str) -> Option<Harness> {
+    build(name, false).await
+}
+
+/// A router with `AUTH_MODE=none`, as a barebones deployment runs it.
+pub async fn no_auth_harness(name: &str) -> Option<Harness> {
+    build(name, true).await
+}
+
+async fn build(name: &str, no_auth: bool) -> Option<Harness> {
     let db = fresh_database(name).await?;
     let library = tempfile::tempdir().expect("tempdir");
     let repositories = Arc::new(Repositories::new(db.clone()));
     let store = nyuka_packaging::store::LibraryStore::open(library.path()).expect("library opens");
     let (event_tx, _) = tokio::sync::broadcast::channel(EVENT_CAPACITY);
 
+    // Seeded the way `main` does, so the id in the router is a real row and
+    // `/me` can look it up.
+    //
+    // This variant migrates first, unlike the default one. `main` always
+    // migrates before seeding, and a router built with authentication off
+    // has no reason to be observed against an empty schema — the case the
+    // default harness leaves unmigrated for is readiness, which does not use
+    // this path.
+    let local_user = if no_auth {
+        use nyuka_persistence::migration::MigratorTrait;
+        nyuka_persistence::migration::Migrator::up(&db, None)
+            .await
+            .expect("migrating");
+        Some(
+            repositories
+                .record_sign_in("local", "local")
+                .await
+                .expect("seeding the local user")
+                .id,
+        )
+    } else {
+        None
+    };
+
     let state = Arc::new(AppState {
-        config: config(library.path()),
+        config: if no_auth {
+            no_auth_config(library.path())
+        } else {
+            config(library.path())
+        },
         db: db.clone(),
         manga: repositories.clone(),
         chapters: repositories.clone(),
@@ -144,6 +196,7 @@ pub async fn harness(name: &str) -> Option<Harness> {
         queue: Arc::new(nyuka_jobs::queue::PostgresQueue::new(db.clone())),
         events: Arc::new(BroadcastBus::new(event_tx.clone())),
         users: repositories,
+        local_user,
         limiter: Arc::new(nyuka_jobs::limiter::SourceLimiter::new(4)),
         sessions: SessionRepository::new(db.clone()),
         // No identity provider is reachable from a test, and discovery would

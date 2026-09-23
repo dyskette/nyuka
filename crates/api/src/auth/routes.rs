@@ -36,11 +36,7 @@ pub async fn login(
     session: Session,
     Query(query): Query<LoginQuery>,
 ) -> ApiResult<Response> {
-    let oidc = state.oidc.as_ref().ok_or_else(|| {
-        ApiError(Box::new(
-            Problem::internal().with_detail("This server is not configured for sign-in."),
-        ))
-    })?;
+    let oidc = state.oidc.as_ref().ok_or_else(|| auth_disabled(&state))?;
 
     let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
     let (url, csrf, nonce) = oidc
@@ -99,11 +95,7 @@ pub async fn callback(
     session: Session,
     Query(query): Query<CallbackQuery>,
 ) -> ApiResult<Response> {
-    let oidc = state.oidc.as_ref().ok_or_else(|| {
-        ApiError(Box::new(
-            Problem::internal().with_detail("This server is not configured for sign-in."),
-        ))
-    })?;
+    let oidc = state.oidc.as_ref().ok_or_else(|| auth_disabled(&state))?;
 
     // Take the flow's secrets out of the session before anything else, so a
     // replayed callback finds nothing to validate against no matter which
@@ -264,10 +256,19 @@ pub struct Me {
 
 /// `GET /api/v1/me` — who the session belongs to.
 pub async fn me(State(state): State<Arc<AppState>>, session: Session) -> ApiResult<Json<Me>> {
-    let user_id: Option<String> = session.get(USER_ID_KEY).await.map_err(session_failed)?;
-    let user_id = user_id
-        .and_then(|id| uuid::Uuid::parse_str(&id).ok())
-        .ok_or_else(|| ApiError(Box::new(Problem::unauthenticated())))?;
+    // With authentication off the guard has already resolved this, but `/me`
+    // is mounted outside the guard so the frontend can ask "am I signed in?"
+    // without a redirect. Reading the same value here keeps that answer
+    // consistent with what every protected route would give.
+    let user_id = match state.local_user {
+        Some(local) => local.0,
+        None => {
+            let stored: Option<String> = session.get(USER_ID_KEY).await.map_err(session_failed)?;
+            stored
+                .and_then(|id| uuid::Uuid::parse_str(&id).ok())
+                .ok_or_else(|| ApiError(Box::new(Problem::unauthenticated())))?
+        }
+    };
 
     let user = state
         .users
@@ -297,6 +298,33 @@ fn groups_from(
     >,
 ) -> Vec<String> {
     claims.additional_claims().groups.clone()
+}
+
+/// The refusal for a sign-in endpoint on a server that has no sign-in.
+///
+/// Two different failures wear the same shape here, so they are told apart:
+/// authentication genuinely off is a `404` — the endpoint is not part of this
+/// deployment — while a missing client with authentication *on* is a server
+/// fault, because startup should have failed rather than reaching this.
+fn auth_disabled(state: &AppState) -> ApiError {
+    if state.local_user.is_some() {
+        return ApiError(Box::new(
+            Problem::new(
+                axum::http::StatusCode::NOT_FOUND,
+                "auth-disabled",
+                "Sign-in is not available",
+            )
+            .with_detail(
+                "This server runs with AUTH_MODE=none, so there is nothing to sign in to.",
+            ),
+        ));
+    }
+
+    tracing::error!(
+        "the OIDC client is missing while authentication is enabled; startup should \
+         have failed"
+    );
+    ApiError(Box::new(Problem::internal()))
 }
 
 fn session_failed(e: impl std::fmt::Display) -> ApiError {

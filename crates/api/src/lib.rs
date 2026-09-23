@@ -152,11 +152,24 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     // Discovered at startup, not at first sign-in: an unreachable or
     // misconfigured issuer must fail the boot where an operator is watching
     // (ADR-0005 follow-up 5).
-    let oidc = Some(Arc::new(
-        crate::auth::OidcClient::discover(&config.auth)
+    let (oidc, local_user) = if config.auth.mode.is_disabled() {
+        warn_authentication_is_off(&config);
+
+        // One row, created once. Every request is this user, so `/me`, the
+        // session's `user_id` and the telemetry `user.id` field all keep
+        // their shapes — there is no anonymous branch for a handler to get
+        // wrong. Switching to OIDC later leaves it behind as an inert row.
+        let user = repositories
+            .record_sign_in(LOCAL_ISSUER, LOCAL_SUBJECT)
             .await
-            .context("discovering the OIDC provider")?,
-    ));
+            .context("seeding the local user")?;
+        (None, Some(user.id))
+    } else {
+        let client = crate::auth::OidcClient::discover(&config.auth)
+            .await
+            .context("discovering the OIDC provider")?;
+        (Some(Arc::new(client)), None)
+    };
 
     let (event_tx, _) = broadcast::channel(EVENT_CAPACITY);
     let events = Arc::new(BroadcastBus::new(event_tx.clone()));
@@ -264,6 +277,7 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
         queue,
         events,
         users: repositories,
+        local_user,
         limiter,
         sessions,
         oidc,
@@ -364,6 +378,41 @@ pub fn openapi_document() -> utoipa::openapi::OpenApi {
     documented_routes().split_for_parts().1
 }
 
+/// The identity the seeded local user is recorded under.
+///
+/// `(issuer, subject)` is the natural key, so these constants are what make
+/// the seed idempotent across restarts and what keeps it from ever colliding
+/// with a real provider's subject.
+pub const LOCAL_ISSUER: &str = "local";
+pub const LOCAL_SUBJECT: &str = "local";
+
+/// Says out loud what `AUTH_MODE=none` means for this deployment.
+///
+/// Two messages rather than one: a loopback bind is a reasonable barebones
+/// setup and gets a short note, while a non-loopback bind is the case where
+/// the consequence is worth spelling out. Installing a source makes this
+/// server fetch and execute third-party WebAssembly, so an open instance is
+/// not only a readable library.
+fn warn_authentication_is_off(config: &Config) {
+    if config.bind_addr.ip().is_loopback() {
+        tracing::warn!(
+            bind = %config.bind_addr,
+            "authentication is disabled (AUTH_MODE=none); the server is bound to \
+             loopback, so only this host can reach it"
+        );
+        return;
+    }
+
+    tracing::warn!(
+        bind = %config.bind_addr,
+        "authentication is disabled (AUTH_MODE=none) and this server is listening \
+         on a non-loopback address. Anyone who can reach this port can browse the \
+         library, queue downloads, and install sources — which makes this server \
+         fetch and execute third-party WebAssembly. Put it behind a VPN, a \
+         firewall, or an authenticating proxy, or set AUTH_MODE=oidc."
+    );
+}
+
 /// The response compression layer.
 ///
 /// A function rather than an inline `CompressionLayer::new()` so the test that
@@ -446,7 +495,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/telemetry",
             post(routes::telemetry::ingest).layer(RequestBodyLimitLayer::new(telemetry_body_limit)),
         )
-        .layer(axum::middleware::from_fn(auth::require_session));
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_session,
+        ));
 
     // Rate-limited as a group. The callback is included deliberately: it
     // performs a token exchange against the identity provider, so leaving it

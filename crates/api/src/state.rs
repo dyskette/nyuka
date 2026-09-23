@@ -39,6 +39,14 @@ pub struct AppState {
     pub events: Arc<dyn EventBus>,
     pub users: Arc<dyn UserRepository>,
 
+    /// The seeded local user, when `AUTH_MODE=none`.
+    ///
+    /// `Some` means authentication is off and every request is this user.
+    /// Carrying the id rather than a boolean is what lets the guard hand
+    /// handlers the same `CurrentUser` they get from a real session, so
+    /// nothing downstream knows which mode it is running in.
+    pub local_user: Option<nyuka_domain::model::UserId>,
+
     /// Shared with the worker pool.
     ///
     /// The API holds it so a freshly installed source's declared limit takes

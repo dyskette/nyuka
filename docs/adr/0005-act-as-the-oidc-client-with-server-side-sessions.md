@@ -80,6 +80,42 @@ The organizational standard puts `cargo-deny` and `cargo-audit` in the pipeline,
 
 So the decision is: use `client_secret_basic` or `client_secret_post` for client authentication, do not enable encrypted ID tokens, prefer an IdP signing algorithm of `ES256` where the provider supports it, and record a `cargo-deny` exception for RUSTSEC-2023-0071 that states this reasoning inline, names an owner, and carries a review date. An advisory exception with a written rationale is a security control. An advisory exception without one is a hole with a comment next to it.
 
+### Amendment: `AUTH_MODE=none`
+
+Added after the fact, and cheap for a reason this decision already established:
+**nothing in the application is partitioned by user.** `session.user_id` is the
+only foreign key to `app_user`, and it is nullable. No series, chapter, follow,
+download, job or source references a user. The claim above — that `user` exists
+for identity and audit rather than for partitioning — turned out to be true of
+the schema and not only of the intent.
+
+So `AUTH_MODE=none` serves every request as a single seeded local user. There
+is no anonymous code path: the guard substitutes a `CurrentUser` the same way a
+real session would, so no handler knows which mode it is running in and none
+can forget to handle one.
+
+Three properties make it safe to offer rather than merely possible:
+
+1. **The mode is explicit**, not inferred from an empty issuer. `OIDC_ISSUER_UR=…`
+   is a plausible typo, and inferring would turn it into a silently open server
+   instead of a failed boot.
+2. **Startup says what it means**, with different wording for a loopback bind
+   than for a reachable one. The consequence worth stating is not the readable
+   library — it is that installing a source makes this server fetch and execute
+   third-party WebAssembly.
+3. **The default is unchanged.** A test asserts the default harness still
+   refuses an unauthenticated request, because a leak of the new mode into the
+   default would make every access-control test in the suite pass for the wrong
+   reason.
+
+`SESSION_KEY` becomes optional in this mode and one is generated per run.
+Sessions then carry nothing that survives a restart, which is correct: with no
+sign-in there is no state in them worth keeping.
+
+This does not weaken the analysis above. Everything this ADR says about the
+OIDC path remains the default and remains what a deployment anyone else can
+reach should use.
+
 ## Consequences
 
 ### What you gain

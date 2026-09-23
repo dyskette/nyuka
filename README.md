@@ -40,12 +40,30 @@ the composition root. CI enforces the dependency rule.
 
 ## Setup
 
+The quickest thing that runs, with no identity provider:
+
+```bash
+docker compose up -d postgres
+
+DATABASE_URL=postgres://nyuka:nyuka@localhost:5432/nyuka \
+LIBRARY_ROOT=./library \
+AUTH_MODE=none \
+BIND_ADDR=127.0.0.1:8080 \
+  cargo run -p nyuka-api
+
+cd web && npm install && npm run dev   # Vite dev server, proxying /api
+```
+
+Three variables and a database. `AUTH_MODE=none` serves every request as a
+single local user — see [Running without authentication](#running-without-authentication)
+for when that is and is not appropriate.
+
+With an identity provider:
+
 ```bash
 cp .env.example .env          # then fill in the OIDC and session secrets
 docker compose up -d postgres flaresolverr
 cargo run -p nyuka-api        # API on :8080
-
-cd web && npm install && npm run dev   # Vite dev server, proxying /api
 ```
 
 Migrations run on boot. `/readyz` reports whether they are current.
@@ -63,6 +81,44 @@ malformed, rather than failing at first use.
 Secrets — `OIDC_CLIENT_SECRET`, `DATABASE_URL`, `SESSION_KEY` — arrive from
 Docker secrets or a vault. They are never baked into an image, and a
 redaction layer keeps them out of logs and spans.
+
+### Running without authentication
+
+`AUTH_MODE=none` exists because standing up an identity provider to read your
+own manga on your own machine is disproportionate. It serves every request as
+one seeded local user, so nothing downstream behaves differently — `/me`
+answers, sessions still work, and switching to `oidc` later leaves the local
+user behind as an inert row.
+
+It is cheap to support because **nothing in this application is partitioned by
+user**. `session.user_id` is the only foreign key to `app_user` and it is
+nullable; no series, chapter, follow, download, job or source references a
+user. The library is shared by design (ADR-0005), so authentication governs
+who can reach the server, not who can see what.
+
+> [!WARNING]
+> Anyone who can reach the port can browse the library, queue downloads, and
+> **install sources — which makes this server fetch and execute third-party
+> WebAssembly**. That is a larger consequence than an exposed reading list.
+> Bind to loopback, or put it behind a VPN, a firewall, or an authenticating
+> proxy.
+
+The server says so at startup, and says something different depending on
+whether it can be reached from outside the host:
+
+```
+WARN authentication is disabled (AUTH_MODE=none); the server is bound to
+     loopback, so only this host can reach it
+
+WARN authentication is disabled (AUTH_MODE=none) and this server is listening
+     on a non-loopback address. Anyone who can reach this port can browse the
+     library, queue downloads, and install sources — which makes this server
+     fetch and execute third-party WebAssembly. …
+```
+
+The mode is explicit rather than inferred from an empty issuer URL, so
+`OIDC_ISSUER_UR=https://…` fails the boot instead of quietly opening the
+server.
 
 ## Runbook
 

@@ -248,3 +248,77 @@ async fn ordinary_routes_are_not_rate_limited() {
 /// show.
 #[test]
 fn the_uncovered_negative_paths_are_written_down() {}
+
+// ---------------------------------------------------------------------------
+// AUTH_MODE=none
+// ---------------------------------------------------------------------------
+
+/// The point of the mode: a barebones deployment serves without a session.
+#[tokio::test(flavor = "multi_thread")]
+async fn with_authentication_off_protected_routes_serve_without_a_session() {
+    let Some(h) = support::no_auth_harness("nyuka_test_noauth_open").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (status, body) = h.get("/api/v1/manga").await;
+    assert_eq!(status, StatusCode::OK, "got {body}");
+    assert_eq!(body["items"], serde_json::json!([]));
+}
+
+/// Every handler keeps the same shape, so `/me` answers with the seeded user
+/// rather than a second anonymous representation.
+#[tokio::test(flavor = "multi_thread")]
+async fn with_authentication_off_me_reports_the_local_user() {
+    let Some(h) = support::no_auth_harness("nyuka_test_noauth_me").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (status, body) = h.get("/api/v1/me").await;
+    assert_eq!(status, StatusCode::OK, "got {body}");
+    assert_eq!(body["issuer"], "local");
+    assert_eq!(body["subject"], "local");
+}
+
+/// There is nothing to sign in to, and saying so is better than a 500 or a
+/// redirect into a flow that cannot complete.
+#[tokio::test(flavor = "multi_thread")]
+async fn with_authentication_off_the_sign_in_endpoints_say_so() {
+    let Some(h) = support::no_auth_harness("nyuka_test_noauth_login").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (status, body) = h.get("/api/v1/auth/login").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["type"], "/problems/auth-disabled");
+}
+
+/// CSRF is not about authentication. It still applies, because it costs one
+/// header and the frontend sends it either way — and removing it here would
+/// be a second behaviour difference between the two modes for no gain.
+#[tokio::test(flavor = "multi_thread")]
+async fn csrf_still_applies_with_authentication_off() {
+    let Some(h) = support::no_auth_harness("nyuka_test_noauth_csrf").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (status, _) = h.send(mutation("/api/v1/auth/logout", false)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+/// And the control for all of the above: the default harness must still
+/// refuse. If turning the mode on leaked into the default, every
+/// access-control test in this file would be passing for the wrong reason.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_default_mode_still_requires_a_session() {
+    let Some(h) = support::harness("nyuka_test_noauth_control").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (status, _) = h.get("/api/v1/manga").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
