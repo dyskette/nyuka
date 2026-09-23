@@ -173,7 +173,12 @@ has been removed.
       the filter descriptors rather than a generic editor.
 - [x] Detail panel (`/library/$mangaId`) — header, URL-driven tabs, and the
       chapter list with a per-row download action
-- [ ] Command palette (`cmdk`), from the mockup
+- [x] **Command palette** (`cmdk`), from the mockup — library search,
+      navigation, contextual actions on the highlighted series, and the four
+      maintenance jobs, which have no other UI. The mockup's "Refresh
+      metadata" is left out: the server answers 400 for that kind.
+- [x] MSW wired up for component tests, with handlers typed against the
+      generated schema and `onUnhandledRequest: 'error'`
 - [ ] Virtualized list for large libraries (TanStack Virtual)
 - [x] SSE provider and the reconnect invalidation set — one `EventSource` at
       the root, an invalidation table per event, and invalidate-on-connect for
