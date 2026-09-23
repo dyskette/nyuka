@@ -1,100 +1,146 @@
 import { screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
 import type { components } from '@/shared/api/schema'
 import { renderWithProviders } from '@/test/render'
 import { CatalogGrid } from './CatalogGrid'
 
-type Manga = components['schemas']['MangaDto']
+type CatalogItem = components['schemas']['CatalogItemDto']
 
-function manga(overrides: Partial<Manga> = {}): Manga {
+function item(overrides: Partial<CatalogItem> = {}): CatalogItem {
   return {
-    id: '11111111-1111-4111-8111-111111111111',
-    source_id: '22222222-2222-4222-8222-222222222222',
-    external_key: 'series-1',
-    title: 'Test Series',
+    external_key: 'glass-orchard',
+    title: 'Glass Orchard',
     authors: [],
     artists: [],
     tags: [],
     status: 'ongoing',
     content_rating: 'safe',
     reading_direction: 'right_to_left',
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-02T00:00:00Z',
     ...overrides,
   }
 }
 
 describe('CatalogGrid', () => {
-  it('renders one link per series', async () => {
+  /**
+   * A catalog entry has no local identity until it is added, so the only
+   * thing to do with a new one is add it. `manga_id` is the server's answer
+   * to "is this already in", and it is what decides.
+   */
+  it('offers to add an entry that is not in the library', async () => {
+    const onAdd = vi.fn()
+    await renderWithProviders(<CatalogGrid items={[item()]} onAdd={onAdd} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add Glass Orchard to your library' }))
+    expect(onAdd).toHaveBeenCalledWith('glass-orchard')
+  })
+
+  it('opens an entry that is already in the library instead of adding it again', async () => {
     await renderWithProviders(
       <CatalogGrid
-        items={[
-          manga({ id: '11111111-1111-4111-8111-111111111111', title: 'Alpha' }),
-          manga({ id: '33333333-3333-4333-8333-333333333333', title: 'Beta' }),
-        ]}
+        items={[item({ manga_id: '11111111-1111-4111-8111-111111111111' })]}
+        onAdd={vi.fn()}
       />,
     )
 
-    const links = screen.getAllByRole('link')
-    expect(links).toHaveLength(2)
-    expect(links[0]?.getAttribute('href')).toBe('/library/11111111-1111-4111-8111-111111111111')
+    expect(screen.queryByRole('button', { name: /Add/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link').getAttribute('href')).toContain(
+      '/library/11111111-1111-4111-8111-111111111111',
+    )
+    // The mockup's "✓ Library" mark. The word carries it, not the glyph.
+    expect(screen.getByText('Library')).toBeInTheDocument()
   })
 
-  /**
-   * A card is a link, not a clickable div. That is what makes it openable in
-   * a new tab and announceable by a screen reader, and it is easy to lose in
-   * a refactor toward an onClick handler.
-   */
-  it('makes each card a real link', async () => {
-    await renderWithProviders(<CatalogGrid items={[manga({ title: 'Alpha' })]} />)
-
-    const link = screen.getByRole('link', { name: /Alpha/ })
-    expect(link.tagName).toBe('A')
-    expect(link.getAttribute('href')).toBeTruthy()
-  })
-
-  /**
-   * The title is rendered next to the cover, so alt text repeating it would
-   * make a screen reader announce the series twice.
-   */
-  it('leaves the cover image decorative', async () => {
+  it('disables the button for an entry already being added', async () => {
     await renderWithProviders(
-      <CatalogGrid items={[manga({ cover_url: 'https://example.test/c.jpg' })]} />,
+      <CatalogGrid items={[item()]} adding={new Set(['glass-orchard'])} onAdd={vi.fn()} />,
     )
 
-    const image = document.querySelector('img')
-    expect(image).not.toBeNull()
-    expect(image?.getAttribute('alt')).toBe('')
-  })
-
-  it('shows a placeholder when a series has no cover', async () => {
-    await renderWithProviders(<CatalogGrid items={[manga({ title: 'Alpha' })]} />)
-
-    const link = screen.getByRole('link', { name: /Alpha/ })
-    expect(within(link).getByText('No cover')).toBeTruthy()
-    expect(document.querySelector('img')).toBeNull()
-  })
-
-  it('lists authors when there are any, and omits the line when there are none', async () => {
-    const { unmount } = await renderWithProviders(
-      <CatalogGrid items={[manga({ authors: ['Ada', 'Grace'] })]} />,
-    )
-    expect(screen.getByText('Ada, Grace')).toBeTruthy()
-    unmount()
-
-    await renderWithProviders(<CatalogGrid items={[manga({ authors: [] })]} />)
-    expect(screen.queryByText(/,/)).toBeNull()
+    expect(screen.getByRole('button', { name: /Add Glass Orchard/ })).toBeDisabled()
   })
 
   /**
-   * An empty library on a fresh install is the expected state, not an error,
-   * and it is the one moment where the next action is genuinely unobvious.
+   * Cover hosts are third parties. Without this they learn the address of
+   * every server displaying their images.
    */
-  it('says what to do next when the library is empty', async () => {
-    await renderWithProviders(<CatalogGrid items={[]} />)
+  it('does not leak the referrer to a source cover host', async () => {
+    await renderWithProviders(
+      <CatalogGrid
+        items={[item({ cover_url: 'https://cdn.example.org/a.jpg' })]}
+        onAdd={vi.fn()}
+      />,
+    )
 
-    expect(screen.getByText('Your library is empty')).toBeTruthy()
-    expect(screen.getByText(/Add a source/)).toBeTruthy()
-    expect(screen.queryAllByRole('link')).toHaveLength(0)
+    expect(document.querySelector('img')).toHaveAttribute('referrerpolicy', 'no-referrer')
+  })
+
+  /**
+   * The title is rendered beside the cover, so alt text repeating it makes a
+   * screen reader announce the series twice.
+   */
+  it('leaves the cover decorative', async () => {
+    await renderWithProviders(
+      <CatalogGrid
+        items={[item({ cover_url: 'https://cdn.example.org/a.jpg' })]}
+        onAdd={vi.fn()}
+      />,
+    )
+
+    // Empty alt gives the element role `presentation`, so it is absent from
+    // the accessibility tree entirely — which is what "decorative" means.
+    expect(document.querySelector('img')).toHaveAttribute('alt', '')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  /**
+   * Adding refetches the page, so an index key would hand one card's in-flight
+   * state to whatever moved into its position.
+   */
+  it('keys cards on the source key, so in-flight state follows the entry', async () => {
+    const { rerender } = await renderWithProviders(
+      <CatalogGrid
+        items={[
+          item({ external_key: 'a', title: 'Alpha' }),
+          item({ external_key: 'b', title: 'Beta' }),
+        ]}
+        adding={new Set(['b'])}
+        onAdd={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: /Add Beta/ })).toBeDisabled()
+
+    // Alpha leaves the page; Beta is still being added.
+    rerender(
+      <CatalogGrid
+        items={[item({ external_key: 'b', title: 'Beta' })]}
+        adding={new Set(['b'])}
+        onAdd={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /Add Beta/ })).toBeDisabled()
+  })
+
+  it('says a source returned nothing rather than rendering an empty grid', async () => {
+    await renderWithProviders(<CatalogGrid items={[]} onAdd={vi.fn()} />)
+
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.getByText(/Nothing here/)).toBeInTheDocument()
+  })
+
+  it('renders one card per entry', async () => {
+    await renderWithProviders(
+      <CatalogGrid
+        items={[
+          item({ external_key: 'a', title: 'Alpha' }),
+          item({ external_key: 'b', title: 'Beta' }),
+        ]}
+        onAdd={vi.fn()}
+      />,
+    )
+
+    const cards = screen.getAllByRole('listitem')
+    expect(cards).toHaveLength(2)
+    expect(within(cards[0] as HTMLElement).getByText('Alpha')).toBeInTheDocument()
   })
 })

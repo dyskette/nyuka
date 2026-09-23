@@ -1,8 +1,15 @@
 import { Trans } from '@lingui/react/macro'
 import type { components } from '@/shared/api/schema'
-import { MangaCard } from './MangaCard'
+import { CatalogCard } from './CatalogCard'
 
-type Manga = components['schemas']['MangaDto']
+type CatalogItem = components['schemas']['CatalogItemDto']
+
+export interface CatalogGridProps {
+  items: CatalogItem[]
+  /** External keys whose add request is in flight. */
+  adding?: ReadonlySet<string>
+  onAdd: (externalKey: string) => void
+}
 
 /**
  * The cover grid.
@@ -16,36 +23,31 @@ type Manga = components['schemas']['MangaDto']
  * decides what is loaded and this can be exercised without a query client
  * (ADR-0008).
  */
-export function CatalogGrid({ items }: { items: Manga[] }) {
-  if (items.length === 0) return <EmptyLibrary />
+export function CatalogGrid({ items, adding, onAdd }: CatalogGridProps) {
+  if (items.length === 0) return <EmptyCatalog />
 
   return (
     <ul className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4 p-4">
-      {items.map((manga) => (
-        <li key={manga.id}>
-          <MangaCard manga={manga} />
+      {items.map((item) => (
+        // Keyed on the source's own key, not an index: adding a series
+        // refetches the page, and an index key would re-use one card's
+        // in-flight state for whatever moved into its position.
+        <li key={item.external_key}>
+          <CatalogCard item={item} adding={adding?.has(item.external_key) ?? false} onAdd={onAdd} />
         </li>
       ))}
     </ul>
   )
 }
 
-/**
- * Says what to do next rather than only that there is nothing.
- *
- * An empty library on a fresh install is the expected state, not an error, and
- * it is the one moment where the next action is genuinely unobvious.
- */
-function EmptyLibrary() {
+function EmptyCatalog() {
   return (
     <div className="flex flex-col items-center gap-2 p-12 text-center">
       <p className="text-sm font-medium">
-        <Trans>Your library is empty</Trans>
+        <Trans>Nothing here</Trans>
       </p>
       <p className="text-muted-foreground max-w-sm text-sm">
-        <Trans>
-          Add a source, then browse its catalog to add a series. Everything you add appears here.
-        </Trans>
+        <Trans>This source returned no results. Try a different search.</Trans>
       </p>
     </div>
   )

@@ -31,14 +31,39 @@ msgstr "{total} titles"
 msgid "⌘K"
 msgstr "⌘K"
 
+#: src/features/sources/components/RepoList.tsx
+msgid "A repository is a list of sources this server can install from. Add one above."
+msgstr "A repository is a list of sources this server can install from. Add one above."
+
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Actions"
 msgstr "Actions"
 
-#: src/features/browse/components/CatalogGrid.tsx
+#: src/features/browse/components/CatalogCard.tsx
+msgid "Add"
+msgstr "Add"
+
+#. placeholder {0}: item.title
+#: src/features/browse/components/CatalogCard.tsx
+msgid "Add {0} to your library"
+msgstr "Add {0} to your library"
+
+#: src/routes/browse.tsx
+msgid "Add a repository in Settings, then install a source from it."
+msgstr "Add a repository in Settings, then install a source from it."
+
 #: src/features/library/components/LibraryTable.tsx
 msgid "Add a source, then browse its catalog to add a series. Everything you add appears here."
 msgstr "Add a source, then browse its catalog to add a series. Everything you add appears here."
+
+#: src/routes/settings.tsx
+msgid "Add repository"
+msgstr "Add repository"
+
+#: src/features/browse/components/CatalogCard.tsx
+#: src/routes/settings.tsx
+msgid "Adding…"
+msgstr "Adding…"
 
 #: src/features/library/components/LibraryToolbar.tsx
 #: src/routes/downloads.tsx
@@ -58,8 +83,12 @@ msgid "Browse"
 msgstr "Browse"
 
 #: src/routes/browse.tsx
-msgid "Browse is not built yet."
-msgstr "Browse is not built yet."
+msgid "Browse could not be loaded."
+msgstr "Browse could not be loaded."
+
+#: src/routes/browse.tsx
+#~ msgid "Browse is not built yet."
+#~ msgstr "Browse is not built yet."
 
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Cancel"
@@ -111,10 +140,28 @@ msgstr "Follows"
 msgid "Follows is not built yet."
 msgstr "Follows is not built yet."
 
+#: src/routes/browse.tsx
+msgid "Go to Settings"
+msgstr "Go to Settings"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Install"
+msgstr "Install"
+
+#. placeholder {0}: entry.name
+#: src/features/sources/components/RepoList.tsx
+msgid "Install {0}"
+msgstr "Install {0}"
+
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Job"
 msgstr "Job"
 
+#: src/features/sources/components/RepoList.tsx
+msgid "Keep"
+msgstr "Keep"
+
+#: src/features/browse/components/CatalogCard.tsx
 #: src/shared/components/AppShell.tsx
 msgid "Library"
 msgstr "Library"
@@ -123,13 +170,37 @@ msgstr "Library"
 msgid "Live"
 msgstr "Live"
 
+#: src/routes/settings.tsx
+msgid "Name"
+msgstr "Name"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Never refreshed"
+msgstr "Never refreshed"
+
+#: src/routes/browse.tsx
+msgid "Next page"
+msgstr "Next page"
+
 #: src/features/library/components/ChapterList.tsx
 msgid "No chapters yet. Refresh the series to fetch its chapter list."
 msgstr "No chapters yet. Refresh the series to fetch its chapter list."
 
-#: src/features/browse/components/MangaCard.tsx
+#: src/features/browse/components/CatalogCard.tsx
 msgid "No cover"
 msgstr "No cover"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "No repositories"
+msgstr "No repositories"
+
+#: src/routes/browse.tsx
+msgid "No sources installed"
+msgstr "No sources installed"
+
+#: src/features/browse/components/CatalogGrid.tsx
+msgid "Nothing here"
+msgstr "Nothing here"
 
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Nothing in the queue"
@@ -142,6 +213,10 @@ msgstr "Offline"
 #: src/routes/library.$mangaId.tsx
 msgid "Open at the source"
 msgstr "Open at the source"
+
+#: src/features/browse/components/CatalogCard.tsx
+msgid "Open in library"
+msgstr "Open in library"
 
 #: src/routes/library.$mangaId.tsx
 msgid "Overview"
@@ -156,6 +231,40 @@ msgstr "Progress"
 msgid "Queued"
 msgstr "Queued"
 
+#: src/features/sources/components/RepoList.tsx
+msgid "Reading the index…"
+msgstr "Reading the index…"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Refresh"
+msgstr "Refresh"
+
+#. placeholder {0}: relativeTime(repo.last_refreshed_at)
+#: src/features/sources/components/RepoList.tsx
+msgid "Refreshed {0}"
+msgstr "Refreshed {0}"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Remove"
+msgstr "Remove"
+
+#. placeholder {0}: repo.name
+#: src/features/sources/components/RepoList.tsx
+msgid "Remove {0}"
+msgstr "Remove {0}"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Remove this and its series?"
+msgstr "Remove this and its series?"
+
+#: src/routes/settings.tsx
+msgid "Repository name"
+msgstr "Repository name"
+
+#: src/routes/settings.tsx
+msgid "Repository URL"
+msgstr "Repository URL"
+
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Retry"
 msgstr "Retry"
@@ -164,9 +273,17 @@ msgstr "Retry"
 msgid "Retry this job"
 msgstr "Retry this job"
 
+#: src/routes/browse.tsx
+msgid "Search"
+msgstr "Search"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Search {total} titles"
 msgstr "Search {total} titles"
+
+#: src/routes/browse.tsx
+msgid "Search this source"
+msgstr "Search this source"
 
 #. placeholder {0}: manga.title
 #: src/features/library/components/LibraryTable.tsx
@@ -186,8 +303,12 @@ msgid "Settings"
 msgstr "Settings"
 
 #: src/routes/settings.tsx
-msgid "Settings is not built yet."
-msgstr "Settings is not built yet."
+msgid "Settings could not be loaded."
+msgstr "Settings could not be loaded."
+
+#: src/routes/settings.tsx
+#~ msgid "Settings is not built yet."
+#~ msgstr "Settings is not built yet."
 
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Size"
@@ -195,8 +316,13 @@ msgstr "Size"
 
 #: src/features/library/components/LibraryTable.tsx
 #: src/features/library/components/LibraryToolbar.tsx
+#: src/routes/browse.tsx
 msgid "Source"
 msgstr "Source"
+
+#: src/routes/settings.tsx
+msgid "Sources"
+msgstr "Sources"
 
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Speed"
@@ -210,6 +336,14 @@ msgstr "State"
 msgid "Status"
 msgstr "Status"
 
+#: src/routes/settings.tsx
+msgid "That did not work."
+msgstr "That did not work."
+
+#: src/routes/browse.tsx
+msgid "That source is no longer installed"
+msgstr "That source is no longer installed"
+
 #: src/routes/downloads.tsx
 msgid "The job queue could not be loaded."
 msgstr "The job queue could not be loaded."
@@ -218,23 +352,56 @@ msgstr "The job queue could not be loaded."
 msgid "The library could not be loaded."
 msgstr "The library could not be loaded."
 
+#: src/routes/browse.tsx
+msgid "The request failed before it reached the source."
+msgstr "The request failed before it reached the source."
+
+#: src/features/sources/components/RepoList.tsx
+msgid "This repository lists no sources. Refresh it to read the index again."
+msgstr "This repository lists no sources. Refresh it to read the index again."
+
 #: src/routes/library.$mangaId.tsx
 msgid "This series could not be loaded."
 msgstr "This series could not be loaded."
+
+#: src/routes/browse.tsx
+msgid "This source could not be reached"
+msgstr "This source could not be reached"
 
 #: src/routes/library.$mangaId.tsx
 msgid "This source gave no description."
 msgstr "This source gave no description."
 
+#: src/features/browse/components/CatalogGrid.tsx
+msgid "This source returned no results. Try a different search."
+msgstr "This source returned no results. Try a different search."
+
 #: src/features/library/components/LibraryTable.tsx
 msgid "Title"
 msgstr "Title"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Uninstall"
+msgstr "Uninstall"
+
+#. placeholder {0}: entry.name
+#: src/features/sources/components/RepoList.tsx
+msgid "Uninstall {0}"
+msgstr "Uninstall {0}"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "Update"
+msgstr "Update"
+
+#. placeholder {0}: entry.name
+#: src/features/sources/components/RepoList.tsx
+msgid "Update {0}"
+msgstr "Update {0}"
 
 #: src/features/library/components/LibraryTable.tsx
 msgid "Updated"
 msgstr "Updated"
 
-#: src/features/browse/components/CatalogGrid.tsx
 #: src/features/library/components/LibraryTable.tsx
 msgid "Your library is empty"
 msgstr "Your library is empty"
