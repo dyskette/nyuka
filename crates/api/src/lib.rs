@@ -114,6 +114,24 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
     let library = Arc::new(LibraryStoreAdapter::new(store));
 
     // --- sources ---------------------------------------------------------
+    //
+    // Packages live under DATA_DIR, not the library: the library is what an
+    // operator backs up and syncs, and third-party executable code has no
+    // business travelling with it.
+    let packages = Arc::new(
+        nyuka_packaging::packages::PackageStore::open(&config.data_dir).with_context(|| {
+            format!(
+                "opening the data directory at {}",
+                config.data_dir.display()
+            )
+        })?,
+    );
+    match packages.clean_partials() {
+        Ok(0) => {}
+        Ok(removed) => tracing::info!(removed, "cleaned partial source package writes"),
+        Err(e) => tracing::warn!(error = %e, "could not clean partial package writes"),
+    }
+
     let resolver = Arc::new(VettingResolver::new());
     let wasm = Arc::new(
         Runtime::new(Limits {
@@ -131,10 +149,39 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
             source_runtime.clone(),
             repositories.clone(),
             resolver.clone(),
+            packages,
             RegistryConfig::default(),
         )
         .context("building the source registry")?,
     );
+
+    // Every installed source is compiled here, from its saved package.
+    //
+    // Without this a restart leaves each one listed by the API and returning
+    // "not found" from anything that needs its module. Eager rather than lazy,
+    // for the reason the OIDC issuer is discovered at startup (ADR-0005): a
+    // source that will not load should say so where an operator is watching,
+    // not on the first request that needs it.
+    //
+    // One bad source does not stop the boot. Failing here would take a whole
+    // library down over one package, and an operator cannot fix what will not
+    // start.
+    match registry.load_installed().await {
+        Ok(report) => {
+            if report.missing > 0 || report.failed > 0 {
+                tracing::warn!(
+                    total = report.total,
+                    loaded = report.loaded,
+                    missing = report.missing,
+                    failed = report.failed,
+                    "some installed sources are unusable; reinstall them"
+                );
+            } else if report.total > 0 {
+                tracing::info!(loaded = report.loaded, "loaded installed sources");
+            }
+        }
+        Err(e) => tracing::error!(error = %e, "could not load installed sources"),
+    }
     let fetcher = Arc::new(
         VettedFetcher::new(FetcherConfig::default(), resolver)
             .context("building the page fetcher")?,

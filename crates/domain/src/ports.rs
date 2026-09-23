@@ -104,6 +104,29 @@ pub trait SourceRegistry: Send + Sync {
 // Storage port (ADR-0007)
 // ---------------------------------------------------------------------------
 
+/// Where installed source packages are kept between restarts.
+///
+/// A source is a WASM module compiled at install time and held in memory. Its
+/// package was previously downloaded, compiled, and discarded — so after a
+/// restart every installed source was listed and unusable, with no way to
+/// recover but reinstalling from the network.
+///
+/// Implementations write under the server's own data directory, never under
+/// the library: the library is what an operator backs up and syncs, and
+/// third-party executable code has no business travelling with it.
+pub trait PackageStorage: Send + Sync {
+    fn write(&self, source: SourceId, bytes: &[u8]) -> Result<()>;
+
+    /// `Ok(None)` when there is no package, which is not an error: a source
+    /// installed before packages were kept has a row and no file, and that has
+    /// to read as "reinstall this" rather than as a failure to start.
+    fn read(&self, source: SourceId) -> Result<Option<Vec<u8>>>;
+
+    /// Succeeds when there was nothing to remove, so uninstall works after a
+    /// restart that never loaded the source.
+    fn remove(&self, source: SourceId) -> Result<()>;
+}
+
 /// Writing and reading packaged chapters.
 ///
 /// Never returns an absolute path: callers receive a relative path or a

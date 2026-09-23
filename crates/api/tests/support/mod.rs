@@ -124,6 +124,9 @@ fn raw_config(library_root: &std::path::Path) -> RawConfig {
     RawConfig {
         database_url: "postgres://u:p@localhost:5432/nyuka".into(),
         library_root: library_root.display().to_string(),
+        // A sibling of the library, never inside it — the config refuses that,
+        // for the same reason an operator should not nest them.
+        data_dir: library_root.with_extension("data").display().to_string(),
         oidc_issuer_url: "https://auth.example.test".into(),
         oidc_client_id: "nyuka".into(),
         oidc_client_secret: "shh".into(),

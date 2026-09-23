@@ -30,6 +30,19 @@ use crate::source::{Invocation, RunError, invoke};
 use crate::state::Defaults;
 
 /// A source that has been installed and compiled.
+/// A package parsed and compiled, not yet bound to an id.
+pub struct PreparedSource {
+    pub external_id: nyuka_domain::model::ExternalKey,
+    pub name: String,
+    pub version: u32,
+    pub languages: Vec<String>,
+    pub required: Vec<Capability>,
+    pub manifest: package::Manifest,
+    pub module: wasmtime::Module,
+    pub filters: Option<serde_json::Value>,
+    pub settings: Option<serde_json::Value>,
+}
+
 pub struct LoadedSource {
     pub id: SourceId,
     pub manifest: package::Manifest,
@@ -89,12 +102,16 @@ impl SourceRuntime {
 
     /// Compiles and registers a package, refusing it if this host cannot run
     /// it.
-    pub fn install(
-        &self,
-        id: SourceId,
-        repo_id: nyuka_domain::model::SourceRepoId,
-        bytes: &[u8],
-    ) -> Result<InstalledSource> {
+    /// Parses and compiles a package, without registering it.
+    ///
+    /// Split from registration because the id a source ends up with is the
+    /// database's answer, not the caller's: `upsert` keys on
+    /// `(repo_id, external_id)` and returns the existing row's id when a
+    /// source is reinstalled. Registering under a locally generated id left
+    /// the compiled module unreachable under the id everything else uses —
+    /// the source was listed and every call that needed the module returned
+    /// "not found".
+    pub fn prepare(&self, bytes: &[u8]) -> Result<PreparedSource> {
         let pkg: Package = package::load(bytes, &package::WasmtimeImports(&self.runtime))
             .map_err(map_load_error)?;
         let module = self
@@ -105,14 +122,37 @@ impl SourceRuntime {
                 retryable: false,
             })?;
 
-        let installed = InstalledSource {
-            id,
-            repo_id,
+        Ok(PreparedSource {
             external_id: nyuka_domain::model::ExternalKey(pkg.manifest.info.id.clone()),
             name: pkg.manifest.info.name.clone(),
             version: pkg.manifest.info.version,
             languages: pkg.manifest.info.languages.clone(),
-            required_capabilities: pkg.required.clone(),
+            required: pkg.required,
+            manifest: pkg.manifest,
+            module,
+            filters: pkg.filters,
+            settings: pkg.settings,
+        })
+    }
+
+    /// Makes a prepared package usable under an id.
+    ///
+    /// Replaces whatever was registered under that id, so reinstalling an
+    /// upgraded source does not leave the previous module serving requests.
+    pub fn register(
+        &self,
+        id: SourceId,
+        repo_id: nyuka_domain::model::SourceRepoId,
+        prepared: PreparedSource,
+    ) -> Result<InstalledSource> {
+        let installed = InstalledSource {
+            id,
+            repo_id,
+            external_id: prepared.external_id.clone(),
+            name: prepared.name.clone(),
+            version: prepared.version,
+            languages: prepared.languages.clone(),
+            required_capabilities: prepared.required.clone(),
             // A rate limit is not in the manifest — a source declares it at
             // runtime through `net::set_rate_limit`, so it cannot be known
             // until the module first runs. The caller persists whatever the
@@ -124,12 +164,13 @@ impl SourceRuntime {
 
         let loaded = Arc::new(LoadedSource {
             id,
-            manifest: pkg.manifest,
-            module,
-            required: pkg.required,
-            filters: pkg.filters,
-            settings: pkg.settings,
+            manifest: prepared.manifest,
+            module: prepared.module,
+            required: prepared.required,
+            filters: prepared.filters,
+            settings: prepared.settings,
         });
+
         self.sources
             .write()
             .map_err(|_| DomainError::Internal("source registry poisoned".into()))?
@@ -137,13 +178,40 @@ impl SourceRuntime {
         Ok(installed)
     }
 
+    /// Whether a source's module is loaded and usable.
+    ///
+    /// Distinguishes "no such source" from "installed but not loaded", which
+    /// are different problems with different fixes and reported identically
+    /// before this existed.
+    pub fn is_loaded(&self, id: SourceId) -> bool {
+        self.sources
+            .read()
+            .map(|sources| sources.contains_key(&id))
+            .unwrap_or(false)
+    }
+
+    /// The loaded module for a source.
+    ///
+    /// The error says the source is not *loaded*, not that it does not exist.
+    /// Those are different problems — one is a bad id, the other is a source
+    /// whose package is missing or would not compile — and reporting both as
+    /// "no source matches that identifier" sent an operator looking for a
+    /// wrong id when the real answer was "reinstall this".
     fn get(&self, id: SourceId) -> Result<Arc<LoadedSource>> {
         self.sources
             .read()
             .map_err(|_| DomainError::Internal("source registry poisoned".into()))?
             .get(&id)
             .cloned()
-            .ok_or(DomainError::NotFound)
+            .ok_or_else(|| DomainError::Source {
+                message: format!(
+                    "source {id} is installed but not loaded; its package is missing or \
+                     would not compile — reinstall it",
+                    id = id.0
+                ),
+                // Reinstalling is the fix, and it is not one a retry performs.
+                retryable: false,
+            })
     }
 
     /// Runs one invocation on a blocking thread.

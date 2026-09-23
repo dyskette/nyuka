@@ -47,6 +47,7 @@ docker compose up -d postgres
 
 DATABASE_URL=postgres://nyuka:nyuka@localhost:5432/nyuka \
 LIBRARY_ROOT=./library \
+DATA_DIR=./data \
 AUTH_MODE=none \
 BIND_ADDR=127.0.0.1:8080 \
   cargo run -p nyuka-api
@@ -54,9 +55,31 @@ BIND_ADDR=127.0.0.1:8080 \
 cd web && npm install && npm run dev   # Vite dev server, proxying /api
 ```
 
-Three variables and a database. `AUTH_MODE=none` serves every request as a
+Four variables and a database. `AUTH_MODE=none` serves every request as a
 single local user — see [Running without authentication](#running-without-authentication)
 for when that is and is not appropriate.
+
+### The two directories
+
+They are separate on purpose, and the server refuses to start if either
+contains the other.
+
+| | `LIBRARY_ROOT` | `DATA_DIR` |
+|---|---|---|
+| Holds | CBZ files, organised by series | Installed source packages |
+| If you lose it | Re-download everything | Reinstall your sources |
+| Back it up | Yes — this is the irreplaceable part | Optional |
+| Sync between machines | Reasonable | No |
+
+Keeping server state out of the library matters for two reasons: an operator
+backing up their comics should not sweep up third-party executable code along
+with them, and restoring an older library should not roll back which sources
+are installed.
+
+`DATA_DIR` holds each installed source's `.aix` under `sources/`, so a restart
+can compile them again without reaching the network. Without it, every
+installed source is listed by the API and unusable after a restart — which is
+exactly what happened before this directory existed.
 
 With an identity provider:
 

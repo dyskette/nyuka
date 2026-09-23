@@ -155,14 +155,50 @@ fn masked(network: &[u8], other: &[u8], prefix: u8) -> bool {
 }
 
 /// The shape the environment is read into, before anything is checked.
+/// Whether either path contains the other.
+///
+/// Compared lexically after normalising, not by canonicalising: at
+/// configuration time neither directory necessarily exists yet, and a check
+/// that only worked once they did would pass on a fresh deployment and fail on
+/// the next boot.
+///
+/// The trailing separator matters. Without it `/srv/lib` and `/srv/library`
+/// compare as one containing the other, and a perfectly good pair of
+/// directories is refused.
+fn paths_overlap(a: &str, b: &str) -> bool {
+    let a = normalise_dir(a);
+    let b = normalise_dir(b);
+    a == b || a.starts_with(&b) || b.starts_with(&a)
+}
+
+fn normalise_dir(path: &str) -> String {
+    let trimmed = path.trim().trim_end_matches('/');
+    format!("{trimmed}/")
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RawConfig {
     #[serde(default)]
     pub database_url: String,
     #[serde(default = "default_bind")]
     pub bind_addr: String,
+    /// Where the comics live: CBZ files, organised by series.
+    ///
+    /// Separate from `data_dir` because the two have different lifetimes and
+    /// different backup needs. The library is the irreplaceable part — losing
+    /// it means re-downloading everything — while everything under `data_dir`
+    /// can be rebuilt from the network.
     #[serde(default)]
     pub library_root: String,
+
+    /// Where the server keeps its own state: installed source packages, and
+    /// whatever else it needs across restarts.
+    ///
+    /// Not under `library_root`, or an operator backing up their comics would
+    /// sweep up server internals, and one syncing the library between machines
+    /// would carry compiled third-party code with it.
+    #[serde(default)]
+    pub data_dir: String,
 
     /// `oidc` or `none`.
     ///
@@ -235,6 +271,7 @@ impl Default for RawConfig {
             database_url: String::new(),
             bind_addr: default_bind(),
             library_root: String::new(),
+            data_dir: String::new(),
             auth_mode: default_auth_mode(),
             oidc_issuer_url: String::new(),
             oidc_client_id: String::new(),
@@ -413,6 +450,7 @@ pub struct Config {
     pub database_url: Secret,
     pub bind_addr: SocketAddr,
     pub library_root: PathBuf,
+    pub data_dir: PathBuf,
     pub auth: AuthConfig,
     pub jobs: JobsConfig,
     pub sources: SourcesConfig,
@@ -464,6 +502,25 @@ impl RawConfig {
 
         if self.library_root.trim().is_empty() {
             problems.push("LIBRARY_ROOT is required".into());
+        }
+
+        if self.data_dir.trim().is_empty() {
+            problems.push("DATA_DIR is required".into());
+        }
+
+        // Rejected rather than merely discouraged. The library is what an
+        // operator backs up and syncs; server state nested inside it would be
+        // carried along by every one of those, and a restore of an older
+        // library would silently roll back the installed sources with it.
+        if !self.library_root.trim().is_empty()
+            && !self.data_dir.trim().is_empty()
+            && paths_overlap(&self.library_root, &self.data_dir)
+        {
+            problems.push(
+                "DATA_DIR and LIBRARY_ROOT must not contain one another; give the \
+                 server its own directory"
+                    .into(),
+            );
         }
 
         let mode = match AuthMode::parse(&self.auth_mode) {
@@ -604,6 +661,7 @@ impl RawConfig {
             database_url: self.database_url.into(),
             bind_addr: bind_addr.expect("checked above"),
             library_root: PathBuf::from(self.library_root),
+            data_dir: PathBuf::from(self.data_dir),
             auth: AuthConfig {
                 mode,
                 issuer_url: self.oidc_issuer_url,
@@ -658,6 +716,7 @@ mod tests {
         RawConfig {
             database_url: "postgres://u:p@localhost:5432/nyuka".into(),
             library_root: "/library".into(),
+            data_dir: "/data".into(),
             oidc_issuer_url: "https://auth.example.test".into(),
             oidc_client_id: "nyuka".into(),
             oidc_client_secret: "shh".into(),
@@ -736,6 +795,7 @@ mod tests {
         RawConfig {
             database_url: "postgres://u:p@localhost:5432/nyuka".into(),
             library_root: "/library".into(),
+            data_dir: "/data".into(),
             auth_mode: "none".into(),
             ..RawConfig::default()
         }

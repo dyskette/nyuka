@@ -33,5 +33,6 @@
 pub mod adapter;
 pub mod cbz;
 pub mod comicinfo;
+pub mod packages;
 pub mod paths;
 pub mod store;

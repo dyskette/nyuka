@@ -37,3 +37,8 @@ rquickjs = { workspace = true, optional = true }
 proptest = { workspace = true }
 # Unpacking the conformance fixture in the integration test.
 zip = { workspace = true }
+# The package store, for the restart regression test. A dev-dependency rather
+# than a real one: this crate speaks to storage through the domain port, and
+# only the test needs a concrete implementation.
+nyuka-packaging = { path = "../packaging" }
+tempfile = { workspace = true }

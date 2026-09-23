@@ -217,26 +217,6 @@ has been removed.
       claimed `/readyz` reports FlareSolverr reachability and referenced a
       span that does not exist); CHANGELOG brought up to date.
 
-## Blocking defect
-
-- [ ] **An installed source is unusable after a restart.** The compiled module
-      lives only in `SourceRuntime`'s in-memory map, and `runtime.install` is
-      the only thing that puts it there. Startup registers rate limits and
-      loads nothing, and the `.aix` bytes are not persisted — no column, no
-      file. So after any restart every installed source is listed by
-      `GET /sources` and returns 404 from `/catalog`, `/filters` and
-      `/settings`, with the misleading detail "No source matches that
-      identifier". Browse, download and follow checks are all affected.
-
-      A second, compounding bug: `install` loads the module under a freshly
-      generated id while `upsert` returns the existing row's id, so
-      *reinstalling* a source leaves the new module unreachable and the old
-      one stale under a key nothing looks up.
-
-      Found by trying to verify the settings editor against a real source.
-      Needs a decision on where package bytes live before it can be fixed —
-      see the report in the conversation.
-
 ## Known gaps recorded in code
 
 These are deliberate, documented, and not scheduled. Listed so they are not

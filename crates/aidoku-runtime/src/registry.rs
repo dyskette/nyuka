@@ -37,7 +37,7 @@ use std::time::Duration;
 use nyuka_domain::model::{
     Capability, ContentRating, ExternalKey, InstalledSource, SourceEntry, SourceId, SourceRepoId,
 };
-use nyuka_domain::ports::{SourceRegistry, SourceRepository};
+use nyuka_domain::ports::{PackageStorage, SourceRegistry, SourceRepository};
 use nyuka_domain::{DomainError, Result};
 use serde::Deserialize;
 
@@ -92,11 +92,24 @@ impl Default for RegistryConfig {
     }
 }
 
+/// What a startup load did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LoadReport {
+    pub total: usize,
+    pub loaded: usize,
+    /// Installed, with no saved package. Reinstall to fix.
+    pub missing: usize,
+    /// Installed, with a package that would not read or compile.
+    pub failed: usize,
+}
+
 pub struct AidokuRegistry {
     runtime: Arc<SourceRuntime>,
     sources: Arc<dyn SourceRepository>,
     client: reqwest::Client,
     config: RegistryConfig,
+    /// Where installed packages are kept so a restart can compile them again.
+    packages: Arc<dyn PackageStorage>,
     /// Computed once. The port hands out a slice, and the package module
     /// builds a fresh `Vec` per call.
     capabilities: Vec<Capability>,
@@ -107,6 +120,7 @@ impl AidokuRegistry {
         runtime: Arc<SourceRuntime>,
         sources: Arc<dyn SourceRepository>,
         resolver: Arc<VettingResolver>,
+        packages: Arc<dyn PackageStorage>,
         config: RegistryConfig,
     ) -> Result<Self> {
         let client = build_async_client(&config.user_agent, config.timeout, resolver)
@@ -116,7 +130,123 @@ impl AidokuRegistry {
             sources,
             client,
             config,
+            packages,
             capabilities: crate::package::supported_capabilities(),
+        })
+    }
+
+    /// Compiles every installed source from its saved package.
+    ///
+    /// Called once at startup. Without it a restart leaves every source listed
+    /// by the API and returning "not found" from anything that needs its
+    /// module — browse, catalog, download and follow checks alike.
+    ///
+    /// # One bad source does not stop the boot
+    ///
+    /// A package that is missing, corrupt, or compiled by an incompatible
+    /// runtime is reported and skipped. Failing the boot would take down a
+    /// whole library over one source, and an operator cannot fix what will not
+    /// start; every other source keeps working and the broken one says to
+    /// reinstall.
+    pub async fn load_installed(&self) -> Result<LoadReport> {
+        let installed = self.sources.list().await?;
+        let mut report = LoadReport {
+            total: installed.len(),
+            ..Default::default()
+        };
+
+        for source in installed {
+            let bytes = match self.packages.read(source.id) {
+                Ok(Some(bytes)) => bytes,
+                Ok(None) => {
+                    // Expected for anything installed before packages were
+                    // kept. Named as such rather than as a failure.
+                    tracing::warn!(
+                        source.id = %source.id.0,
+                        source.name = %source.name,
+                        "no saved package; reinstall this source to use it"
+                    );
+                    report.missing += 1;
+                    continue;
+                }
+                Err(e) => {
+                    tracing::error!(source.id = %source.id.0, error = %e, "reading the package failed");
+                    report.failed += 1;
+                    continue;
+                }
+            };
+
+            match self
+                .runtime
+                .prepare(&bytes)
+                .and_then(|prepared| self.runtime.register(source.id, source.repo_id, prepared))
+            {
+                Ok(_) => report.loaded += 1,
+                Err(e) => {
+                    tracing::error!(
+                        source.id = %source.id.0,
+                        source.name = %source.name,
+                        error = %e,
+                        "the saved package could not be compiled; reinstall this source"
+                    );
+                    report.failed += 1;
+                }
+            }
+        }
+
+        Ok(report)
+    }
+
+    /// Everything after the download.
+    ///
+    /// Split out so the id invariant below is testable: `install` reaches the
+    /// network, and the bug this guards against — registering the module under
+    /// a locally generated id rather than the one the database returned — is
+    /// not visible from either side of that request.
+    pub async fn install_bytes(&self, repo: SourceRepoId, bytes: &[u8]) -> Result<InstalledSource> {
+        // This is where an unsupported capability is refused. Installing a
+        // source that then fails mid-download is the worst outcome, because it
+        // looks like a site problem rather than a host gap (ADR-0004).
+        let prepared = self.runtime.prepare(bytes)?;
+
+        // The id comes from the database, not from here. `upsert` keys on
+        // `(repo_id, external_id)`, so reinstalling keeps the existing row's
+        // id and the library pointing at this source survives the upgrade —
+        // which is exactly why the module must be registered under that id and
+        // not under one generated locally.
+        let candidate = InstalledSource {
+            id: SourceId(uuid::Uuid::new_v4()),
+            repo_id: repo,
+            external_id: prepared.external_id.clone(),
+            name: prepared.name.clone(),
+            version: prepared.version,
+            languages: prepared.languages.clone(),
+            required_capabilities: prepared.required.clone(),
+            declared_rate_limit: None,
+        };
+        let stored = self.sources.upsert(&candidate).await?;
+
+        // Written before the module is registered, so a source that is usable
+        // in this process is also usable after a restart. The reverse order
+        // would leave a working install that vanishes on reboot — the bug this
+        // store exists to fix.
+        self.packages
+            .write(stored, bytes)
+            .map_err(|e| DomainError::Storage(format!("saving the source package: {e}")))?;
+
+        let installed = self.runtime.register(stored, repo, prepared)?;
+        tracing::info!(
+            source.id = %stored,
+            // Reaching through the newtype on purpose: `ExternalKey` has no
+            // `Display` so that interpolating one anywhere is a deliberate
+            // act, not something that happens by reflex (see its doc).
+            source.external_id = %installed.external_id.0,
+            version = installed.version,
+            "installed a source"
+        );
+        Ok(InstalledSource {
+            id: stored,
+            ..installed
         })
     }
 
@@ -233,34 +363,16 @@ impl SourceRegistry for AidokuRegistry {
             .get(&listed.download_url, self.config.max_package_bytes)
             .await?;
 
-        // A source id is assigned here, but `upsert` keys on
-        // `(repo_id, external_id)`: reinstalling keeps the existing row's id,
-        // so the library pointing at this source survives the upgrade.
-        let id = SourceId(uuid::Uuid::new_v4());
-
-        // This is where an unsupported capability is refused. Installing a
-        // source that then fails mid-download is the worst outcome, because it
-        // looks like a site problem rather than a host gap (ADR-0004).
-        let installed = self.runtime.install(id, repo, &bytes)?;
-
-        let stored = self.sources.upsert(&installed).await?;
-        tracing::info!(
-            source.id = %stored,
-            // Reaching through the newtype on purpose: `ExternalKey` has no
-            // `Display` so that interpolating one anywhere is a deliberate
-            // act, not something that happens by reflex (see its doc).
-            source.external_id = %installed.external_id.0,
-            version = installed.version,
-            "installed a source"
-        );
-        Ok(InstalledSource {
-            id: stored,
-            ..installed
-        })
+        self.install_bytes(repo, &bytes).await
     }
 
     async fn uninstall(&self, source: SourceId) -> Result<()> {
         self.runtime.remove(source)?;
+        // Before the row, so a failure here does not orphan a package file
+        // with nothing left pointing at it.
+        self.packages
+            .remove(source)
+            .map_err(|e| DomainError::Storage(format!("removing the source package: {e}")))?;
         self.sources.remove(source).await
     }
 
