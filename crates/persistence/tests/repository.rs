@@ -926,3 +926,88 @@ async fn a_series_with_no_chapters_still_appears_with_zero_counts() {
     assert_eq!(summary.chapter_count, 0);
     assert_eq!(summary.downloaded_count, 0);
 }
+
+/// The panel's chapter list, with each chapter's download state.
+///
+/// The `LEFT JOIN` is what makes a chapter with no file still appear. An
+/// `INNER JOIN` would list only the downloaded ones, which is precisely the
+/// list a reader does not need — they are looking for what is missing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_chapter_summary_reports_which_chapters_are_downloaded() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_chapter_summary").await else {
+        return;
+    };
+
+    let chapters: Vec<SourceChapter> = (1..=4)
+        .map(|n| chapter(&format!("c{n}"), n as f32))
+        .collect();
+    let ids = repos
+        .upsert_chapters(manga, &chapters)
+        .await
+        .expect("chapters");
+
+    // The second one only, so the assertion below distinguishes "the right
+    // chapter" from "the first one".
+    repos
+        .record_download(&DownloadedChapter {
+            chapter_id: ids[1],
+            relative_path: "Series/c2.cbz".into(),
+            size_bytes: 4096,
+            checksum: "x".into(),
+            packaged_at: Utc::now(),
+        })
+        .await
+        .expect("download");
+
+    let page = repos
+        .list_chapter_summaries(manga, None)
+        .await
+        .expect("summaries");
+
+    assert_eq!(page.items.len(), 4, "every chapter, downloaded or not");
+
+    let downloaded: Vec<bool> = page.items.iter().map(|c| c.downloaded).collect();
+    assert_eq!(
+        downloaded,
+        vec![false, true, false, false],
+        "ordered by chapter number, with the state on the right row"
+    );
+
+    let second = &page.items[1];
+    assert_eq!(second.size_bytes, Some(4096));
+    assert_eq!(second.chapter.id, ids[1]);
+    assert!(
+        page.items[0].size_bytes.is_none(),
+        "a chapter with no file has no size, rather than zero — zero is a \
+         real size a broken package could have"
+    );
+}
+
+/// The two chapter listings must agree on order and page boundaries, because
+/// a cursor from one is documented as valid for the other. Divergence would
+/// show as a page that skips or repeats chapters only after the first.
+#[tokio::test(flavor = "multi_thread")]
+async fn both_chapter_listings_order_identically() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_chapter_order").await else {
+        return;
+    };
+
+    let chapters: Vec<SourceChapter> = (1..=6)
+        .map(|n| chapter(&format!("c{n}"), (7 - n) as f32))
+        .collect();
+    repos
+        .upsert_chapters(manga, &chapters)
+        .await
+        .expect("chapters");
+
+    let plain = repos.list_chapters(manga, None).await.expect("plain");
+    let summaries = repos
+        .list_chapter_summaries(manga, None)
+        .await
+        .expect("summaries");
+
+    let plain_ids: Vec<_> = plain.items.iter().map(|c| c.id).collect();
+    let summary_ids: Vec<_> = summaries.items.iter().map(|c| c.chapter.id).collect();
+    assert_eq!(plain_ids, summary_ids);
+    assert_eq!(plain.next, summaries.next);
+}

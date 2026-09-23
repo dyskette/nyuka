@@ -14,8 +14,8 @@
 //! `routes/mod.rs`.
 
 use nyuka_domain::model::{
-    Chapter, ContentRating, Cursor, Follow, InstalledSource, Job, JobKind, JobState, Manga,
-    MangaStatus, MangaSummary, Page, ReadingDirection, SourceEntry, SourceRepo,
+    Chapter, ChapterSummary, ContentRating, Cursor, Follow, InstalledSource, Job, JobKind,
+    JobState, Manga, MangaStatus, MangaSummary, Page, ReadingDirection, SourceEntry, SourceRepo,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -161,6 +161,27 @@ pub struct ChapterDto {
     pub volume: Option<f32>,
     pub language: Option<String>,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// A chapter with its local download state.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ChapterSummaryDto {
+    #[serde(flatten)]
+    pub chapter: ChapterDto,
+    /// True when a packaged file is recorded for this chapter.
+    pub downloaded: bool,
+    /// The packaged size, present only when `downloaded`.
+    pub size_bytes: Option<i64>,
+}
+
+impl From<ChapterSummary> for ChapterSummaryDto {
+    fn from(s: ChapterSummary) -> Self {
+        Self {
+            chapter: s.chapter.into(),
+            downloaded: s.downloaded,
+            size_bytes: s.size_bytes,
+        }
+    }
 }
 
 impl From<Chapter> for ChapterDto {

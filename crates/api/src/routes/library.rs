@@ -13,7 +13,9 @@ use nyuka_domain::model::{ChapterId, MangaId};
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
-use crate::routes::dto::{ChapterDto, MangaDto, MangaSummaryDto, Paged, Pagination};
+use crate::routes::dto::{
+    ChapterDto, ChapterSummaryDto, MangaDto, MangaSummaryDto, Paged, Pagination,
+};
 use crate::state::AppState;
 
 /// `GET /api/v1/manga`
@@ -73,7 +75,7 @@ pub async fn get(
     tag = "library",
     params(("id" = Uuid, Path, description = "Series id"), Pagination),
     responses(
-        (status = OK, body = Paged<ChapterDto>),
+        (status = OK, body = Paged<ChapterSummaryDto>),
         (status = NOT_FOUND, description = "No such series"),
     ),
 )]
@@ -81,7 +83,7 @@ pub async fn chapters(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
     Query(page): Query<Pagination>,
-) -> ApiResult<Json<Paged<ChapterDto>>> {
+) -> ApiResult<Json<Paged<ChapterSummaryDto>>> {
     // Checked first so a client asking about a series that does not exist gets
     // a 404 rather than an empty page, which reads as "no chapters yet".
     state
@@ -93,7 +95,7 @@ pub async fn chapters(
     Ok(Json(
         state
             .chapters
-            .list_for_manga(MangaId(id), page.cursor().as_ref())
+            .list_summaries_for_manga(MangaId(id), page.cursor().as_ref())
             .await?
             .into(),
     ))

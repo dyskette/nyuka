@@ -85,6 +85,18 @@ fn row_to_manga_summary(row: &sea_orm::QueryResult) -> Result<MangaSummary> {
     })
 }
 
+fn row_to_chapter_summary(row: &sea_orm::QueryResult) -> Result<ChapterSummary> {
+    // `size_bytes` comes from a LEFT JOIN, so it is NULL exactly when there is
+    // no download. That is the same fact `downloaded` carries, and deriving
+    // one from the other keeps them from disagreeing.
+    let size_bytes: Option<i64> = row.try_get("", "size_bytes").map_err(db)?;
+    Ok(ChapterSummary {
+        chapter: row_to_chapter(row)?,
+        downloaded: size_bytes.is_some(),
+        size_bytes,
+    })
+}
+
 fn row_to_chapter(row: &sea_orm::QueryResult) -> Result<Chapter> {
     Ok(Chapter {
         id: ChapterId(row.try_get("", "id").map_err(db)?),
@@ -560,6 +572,81 @@ impl Repositories {
 
         let next = has_more
             .then(|| items.last().map(|c| Cursor(c.id.0.to_string())))
+            .flatten();
+        Ok(Page { items, next })
+    }
+
+    /// The chapter list with each chapter's download state.
+    ///
+    /// A LEFT JOIN rather than a second query keyed by the ids just returned:
+    /// the panel shows one state per row, and the join is on that table's
+    /// primary key.
+    ///
+    /// Ordering and keyset are identical to [`Self::list_chapters`], so a
+    /// cursor from either is valid for the other.
+    #[tracing::instrument(
+        skip(self, cursor),
+        fields(
+            db.system.name = "postgresql",
+            db.operation.name = "SELECT",
+            db.collection.name = "chapter",
+        )
+    )]
+    pub async fn list_chapter_summaries(
+        &self,
+        manga: MangaId,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<ChapterSummary>> {
+        let after: Option<Uuid> = cursor
+            .map(|c| c.0.parse::<Uuid>())
+            .transpose()
+            .map_err(|_| DomainError::Invalid("cursor is not a chapter id".into()))?;
+
+        // `c.*` and not `*`: `downloaded_chapter` has its own `chapter_id`,
+        // and a bare star would also bring columns whose names collide with
+        // the chapter's own on the way into `row_to_chapter`.
+        let select = "SELECT c.*, d.size_bytes AS size_bytes \
+                      FROM chapter c \
+                      LEFT JOIN downloaded_chapter d ON d.chapter_id = c.id ";
+
+        let (sql, values): (String, Vec<Value>) = match after {
+            Some(id) => (
+                format!(
+                    "{select} WHERE c.manga_id = $1 AND (c.number, c.id) > \
+                     (SELECT COALESCE(number, 0), id FROM chapter WHERE id = $2) \
+                     ORDER BY c.number NULLS FIRST, c.id LIMIT $3"
+                ),
+                vec![manga.0.into(), id.into(), ((PAGE_SIZE + 1) as i64).into()],
+            ),
+            None => (
+                format!(
+                    "{select} WHERE c.manga_id = $1 \
+                     ORDER BY c.number NULLS FIRST, c.id LIMIT $2"
+                ),
+                vec![manga.0.into(), ((PAGE_SIZE + 1) as i64).into()],
+            ),
+        };
+
+        let mut rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                &sql,
+                values,
+            ))
+            .await
+            .map_err(db)?;
+
+        let has_more = rows.len() as u64 > PAGE_SIZE;
+        rows.truncate(PAGE_SIZE as usize);
+
+        let items: Vec<ChapterSummary> = rows
+            .iter()
+            .map(row_to_chapter_summary)
+            .collect::<Result<_>>()?;
+
+        let next = has_more
+            .then(|| items.last().map(|c| Cursor(c.chapter.id.0.to_string())))
             .flatten();
         Ok(Page { items, next })
     }

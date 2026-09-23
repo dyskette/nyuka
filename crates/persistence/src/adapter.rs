@@ -55,6 +55,14 @@ impl ChapterRepository for Repositories {
         self.list_chapters(manga, cursor).await
     }
 
+    async fn list_summaries_for_manga(
+        &self,
+        manga: MangaId,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<ChapterSummary>> {
+        self.list_chapter_summaries(manga, cursor).await
+    }
+
     async fn upsert_many(
         &self,
         manga: MangaId,

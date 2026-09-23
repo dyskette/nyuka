@@ -223,8 +223,8 @@ impl KindHandler for RefreshMetadata {
 pub(crate) mod tests {
     use super::*;
     use nyuka_domain::model::{
-        Chapter, ContentRating, Cursor, DownloadedChapter, ExternalKey, FollowId, MangaStatus,
-        Page, ReadingDirection, SourceChapter, SourceId,
+        Chapter, ChapterSummary, ContentRating, Cursor, DownloadedChapter, ExternalKey, FollowId,
+        MangaStatus, Page, ReadingDirection, SourceChapter, SourceId,
     };
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -349,6 +349,13 @@ pub(crate) mod tests {
                 items: vec![],
                 next: None,
             })
+        }
+        async fn list_summaries_for_manga(
+            &self,
+            _manga: MangaId,
+            _cursor: Option<&Cursor>,
+        ) -> Result<Page<ChapterSummary>> {
+            unimplemented!("the panel's chapter list is not exercised here")
         }
         async fn upsert_many(
             &self,

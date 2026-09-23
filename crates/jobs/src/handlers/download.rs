@@ -254,8 +254,8 @@ mod tests {
     use super::*;
     use crate::handlers::testing::job;
     use nyuka_domain::model::{
-        ChapterId, ContentRating, Cursor, DownloadedChapter, ExternalKey, JobKind, MangaId,
-        MangaStatus, Page, ReadingDirection, SourceChapter, SourceId, SourceManga,
+        ChapterId, ChapterSummary, ContentRating, Cursor, DownloadedChapter, ExternalKey, JobKind,
+        MangaId, MangaStatus, Page, ReadingDirection, SourceChapter, SourceId, SourceManga,
     };
     use nyuka_domain::ports::ChapterRead;
     use std::sync::Mutex;
@@ -368,6 +368,13 @@ mod tests {
                 items: vec![self.chapter.clone()],
                 next: None,
             })
+        }
+        async fn list_summaries_for_manga(
+            &self,
+            _manga: MangaId,
+            _cursor: Option<&Cursor>,
+        ) -> Result<Page<ChapterSummary>> {
+            unimplemented!("the panel's chapter list is not exercised here")
         }
         async fn upsert_many(
             &self,

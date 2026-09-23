@@ -525,6 +525,16 @@ export interface components {
             /** Format: float */
             volume?: number | null;
         };
+        /** @description A chapter with its local download state. */
+        ChapterSummaryDto: components["schemas"]["ChapterDto"] & {
+            /** @description True when a packaged file is recorded for this chapter. */
+            downloaded: boolean;
+            /**
+             * Format: int64
+             * @description The packaged size, present only when `downloaded`.
+             */
+            size_bytes?: number | null;
+        };
         DownloadRequest: {
             /** Format: uuid */
             chapter_id: string;
@@ -629,22 +639,16 @@ export interface components {
          *     page. Offsets are deliberately absent: they shift under inserts, and a
          *     library that gains a chapter mid-scroll would skip or repeat one.
          */
-        Paged_ChapterDto: {
-            items: {
-                external_key: string;
-                /** Format: uuid */
-                id: string;
-                language?: string | null;
-                /** Format: uuid */
-                manga_id: string;
-                /** Format: float */
-                number?: number | null;
-                /** Format: date-time */
-                published_at?: string | null;
-                title?: string | null;
-                /** Format: float */
-                volume?: number | null;
-            }[];
+        Paged_ChapterSummaryDto: {
+            items: (components["schemas"]["ChapterDto"] & {
+                /** @description True when a packaged file is recorded for this chapter. */
+                downloaded: boolean;
+                /**
+                 * Format: int64
+                 * @description The packaged size, present only when `downloaded`.
+                 */
+                size_bytes?: number | null;
+            })[];
             next_cursor?: string | null;
         };
         /**
@@ -1315,7 +1319,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Paged_ChapterDto"];
+                    "application/json": components["schemas"]["Paged_ChapterSummaryDto"];
                 };
             };
             /** @description No such series */

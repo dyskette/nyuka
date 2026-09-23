@@ -184,6 +184,21 @@ pub struct MangaSummary {
     pub downloaded_count: i64,
 }
 
+/// A chapter with its local download state.
+///
+/// A projection for the same reason [`MangaSummary`] is one: whether a file
+/// exists is a fact about `downloaded_chapter`, not about the chapter. The
+/// panel lists every chapter with its state, and asking per row would be one
+/// request per line.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChapterSummary {
+    pub chapter: Chapter,
+    /// True when a packaged file is recorded for this chapter.
+    pub downloaded: bool,
+    /// The packaged size, present only when `downloaded`.
+    pub size_bytes: Option<i64>,
+}
+
 /// A chapter as a source describes it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SourceChapter {

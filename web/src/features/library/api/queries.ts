@@ -64,7 +64,7 @@ export function mangaDetailQuery(mangaId: string) {
   })
 }
 
-/** A series' chapters. */
+/** A series' chapters, each with its download state. */
 export function mangaChaptersQuery(mangaId: string, cursor?: string) {
   return queryOptions({
     queryKey: libraryKeys.chapters(mangaId, cursor),

@@ -243,6 +243,17 @@ pub trait ChapterRepository: Send + Sync {
         manga: MangaId,
         cursor: Option<&Cursor>,
     ) -> Result<Page<Chapter>>;
+
+    /// The same list, with each chapter's download state.
+    ///
+    /// Separate from `list_for_manga` for the reason `list_summaries` is
+    /// separate from `list`: it joins a second table, and a caller that only
+    /// needs the chapters should not pay for that.
+    async fn list_summaries_for_manga(
+        &self,
+        manga: MangaId,
+        cursor: Option<&Cursor>,
+    ) -> Result<Page<ChapterSummary>>;
     /// Inserts or updates chapters for a series.
     ///
     /// Takes source-shaped chapters, which carry no local id: one is assigned

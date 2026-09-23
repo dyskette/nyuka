@@ -47,9 +47,19 @@ msgid "Browse is not built yet."
 msgstr "Browse is not built yet."
 
 #: src/features/library/components/LibraryTable.tsx
+#: src/routes/library.$mangaId.tsx
 msgid "Chapters"
 msgstr "Chapters"
 
+#: src/routes/library.$mangaId.tsx
+msgid "Close"
+msgstr "Close"
+
+#: src/features/library/components/ChapterList.tsx
+msgid "Download"
+msgstr "Download"
+
+#: src/features/library/components/ChapterList.tsx
 #: src/features/library/components/LibraryTable.tsx
 msgid "Downloaded"
 msgstr "Downloaded"
@@ -78,9 +88,25 @@ msgstr "Library"
 msgid "Live"
 msgstr "Live"
 
+#: src/features/library/components/ChapterList.tsx
+msgid "No chapters yet. Refresh the series to fetch its chapter list."
+msgstr "No chapters yet. Refresh the series to fetch its chapter list."
+
 #: src/features/browse/components/MangaCard.tsx
 msgid "No cover"
 msgstr "No cover"
+
+#: src/routes/library.$mangaId.tsx
+msgid "Open at the source"
+msgstr "Open at the source"
+
+#: src/routes/library.$mangaId.tsx
+msgid "Overview"
+msgstr "Overview"
+
+#: src/features/library/components/ChapterList.tsx
+msgid "Queued"
+msgstr "Queued"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Search {total} titles"
@@ -119,6 +145,14 @@ msgstr "Status"
 #: src/routes/library.tsx
 msgid "The library could not be loaded."
 msgstr "The library could not be loaded."
+
+#: src/routes/library.$mangaId.tsx
+msgid "This series could not be loaded."
+msgstr "This series could not be loaded."
+
+#: src/routes/library.$mangaId.tsx
+msgid "This source gave no description."
+msgstr "This source gave no description."
 
 #: src/features/library/components/LibraryTable.tsx
 msgid "Title"

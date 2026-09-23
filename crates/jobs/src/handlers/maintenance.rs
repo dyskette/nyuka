@@ -200,8 +200,8 @@ mod tests {
     use super::*;
     use crate::handlers::testing::job;
     use nyuka_domain::model::{
-        Chapter, ChapterId, ContentRating, Cursor, DownloadedChapter, ExternalKey, JobKind, Manga,
-        MangaStatus, PageRef, ReadingDirection, SourceChapter, SourceId,
+        Chapter, ChapterId, ChapterSummary, ContentRating, Cursor, DownloadedChapter, ExternalKey,
+        JobKind, Manga, MangaStatus, Page, PageRef, ReadingDirection, SourceChapter, SourceId,
     };
     use nyuka_domain::ports::ChapterRead;
     use std::collections::HashSet;
@@ -302,6 +302,13 @@ mod tests {
                     .collect(),
                 next: None,
             })
+        }
+        async fn list_summaries_for_manga(
+            &self,
+            _manga: MangaId,
+            _cursor: Option<&Cursor>,
+        ) -> Result<Page<ChapterSummary>> {
+            unimplemented!("the panel's chapter list is not exercised here")
         }
         async fn upsert_many(
             &self,
