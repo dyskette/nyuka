@@ -54,8 +54,10 @@ recommendation in its own ADR that can simply be adopted.
 - [ ] **OTLP/protobuf ingest** — the other half of ADR-0013's accepted
       encodings. The browser SDK can be configured for JSON, so this is a
       convenience rather than a blocker.
-- [ ] **Embedded SPA** — `rust-embed` over `web/dist`, with the route
-      precedence rules (ADR-0006)
+- [x] **Embedded SPA** — `rust-embed` over `web/dist`, with the route
+      precedence rules (ADR-0006). `build.rs` writes a placeholder
+      `index.html` when the directory is absent, so the backend builds and
+      tests without a frontend toolchain.
 - [x] **Rate limiting** with `tower_governor`, covering `/auth/callback` as
       well as `/auth/login` (ADR-0005 follow-up 6). Uses a custom key
       extractor: the shipped `SmartIpKeyExtractor` trusts `X-Forwarded-For`

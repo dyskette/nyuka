@@ -72,6 +72,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
+rust-embed = { workspace = true }
 futures = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }

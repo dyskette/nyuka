@@ -305,10 +305,15 @@ async fn every_documented_path_is_actually_routed() {
                 .await
                 .expect("body");
 
+            let body: serde_json::Value =
+                serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+            let unrouted = status == StatusCode::NOT_FOUND
+                && body["type"]
+                    .as_str()
+                    .is_some_and(|t| t.ends_with("no-such-endpoint"));
             assert!(
-                status != StatusCode::NOT_FOUND || !bytes.is_empty(),
-                "{method} {path} is in the schema but nothing is mounted \
-                 there: axum's fallback answered with an empty 404"
+                !unrouted,
+                "{method} {path} is in the schema but nothing is mounted there"
             );
             assert_ne!(
                 status,
@@ -326,25 +331,47 @@ async fn every_documented_path_is_actually_routed() {
 }
 
 /// And the control for the control: a path that is definitely not routed must
-/// produce the empty-bodied fallback the test above keys on. Without this, a
-/// change in axum's fallback behaviour would make that test pass silently for
+/// answer with the distinct `no-such-endpoint` problem the test above keys on.
+/// Without this, a change to that problem type would make the check pass for
 /// everything.
 #[tokio::test(flavor = "multi_thread")]
-async fn an_unrouted_path_produces_an_empty_fallback_404() {
+async fn an_unrouted_api_path_reports_no_such_endpoint() {
     let Some(h) = support::harness("nyuka_test_routes_fallback").await else {
         return;
     };
     Migrator::up(&h.db, None).await.expect("migrating");
 
-    let response = h.raw(get("/api/v1/definitely-not-a-route")).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-
-    let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-        .await
-        .expect("body");
+    let (status, body) = h.send(get("/api/v1/definitely-not-a-route")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(
-        bytes.is_empty(),
-        "the routed-path test keys on this being empty; it answered {:?}",
-        String::from_utf8_lossy(&bytes)
+        body["type"]
+            .as_str()
+            .is_some_and(|t| t.ends_with("no-such-endpoint")),
+        "the routed-path test keys on this type: {body}"
     );
+    assert_eq!(
+        body["instance"], "/api/v1/definitely-not-a-route",
+        "the instance must be the URL the client asked for, not the path left \
+         after nesting stripped the prefix"
+    );
+}
+
+/// The two kinds of 404 must be distinguishable. "This URL does not exist"
+/// and "the thing you asked for does not exist" call for different actions,
+/// and a client that cannot tell them apart retries a typo forever.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_missing_endpoint_is_a_different_problem_from_a_missing_resource() {
+    let Some(h) = support::harness("nyuka_test_routes_404_kinds").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (_, unrouted) = h.send(get("/api/v1/nope")).await;
+    assert_ne!(
+        unrouted["type"].as_str(),
+        Some("/problems/not-found"),
+        "an unrouted URL must not answer with the same problem a missing \
+         resource does"
+    );
+    assert_eq!(unrouted["type"], "/problems/no-such-endpoint");
 }

@@ -114,6 +114,20 @@ impl Problem {
             .with_detail(format!("No {what} matches that identifier."))
     }
 
+    /// No endpoint is mounted at this URL.
+    ///
+    /// Distinct from [`Problem::not_found`], which means the endpoint exists
+    /// and the thing it was asked for does not. A client that cannot tell
+    /// those apart retries a typo forever.
+    pub fn no_such_endpoint() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "no-such-endpoint",
+            "No such endpoint",
+        )
+        .with_detail("This URL is not part of the API.")
+    }
+
     pub fn invalid(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::BAD_REQUEST,

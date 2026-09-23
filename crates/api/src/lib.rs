@@ -441,7 +441,21 @@ pub fn router(state: Arc<AppState>) -> Router {
         .layer(axum::middleware::from_fn(csrf::require_csrf_header));
 
     Router::new()
-        .nest("/api/v1", api)
+        .nest(
+            "/api/v1",
+            // The API's own fallback, so an unknown endpoint answers
+            // problem+json rather than falling through to the SPA shell. This
+            // is the sharp edge ADR-0006 names: without it a mistyped fetch
+            // returns `index.html` with 200, and the client reports an HTML
+            // parse error instead of a missing endpoint.
+            //
+            // The bare prefix needs its own route: `/api/v1/` reduces to an
+            // inner path of `/`, which the nested fallback does not catch, so
+            // without this it falls through to the SPA shell — the exact
+            // failure the fallback exists to prevent.
+            api.route("/", get(static_files::api_not_found_bare))
+                .fallback(static_files::api_not_found_bare),
+        )
         // Deliberately outside `/api/v1`: a probe is not a versioned API, and
         // an orchestrator should not have to track the API version to know
         // whether the process is alive.
@@ -457,5 +471,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             tracing_layer::record_span_fields,
         ))
         .layer(tracing_layer::layer())
+        // Last, so it only sees what nothing above matched. A deep link like
+        // `/library/123` is a client-side route, not a missing resource, and
+        // gets the shell with 200.
+        .fallback(static_files::serve)
         .with_state(state)
 }

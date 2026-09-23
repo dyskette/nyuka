@@ -19,6 +19,8 @@
 use std::process::Command;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ensure_frontend_dir()?;
+
     vergen::Emitter::default()
         .add_instructions(&vergen::Build::all_build())?
         .add_instructions(&vergen::Cargo::all_cargo())?
@@ -48,4 +50,31 @@ fn git_sha() -> String {
         .map(|sha| sha.trim().to_string())
         .filter(|sha| !sha.is_empty())
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Creates `web/dist` with a placeholder when it is absent.
+///
+/// `rust-embed` needs the directory to exist at compile time, so without this
+/// the backend cannot be built or tested without first running the frontend
+/// toolchain. The placeholder says what happened rather than leaving an empty
+/// directory that looks like a broken build.
+fn ensure_frontend_dir() -> Result<(), Box<dyn std::error::Error>> {
+    let dist = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/dist");
+    let index = dist.join("index.html");
+
+    if index.exists() {
+        // Rebuild when the frontend is rebuilt.
+        println!("cargo:rerun-if-changed={}", dist.display());
+        return Ok(());
+    }
+
+    std::fs::create_dir_all(&dist)?;
+    std::fs::write(
+        &index,
+        "<!doctype html>\n<meta charset=\"utf-8\">\n<title>nyuka</title>\n\
+         <p>No frontend build is embedded in this binary. Run the frontend \
+         build and rebuild the server.</p>\n",
+    )?;
+    println!("cargo:warning=web/dist was empty; embedded a placeholder index.html");
+    Ok(())
 }
