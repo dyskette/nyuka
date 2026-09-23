@@ -144,19 +144,23 @@ jobs:
           git diff --exit-code -- src/shared/api/schema.d.ts \
             || { echo "::error::src/shared/api/schema.d.ts is stale; run 'npm run gen:api' and commit the result"; exit 1; }
 
-      # ADR-0008: routeTree.gen.ts is generated and committed.
-      - name: Route tree current
-        run: |
-          set -euo pipefail
-          npx tsr generate
-          git diff --exit-code -- src/routeTree.gen.ts \
-            || { echo "::error::src/routeTree.gen.ts is stale; run 'npx tsr generate' and commit the result"; exit 1; }
-
       - name: Test
         run: npx vitest run
 
       - name: Build
         run: npm run build
+
+      # ADR-0008: routeTree.gen.ts is generated and committed.
+      #
+      # Checked after Build rather than by its own generator command: the tree
+      # is produced by the Vite plugin, not by a CLI, so `vite build` is what
+      # regenerates it. Invoking `tsr generate` would need a package this
+      # project does not install — and it silently failed when it was tried.
+      - name: Route tree current
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- src/routeTree.gen.ts \
+            || { echo "::error::src/routeTree.gen.ts is stale; run 'npm run build' and commit the result"; exit 1; }
 
       - name: Bundle size
         run: npx size-limit
