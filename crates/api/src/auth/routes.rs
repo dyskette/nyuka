@@ -97,9 +97,9 @@ pub async fn callback(
 ) -> ApiResult<Response> {
     let oidc = state.oidc.as_ref().ok_or_else(|| auth_disabled(&state))?;
 
-    // Take the flow's secrets out of the session before anything else, so a
-    // replayed callback finds nothing to validate against no matter which
-    // branch below it would have taken.
+    // Take the flow's secrets out of the session before anything else, and
+    // persist that immediately — see the save below — so a replayed callback
+    // finds nothing to validate against no matter which branch this one took.
     let expected_state: Option<String> = session.remove(STATE_KEY).await.map_err(session_failed)?;
     let nonce: Option<String> = session.remove(NONCE_KEY).await.map_err(session_failed)?;
     let verifier: Option<String> = session
@@ -110,6 +110,23 @@ pub async fn callback(
         .remove(RETURN_TO_KEY)
         .await
         .map_err(session_failed)?;
+
+    // Saved here, explicitly, rather than left to the session layer.
+    //
+    // `tower-sessions` skips its own save when the response is a server error:
+    //
+    //     _ if (modified || always_save) && !empty && !res.status().is_server_error()
+    //
+    // Every failure below this point is a 502 — the provider was unreachable,
+    // the code would not exchange, the ID token would not verify — so without
+    // this the removals above are discarded and the flow stays replayable. The
+    // comment above claimed otherwise and was wrong: a callback that failed at
+    // the token endpoint left its state, nonce and verifier in the session,
+    // and a second callback with the same state got past the check again.
+    //
+    // `web/e2e/auth.spec.ts` holds this. Nothing else could: it takes a real
+    // provider to make the exchange fail after the state has matched.
+    session.save().await.map_err(session_failed)?;
 
     if let Some(error) = query.error {
         // The provider declined. This is `access_denied` when a user pressed

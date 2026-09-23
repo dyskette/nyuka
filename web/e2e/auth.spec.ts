@@ -162,6 +162,40 @@ function stateFrom(authorize: string): string {
 }
 
 /**
+ * The flow's secrets are consumed on first use, not on success.
+ *
+ * `callback` removes the state, the nonce and the PKCE verifier from the
+ * session before it validates anything, so a second callback finds nothing to
+ * validate against whichever branch the first one took. The code says so in a
+ * comment; this is what holds it.
+ *
+ * The first callback here carries a **bogus code with the correct state**, so
+ * it fails at the token exchange. That matters: the provider never sees a
+ * valid code, so it cannot be the provider's single-use enforcement that
+ * refuses the second attempt. Only the session consumption can.
+ *
+ * This is the distinction the "replayed code" test above cannot draw, because
+ * there the code really was spent.
+ */
+test('a flow cannot be replayed even when it never completed', async ({ page }) => {
+  const start = await page.request.get(`${SESSION_ORIGIN}${LOGIN}`, { maxRedirects: 0 })
+  const authorize = start.headers().location as string
+  const state = new URL(authorize).searchParams.get('state') ?? ''
+  expect(state).not.toBe('')
+
+  const callback = `${SESSION_ORIGIN}${CALLBACK}?code=never-issued&state=${state}`
+
+  // Fails at the exchange: the state matched, so it got that far.
+  const first = await page.request.get(callback, { maxRedirects: 0 })
+  expect(first.status()).toBe(502)
+
+  // The same state again. The secrets are gone, so this cannot even reach the
+  // exchange — a different failure, which is the point.
+  const second = await page.request.get(callback, { maxRedirects: 0 })
+  expect(second.status()).toBe(400)
+})
+
+/**
  * The sign-in rate limit (ADR-0005 follow-up 6).
  *
  * Deliberately last in the file: it exhausts one server's budget, and
