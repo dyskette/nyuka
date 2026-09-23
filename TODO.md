@@ -179,7 +179,9 @@ has been removed.
       metadata" is left out: the server answers 400 for that kind.
 - [x] MSW wired up for component tests, with handlers typed against the
       generated schema and `onUnhandledRequest: 'error'`
-- [ ] Virtualized list for large libraries (TanStack Virtual)
+- [x] **Virtualized list** (TanStack Virtual) — padding rows rather than
+      absolute positioning, so the table stays a table, with `aria-rowcount`
+      and `aria-rowindex` carrying the real numbers.
 - [x] SSE provider and the reconnect invalidation set — one `EventSource` at
       the root, an invalidation table per event, and invalidate-on-connect for
       both first connections and reconnects. The status bar reads the stream
@@ -188,10 +190,8 @@ has been removed.
 - [x] **Server-side sort, filter and search** — `GET /manga` takes `q`,
       `status`, `source_id`, `sort` and `dir`, with the keyset built on the
       chosen sort column. The client orders and filters nothing.
-- [ ] **Infinite scroll.** The library loads one page and offers no way to
-      reach the next: the toolbar reports "50+ titles" and there is no
-      control behind it. Needs `useInfiniteQuery` on the cursor the server
-      already returns, which is also the prerequisite for virtualization.
+- [x] **Infinite scroll** — one `useInfiniteQuery` over the server's cursor,
+      fetching the next page as the end comes into view.
 - [ ] **Read progress** — needs a decision, not just work. The mockup shows an
       "Unread 32" filter and "14 new" badges, and nothing records what has been
       read: the API tracks what is *downloaded*. Closing this means a
