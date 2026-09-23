@@ -137,11 +137,10 @@ for.
       (ADR-0003 follow-up 2; the partial index and retention job are done)
 - [ ] **Review the 60s time-to-first-page budget** after a month of real
       snapshots (ADR-0019 follow-up 5). It is an estimate until then.
-- [ ] **Rendered-contrast check over the built CSS** in both themes, including
-      the focus ring (ADR-0016 follow-up). The token comments are a first pass
-      measured by hand; five colours are gamut-mapped by the browser, so the
-      rendered value is not the specified one. `axe-core` is the authority and
-      it is not wired yet.
+- [x] **Rendered-contrast check** over the built CSS, both themes, focus ring
+      included (ADR-0016). Fourteen token pairs measured as painted, plus
+      `axe-core` over the rendered shell. Found and fixed a real 2.54:1
+      failure. This was the last open load-bearing follow-up.
 
 ## Frontend
 

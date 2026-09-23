@@ -72,7 +72,7 @@ These are the checks without which the corresponding decision is unsafe rather t
 - **0007** — the temp directory inside the library root, asserted by test.
 - **0009** and **0012** — the GritQL rule banning inline query-key arrays.
 - **0010** — a test asserting `text/event-stream` responses are never compressed.
-- **0016** — a contrast test over *rendered* colors, in both themes, including the focus ring.
+- **0016** — a contrast test over *rendered* colors, in both themes, including the focus ring. **Done**, in `web/e2e/contrast.spec.ts`. It measures by painting each token to a canvas and reading the pixel back, which is the sRGB the browser produces after gamut mapping; compositing a token over its *own background* rather than over black is what makes an alpha value measure as it looks. It found a live failure the token table could not: the sidebar's shortcut hints were `--muted-foreground` under `opacity-60`, at 2.54:1.
 - **0019** — the hourly `nyuka_metrics` snapshot line, which is the only thing that makes the objectives evaluable after log rotation.
 - **0020** — a database test per read model asserting its aggregates against a known fixture, *including the zero case*. An `INNER JOIN` written where a `LEFT JOIN` was meant passes every test that has a non-zero answer.
 - **0021** — `tests/restart.rs`: a package saved by one runtime must load into a fresh one, and `install` must register under the id the database returned. Both bugs were invisible to tests that install and read in the same process, which is what every existing test did.

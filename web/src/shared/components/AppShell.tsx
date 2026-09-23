@@ -35,7 +35,7 @@ interface NavItem {
   label: ReactNode
   /** Shown right-aligned, as the mockup shows for Downloads. */
   badge?: number
-  /** The keyboard shortcut, rendered dimmed. */
+  /** The keyboard shortcut, in the muted colour — see the note at its `kbd`. */
   shortcut: string
 }
 
@@ -98,7 +98,15 @@ function SidebarLink({ item }: { item: NavItem }) {
           {item.badge}
         </span>
       )}
-      <kbd className="text-muted-foreground font-mono text-[10px] opacity-60">{item.shortcut}</kbd>
+      {/*
+        No `opacity` on top of the colour. `--muted-foreground` measures
+        5.83:1 on the page, and dimming it to 60% took it to 2.54:1 — under
+        the 4.5:1 WCAG 1.4.3 requires of 10px text. That is the same mistake
+        ADR-0016 already corrected once, where the focus ring at 60% alpha
+        measured 1.92:1. A token that passes on its own does not pass through
+        an opacity.
+      */}
+      <kbd className="text-muted-foreground font-mono text-[10px]">{item.shortcut}</kbd>
     </Link>
   )
 }

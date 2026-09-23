@@ -38,6 +38,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@biomejs/biome": "2.5.14",
     "@lingui/cli": "6.7.0",
     "@lingui/format-po": "^6.7.0",
