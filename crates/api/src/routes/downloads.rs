@@ -110,6 +110,58 @@ pub async fn request(
         .into_response())
 }
 
+/// The plain `filename` parameter, which some clients read and others do not.
+///
+/// RFC 6266 says to send both: a client that understands `filename*` prefers
+/// it, and one that does not falls back to this. `curl -OJ` is the second kind
+/// — it reads only the plain form — and pulling a chapter out with curl is
+/// exactly the "other tools" case ADR-0007 chose this format for.
+///
+/// Restricted to printable ASCII with the quoting characters removed, because
+/// this form is a quoted-string with nowhere to put a quote, a backslash or a
+/// newline. Anything else becomes `_`, so the name stays recognisable without
+/// the header becoming ambiguous.
+pub fn ascii_fallback_filename(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_graphic() && c != '"' && c != '\\' || c == ' ' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    // A name that was entirely non-ASCII would collapse to underscores and say
+    // nothing. The extension is what a reader actually needs.
+    if cleaned.chars().all(|c| c == '_' || c == ' ') {
+        "chapter.cbz".to_string()
+    } else {
+        cleaned
+    }
+}
+
+/// Percent-encodes a filename for `Content-Disposition`'s `filename*`.
+///
+/// RFC 5987 allows only `attr-char`; everything else is percent-encoded UTF-8.
+/// Hand-written rather than pulling in a crate for it: the allowed set is
+/// eleven punctuation characters plus alphanumerics, and the alternative is a
+/// dependency for one header.
+pub fn percent_encode_filename(name: &str) -> String {
+    const UNRESERVED: &[u8] = b"!#$&+-.^_`|~";
+
+    let mut out = String::with_capacity(name.len());
+    for byte in name.as_bytes() {
+        if byte.is_ascii_alphanumeric() || UNRESERVED.contains(byte) {
+            out.push(*byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 /// `GET /api/v1/downloads/{chapter_id}/file`
 #[utoipa::path(
     operation_id = "getChapterFile",
@@ -158,6 +210,25 @@ pub async fn file(
         HeaderValue::from_static("application/vnd.comicbook+zip"),
     );
     response_headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+
+    // Named, so the file that lands on disk is the one the library holds
+    // rather than a uuid. The name is the archive's own, which already carries
+    // the series, volume and chapter in the shape Komga and Kavita parse
+    // (ADR-0007) — so a chapter pulled out of here and dropped into another
+    // library is still readable there.
+    //
+    // `filename*` with RFC 5987 encoding rather than `filename`: a series
+    // title can hold anything a source published, including quotes, newlines
+    // and non-ASCII, and the plain form has nowhere to put them.
+    if let Some(name) = download.relative_path.rsplit('/').next()
+        && let Ok(value) = HeaderValue::from_str(&format!(
+            "attachment; filename=\"{}\"; filename*=UTF-8''{}",
+            ascii_fallback_filename(name),
+            percent_encode_filename(name)
+        ))
+    {
+        response_headers.insert(header::CONTENT_DISPOSITION, value);
+    }
     response_headers.insert(
         header::ETAG,
         HeaderValue::from_str(&etag).unwrap_or(HeaderValue::from_static("\"\"")),

@@ -110,4 +110,42 @@ describe('ChapterList', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
     expect(screen.getByText(/No chapters yet/)).toBeInTheDocument()
   })
+
+  describe('retrieving the file', () => {
+    /**
+     * Downloading a chapter to the server is only half of it. Without this
+     * there is no way to get one onto the device the reader is holding.
+     */
+    it('offers a downloaded chapter as a link to its archive', async () => {
+      await renderWithProviders(
+        <ChapterList chapters={[chapter({ downloaded: true })]} onDownload={vi.fn()} />,
+      )
+
+      const save = screen.getByRole('link', { name: /Save The Ninth Gate/ })
+      expect(save).toHaveAttribute(
+        'href',
+        '/api/v1/downloads/11111111-1111-4111-8111-111111111111/file',
+      )
+    })
+
+    /**
+     * No `download` attribute. The server sends `Content-Disposition` with the
+     * archive's real name, which carries the series, volume and chapter in the
+     * shape other readers parse — setting one here would override it with
+     * whatever this page happened to know.
+     */
+    it('leaves the filename to the server', async () => {
+      await renderWithProviders(
+        <ChapterList chapters={[chapter({ downloaded: true })]} onDownload={vi.fn()} />,
+      )
+
+      expect(screen.getByRole('link', { name: /Save/ })).not.toHaveAttribute('download')
+    })
+
+    it('offers nothing to save for a chapter with no file', async () => {
+      await renderWithProviders(<ChapterList chapters={[chapter()]} onDownload={vi.fn()} />)
+
+      expect(screen.queryByRole('link', { name: /Save/ })).not.toBeInTheDocument()
+    })
+  })
 })

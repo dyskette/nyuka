@@ -414,3 +414,75 @@ async fn a_missing_endpoint_is_a_different_problem_from_a_missing_resource() {
     );
     assert_eq!(unrouted["type"], "/problems/no-such-endpoint");
 }
+
+// ---------------------------------------------------------------------------
+// Retrieving a chapter file
+// ---------------------------------------------------------------------------
+
+/// The name a browser saves the archive under.
+///
+/// Without it the file lands as a uuid, and a chapter pulled out of the
+/// library is no longer something another reader can parse — which is the
+/// property ADR-0007 chose the format for.
+#[test]
+fn a_filename_is_encoded_for_content_disposition() {
+    use nyuka_api::routes::downloads::percent_encode_filename as encode;
+
+    assert_eq!(
+        encode("Ashfall Chronicle v03 c021.cbz"),
+        "Ashfall%20Chronicle%20v03%20c021.cbz",
+        "spaces are not attr-char"
+    );
+    assert_eq!(encode("plain.cbz"), "plain.cbz");
+
+    // A title is whatever a source published. None of this may end up
+    // unencoded in a header, where a quote or a newline would either truncate
+    // the value or split it into a second header.
+    for hostile in ["a\"b.cbz", "a\nb.cbz", "a;b.cbz", "日本語.cbz", "a\\b.cbz"] {
+        let encoded = encode(hostile);
+        assert!(
+            !encoded.contains(['"', '\n', ';', '\\', ' ']),
+            "{hostile:?} encoded to {encoded:?}, which still carries a header-breaking character"
+        );
+    }
+
+    // UTF-8 by bytes, not by character: the header is ASCII.
+    assert_eq!(encode("é.cbz"), "%C3%A9.cbz");
+}
+
+/// The plain `filename` alongside it, for clients that read only that one.
+///
+/// `curl -OJ` is such a client, and pulling a chapter out with curl is exactly
+/// the case ADR-0007 chose an interoperable format for.
+#[test]
+fn the_ascii_fallback_filename_cannot_break_the_header() {
+    use nyuka_api::routes::downloads::ascii_fallback_filename as fallback;
+
+    assert_eq!(
+        fallback("Ashfall Chronicle v03 c021.cbz"),
+        "Ashfall Chronicle v03 c021.cbz",
+        "an ordinary name passes through"
+    );
+
+    // The parameter is a quoted-string, so these three would end it early or
+    // split the header in two.
+    for hostile in ["a\"b.cbz", "a\\b.cbz", "a\nb.cbz", "a\rb.cbz"] {
+        let value = fallback(hostile);
+        assert!(
+            !value.contains(['"', '\\', '\n', '\r']),
+            "{hostile:?} became {value:?}"
+        );
+    }
+
+    // Non-ASCII collapses, but the result still has to say something.
+    assert_eq!(
+        fallback("日本語.cbz"),
+        "___.cbz",
+        "the extension survives, which is what a reader needs"
+    );
+    assert_eq!(
+        fallback("日本語"),
+        "chapter.cbz",
+        "a name that collapses entirely gets a usable one instead of underscores"
+    );
+}

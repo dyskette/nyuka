@@ -1,4 +1,4 @@
-import { Trans } from '@lingui/react/macro'
+import { Trans, useLingui } from '@lingui/react/macro'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
 
@@ -83,13 +83,36 @@ function ChapterState({
   pending: boolean
   onDownload: (chapterId: string) => void
 }) {
+  const { t } = useLingui()
+
   if (chapter.downloaded) {
     return (
-      <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
+      <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-xs">
         {/* A dot, not a filled row. Colour is never the only carrier — the
             word beside it says the same thing (ADR-0016). */}
-        <span className="bg-success size-1.5 rounded-full" aria-hidden="true" />
-        <Trans>Downloaded</Trans>
+        <span className="flex items-center gap-1">
+          <span className="bg-success size-1.5 rounded-full" aria-hidden="true" />
+          <Trans>Downloaded</Trans>
+        </span>
+
+        {/*
+          A plain link, not a fetch. The endpoint is same-origin and answers a
+          `GET` with the session cookie, so the browser's own download handles
+          it — ranged, resumable, and streamed rather than held in memory the
+          way a blob would be.
+
+          No `download` attribute: the server sends `Content-Disposition` with
+          the archive's real name, which already carries the series, volume and
+          chapter in the shape other readers parse (ADR-0007). Setting one here
+          would override that with whatever this page happened to know.
+        */}
+        <a
+          href={`/api/v1/downloads/${chapter.id}/file`}
+          aria-label={t`Save ${chapterLabel(chapter)} to this device`}
+          className="text-accent hover:bg-accent-soft rounded-sm px-1.5 py-0.5"
+        >
+          <Trans>Save</Trans>
+        </a>
       </span>
     )
   }
