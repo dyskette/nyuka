@@ -60,6 +60,7 @@ use tokio_util::sync::CancellationToken;
 use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_http::compression::CompressionLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
@@ -316,6 +317,12 @@ pub fn compression_layer() -> CompressionLayer {
 /// session layer must be *outside* the CSRF check, or a rejected mutation
 /// would still have loaded and saved a session.
 pub fn router(state: Arc<AppState>) -> Router {
+    // Enforced by a layer as well as in the handler. The layer rejects before
+    // the body is buffered, which is the difference between refusing a
+    // 50 MB upload and allocating it first; the handler's own check is what
+    // reports the limit as problem+json.
+    let telemetry_body_limit = state.config.telemetry.ingest_max_body_bytes;
+
     // Built here rather than passed in: the governor holds per-key state, so
     // one config per router is what makes the limit apply across requests.
     let auth_governor = Arc::new(
@@ -400,6 +407,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         // SSE is not in the OpenAPI document: it is not a request/response
         // pair, and a generated client method for it would be misleading.
         .route("/events", get(sse::events))
+        // Nor is telemetry ingest: it speaks OTLP, and a generated client
+        // method for it would describe a shape the browser SDK already owns.
+        .route(
+            "/telemetry",
+            post(routes::telemetry::ingest).layer(RequestBodyLimitLayer::new(telemetry_body_limit)),
+        )
         .layer(axum::middleware::from_fn(auth::require_session));
 
     // Rate-limited as a group. The callback is included deliberately: it

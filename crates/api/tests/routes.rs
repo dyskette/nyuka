@@ -90,6 +90,7 @@ async fn every_mutating_route_requires_a_session_too() {
         (Method::DELETE, format!("/api/v1/sources/{id}")),
         (Method::POST, "/api/v1/manga".to_string()),
         (Method::POST, "/api/v1/downloads".to_string()),
+        (Method::POST, "/api/v1/telemetry".to_string()),
     ] {
         let (status, body) = h.send(mutate(method.clone(), &path)).await;
         assert_eq!(
@@ -184,6 +185,43 @@ async fn the_openapi_document_is_served_and_describes_the_routes() {
         !paths.contains_key("/events"),
         "SSE is not a request/response pair; a generated method for it would \
          be misleading"
+    );
+}
+
+/// Telemetry ingest writes user-controlled data into the log stream, so an
+/// unauthenticated one would let anyone fill an operator's logs.
+#[tokio::test(flavor = "multi_thread")]
+async fn telemetry_ingest_requires_a_session() {
+    let Some(h) = support::harness("nyuka_test_routes_telemetry_auth").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let (status, _) = h.send(mutate(Method::POST, "/api/v1/telemetry")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// A body over the limit must be refused before it is buffered, not after.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_oversized_telemetry_body_is_refused() {
+    let Some(h) = support::harness("nyuka_test_routes_telemetry_size").await else {
+        return;
+    };
+    Migrator::up(&h.db, None).await.expect("migrating");
+
+    let huge = "x".repeat(1024 * 1024);
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/api/v1/telemetry")
+        .header("x-requested-with", "XMLHttpRequest")
+        .header("content-type", "application/json")
+        .body(Body::from(huge))
+        .expect("request");
+
+    let (status, _) = h.send(request).await;
+    assert!(
+        status == StatusCode::PAYLOAD_TOO_LARGE || status == StatusCode::UNAUTHORIZED,
+        "a megabyte body must not be accepted, got {status}"
     );
 }
 

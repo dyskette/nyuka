@@ -107,7 +107,13 @@ tempfile = "3"
 opentelemetry = "0.32"
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
 opentelemetry-semantic-conventions = "0.32"
-opentelemetry-proto = { version = "0.32", features = ["gen-tonic-messages", "with-serde"] }
+# `default-features = false` matters: the default is `full`, which pulls
+# `gen-tonic` and with it the whole tonic gRPC stack. This build decodes OTLP
+# bodies over HTTP and never speaks gRPC, so the feature list above was
+# previously decorative.
+opentelemetry-proto = { version = "0.32", default-features = false, features = [
+    "gen-tonic-messages", "with-serde", "trace",
+] }
 tracing-opentelemetry = "0.33"
 axum-tracing-opentelemetry = "0.39"
 # Only needed if the `otlp` feature is built (ADR-0014).
