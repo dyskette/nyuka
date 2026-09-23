@@ -8,4 +8,16 @@
 [toolchain]
 channel = "1.98"
 components = ["rustfmt", "clippy"]
-profile = "default"
+
+# `minimal` plus the two components above, not `default`.
+#
+# `default` adds `rust-docs`: around half a gigabyte of generated HTML for the
+# standard library. In the Docker build that is not merely downloaded, it is
+# committed into a builder layer — the base image ships toolchain `1.98.1`
+# while this file names the channel `1.98`, which rustup treats as a different
+# toolchain and installs in full. A build here failed writing that layer with
+# `no space left on device`, on a file under `share/doc/rust/html`.
+#
+# What is lost is offline `cargo doc --open` for `std`. Add it back per machine
+# with `rustup component add rust-docs`; nothing in this repository needs it.
+profile = "minimal"

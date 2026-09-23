@@ -236,3 +236,38 @@ jobs:
           name: playwright-traces
           path: web/test-results/
           retention-days: 7
+
+  # The deployment image, built but not pushed.
+  #
+  # Its own job because nothing else builds it, and nothing else would notice
+  # it breaking: adding a workspace member is enough, since Cargo reads every
+  # member's manifest before resolving `-p nyuka-api`. `xtask` did exactly that
+  # and the image was unbuildable for two days without a single failing check.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          # Cached against the registry-free GitHub Actions cache, so a run
+          # that changes nothing in the build inputs is cheap.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image is distroless and has no shell, so the only thing that can be
+      # asked of it is whether the entrypoint runs. It refuses to start without
+      # configuration, which is the answer that proves the binary is there and
+      # links.
+      - name: The entrypoint runs
+        run: |
+          set -euo pipefail
+          docker build -q -t nyuka:ci .
+          output=$(docker run --rm nyuka:ci 2>&1 || true)
+          echo "$output"
+          grep -q "configuration is not usable" <<<"$output" \
+            || { echo "::error::the image did not start far enough to reject its configuration"; exit 1; }

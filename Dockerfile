@@ -17,6 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # reproducibility guarantee, and this COPY fails without it. Generate it with
 # `cargo generate-lockfile` on first checkout.
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+# Every workspace member's manifest has to exist, even the ones this image does
+# not build: Cargo reads the whole workspace before it resolves `-p nyuka-api`,
+# and a missing member fails with `failed to load manifest for workspace
+# member`. `xtask` is a build tool and contributes nothing to the binary — it
+# is here so the workspace resolves, and copied before `crates/` because it
+# changes far less often, so it stays out of the layer that rebuilds.
+COPY xtask/ xtask/
 COPY crates/ crates/
 COPY --from=web /web/dist web/dist
 COPY web/openapi.json web/openapi.json
