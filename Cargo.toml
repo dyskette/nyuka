@@ -99,6 +99,10 @@ unicode-normalization = "0.1"
 rustix = { version = "1.1", features = ["fs"] }
 # `tower-sessions` dates sessions with `time`; everything else uses chrono.
 time = "0.3"
+# Property testing on stable. A coverage-guided fuzzer (`cargo-fuzz`) needs
+# nightly for its sanitizers, and this workspace pins a stable toolchain;
+# TODO.md records that gap rather than pretending these are the same thing.
+proptest = "1"
 tempfile = "3"
 
 # --- Observability (ADR-0014, ADR-0015) --------------------------------------

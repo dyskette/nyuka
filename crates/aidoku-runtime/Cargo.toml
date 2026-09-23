@@ -34,5 +34,6 @@ rquickjs = { workspace = true, optional = true }
 # html5ever = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
 # Unpacking the conformance fixture in the integration test.
 zip = { workspace = true }

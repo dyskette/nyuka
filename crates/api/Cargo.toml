@@ -71,6 +71,7 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
 async-trait = { workspace = true }
 rust-embed = { workspace = true }
 futures = { workspace = true }

@@ -21,5 +21,6 @@ tracing = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
 zip = { workspace = true }
 tempfile = { workspace = true }

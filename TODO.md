@@ -75,14 +75,22 @@ for.
       global propagator was never installed, so an incoming `traceparent` was
       silently ignored; and `trace_id` was declared on the server span but
       never recorded, so no line carried one.
-- [ ] **Fuzz `paths.rs`** with traversal sequences, null bytes, overlong
-      UTF-8, RTL overrides, and 300-character names (ADR-0007 follow-up 1).
-      These strings come from untrusted extensions.
-- [ ] **Fuzz the postcard decode path** in the runtime (ADR-0004 follow-up).
-- [ ] **Fuzz the OTLP decode path** (ADR-0013 follow-up 2) — attacker-
-      influenced bytes from an authenticated but untrusted client. Unit tests
-      cover non-JSON, empty, truncated, invalid UTF-8 and 2000-deep nesting;
-      a fuzzer is still owed.
+- [x] **Property-test `paths.rs`** with traversal sequences, null bytes,
+      RTL overrides, Windows reserved names and 300-character names
+      (ADR-0007 follow-up 1). The named shapes are an explicit corpus, since
+      a generator reaches them only by luck.
+- [x] **Property-test the postcard decode path** (ADR-0004 follow-up):
+      arbitrary bytes, huge declared lengths, truncated values and single-byte
+      flips against every type decoded from guest memory.
+- [x] **Property-test the OTLP decode path** (ADR-0013 follow-up 2):
+      arbitrary bytes, deep nesting, and a valid envelope with hostile
+      contents, asserting the allow-list and limits hold and that whatever
+      survives serializes to one line.
+- [ ] **Coverage-guided fuzzing** for those same three paths. The property
+      tests above are *not* fuzzing: they explore what the generators reach,
+      not what the code branches on. `cargo-fuzz` needs nightly for its
+      sanitizers and this workspace pins a stable toolchain, so this needs a
+      separate nightly job rather than a line in the main CI run.
 - [ ] **Validate a generated CBZ against a real reader's rules** — the
       ComicInfo v2.0 schema plus the filename conventions Komga and Kavita
       document (ADR-0007 follow-up 4).
