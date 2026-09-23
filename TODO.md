@@ -185,10 +185,13 @@ has been removed.
       both first connections and reconnects. The status bar reads the stream
       rather than always claiming "Live".
 - [ ] Playwright stack with a stub OIDC container
-- [ ] **Server-side sort, filter and search.** All three are applied to the
-      loaded keyset page, so they describe what is on screen rather than the
-      library. Fine at a few hundred series and wrong past that — the fix is
-      ordering and predicates in `GET /manga`, not a bigger page.
+- [x] **Server-side sort, filter and search** — `GET /manga` takes `q`,
+      `status`, `source_id`, `sort` and `dir`, with the keyset built on the
+      chosen sort column. The client orders and filters nothing.
+- [ ] **Infinite scroll.** The library loads one page and offers no way to
+      reach the next: the toolbar reports "50+ titles" and there is no
+      control behind it. Needs `useInfiniteQuery` on the cursor the server
+      already returns, which is also the prerequisite for virtualization.
 - [ ] **Read progress** — needs a decision, not just work. The mockup shows an
       "Unread 32" filter and "14 new" badges, and nothing records what has been
       read: the API tracks what is *downloaded*. Closing this means a
