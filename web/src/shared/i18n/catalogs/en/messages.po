@@ -48,20 +48,12 @@ msgid "{option}: not filtered"
 msgstr "{option}: not filtered"
 
 #: src/features/library/components/LibraryToolbar.tsx
-#~ msgid "{shown} of {total}"
-#~ msgstr "{shown} of {total}"
-
-#: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown} titles"
 msgstr "{shown} titles"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown}+ titles"
 msgstr "{shown}+ titles"
-
-#: src/features/library/components/LibraryToolbar.tsx
-#~ msgid "{total} titles"
-#~ msgstr "{total} titles"
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "↑↓ navigate"
@@ -70,10 +62,6 @@ msgstr "↑↓ navigate"
 #: src/features/palette/components/CommandPalette.tsx
 msgid "↵ open"
 msgstr "↵ open"
-
-#: src/shared/components/AppShell.tsx
-#~ msgid "⌘K"
-#~ msgstr "⌘K"
 
 #: src/features/sources/components/RepoList.tsx
 msgid "A repository is a list of sources this server can install from. Add one above."
@@ -154,10 +142,6 @@ msgstr "Browse {0}"
 msgid "Browse could not be loaded."
 msgstr "Browse could not be loaded."
 
-#: src/routes/browse.tsx
-#~ msgid "Browse is not built yet."
-#~ msgstr "Browse is not built yet."
-
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Cancel"
 msgstr "Cancel"
@@ -227,10 +211,6 @@ msgstr "Downloads"
 msgid "Downloads and scheduled work appear here while they run."
 msgstr "Downloads and scheduled work appear here while they run."
 
-#: src/routes/downloads.tsx
-#~ msgid "Downloads is not built yet."
-#~ msgstr "Downloads is not built yet."
-
 #: src/features/palette/components/CommandPalette.tsx
 msgid "esc close"
 msgstr "esc close"
@@ -259,10 +239,6 @@ msgstr "Follows"
 #: src/routes/follows.tsx
 msgid "Follows could not be loaded."
 msgstr "Follows could not be loaded."
-
-#: src/routes/follows.tsx
-#~ msgid "Follows is not built yet."
-#~ msgstr "Follows is not built yet."
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Go to"
@@ -488,10 +464,6 @@ msgstr "Search"
 msgid "Search “{0}” in Browse"
 msgstr "Search “{0}” in Browse"
 
-#: src/features/library/components/LibraryToolbar.tsx
-#~ msgid "Search {total} titles"
-#~ msgstr "Search {total} titles"
-
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Search sources"
 msgstr "Search sources"
@@ -541,10 +513,6 @@ msgstr "Settings could not be loaded."
 #: src/features/sources/components/RepoList.tsx
 msgid "Settings for {0}"
 msgstr "Settings for {0}"
-
-#: src/routes/settings.tsx
-#~ msgid "Settings is not built yet."
-#~ msgstr "Settings is not built yet."
 
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Size"

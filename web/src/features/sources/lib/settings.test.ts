@@ -75,7 +75,8 @@ describe('parseDeclaration', () => {
   /** A declaration that lists only labels stores the labels. */
   it('falls back to the labels when no values are given', () => {
     const groups = parseDeclaration([{ type: 'select', key: 's', title: 'S', options: ['a', 'b'] }])
-    expect((groups[0]?.settings[0] as EditableSetting).values).toEqual(['a', 'b'])
+    const setting = groups[0]?.settings[0] as EditableSetting | undefined
+    expect(setting?.values).toEqual(['a', 'b'])
   })
 
   /**
@@ -87,7 +88,8 @@ describe('parseDeclaration', () => {
     const groups = parseDeclaration([
       { type: 'select', key: 's', title: 'S', options: ['a', 'b', 'c'], values: ['x'] },
     ])
-    expect((groups[0]?.settings[0] as EditableSetting).values).toEqual(['a', 'b', 'c'])
+    const setting = groups[0]?.settings[0] as EditableSetting | undefined
+    expect(setting?.values).toEqual(['a', 'b', 'c'])
   })
 
   /** A setting with no key cannot be written back: `PUT` addresses it by key. */
@@ -107,10 +109,16 @@ describe('parseDeclaration', () => {
 })
 
 describe('decodeValues', () => {
-  const settings = parseDeclaration([
+  // Thrown rather than asserted: this runs at collection time, where a failed
+  // `expect` is not attributed to any test. An ungrouped declaration parses
+  // into a single anonymous group, so an absent one means `parseDeclaration`
+  // changed and every test below is measuring nothing.
+  const [group] = parseDeclaration([
     { type: 'switch', key: 'locked', title: 'Locked' },
     { type: 'text', key: 'token', title: 'Token' },
-  ])[0]!.settings
+  ])
+  if (group === undefined) throw new Error('the declaration above parses to one group')
+  const settings = group.settings
 
   it('decodes each value by its declared type', () => {
     const values = decodeValues(settings, [

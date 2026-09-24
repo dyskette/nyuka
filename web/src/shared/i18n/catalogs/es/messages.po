@@ -48,20 +48,12 @@ msgid "{option}: not filtered"
 msgstr "{option}: sin filtrar"
 
 #: src/features/library/components/LibraryToolbar.tsx
-#~ msgid "{shown} of {total}"
-#~ msgstr "{shown} de {total}"
-
-#: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown} titles"
 msgstr "{shown} títulos"
 
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown}+ titles"
 msgstr "{shown}+ títulos"
-
-#: src/features/library/components/LibraryToolbar.tsx
-#~ msgid "{total} titles"
-#~ msgstr "{total} títulos"
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "↑↓ navigate"
@@ -70,10 +62,6 @@ msgstr "↑↓ moverse"
 #: src/features/palette/components/CommandPalette.tsx
 msgid "↵ open"
 msgstr "↵ abrir"
-
-#: src/shared/components/AppShell.tsx
-#~ msgid "⌘K"
-#~ msgstr "⌘K"
 
 #: src/features/sources/components/RepoList.tsx
 msgid "A repository is a list of sources this server can install from. Add one above."
@@ -154,10 +142,6 @@ msgstr "Explorar {0}"
 msgid "Browse could not be loaded."
 msgstr "No se pudo cargar Explorar."
 
-#: src/routes/browse.tsx
-#~ msgid "Browse is not built yet."
-#~ msgstr "Explorar todavía no está construido."
-
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Cancel"
 msgstr "Cancelar"
@@ -227,10 +211,6 @@ msgstr "Descargas"
 msgid "Downloads and scheduled work appear here while they run."
 msgstr "Las descargas y el trabajo programado aparecen aquí mientras se ejecutan."
 
-#: src/routes/downloads.tsx
-#~ msgid "Downloads is not built yet."
-#~ msgstr "Descargas todavía no está construido."
-
 #: src/features/palette/components/CommandPalette.tsx
 msgid "esc close"
 msgstr "esc cerrar"
@@ -259,10 +239,6 @@ msgstr "Seguimientos"
 #: src/routes/follows.tsx
 msgid "Follows could not be loaded."
 msgstr "No se pudieron cargar los seguimientos."
-
-#: src/routes/follows.tsx
-#~ msgid "Follows is not built yet."
-#~ msgstr "Seguimientos todavía no está construido."
 
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Go to"
@@ -488,10 +464,6 @@ msgstr "Buscar"
 msgid "Search “{0}” in Browse"
 msgstr "Buscar «{0}» en Explorar"
 
-#: src/features/library/components/LibraryToolbar.tsx
-#~ msgid "Search {total} titles"
-#~ msgstr "Buscar en {total} títulos"
-
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Search sources"
 msgstr "Buscar en las fuentes"
@@ -541,10 +513,6 @@ msgstr "No se pudieron cargar los ajustes."
 #: src/features/sources/components/RepoList.tsx
 msgid "Settings for {0}"
 msgstr "Ajustes de {0}"
-
-#: src/routes/settings.tsx
-#~ msgid "Settings is not built yet."
-#~ msgstr "Ajustes todavía no está construido."
 
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Size"

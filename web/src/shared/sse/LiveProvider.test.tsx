@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { libraryKeys } from '@/features/library/api/keys'
 import { LiveProvider, useLiveStatus } from './LiveProvider'
 
 /**
@@ -99,12 +100,12 @@ describe('LiveProvider', () => {
 
     expect(invalidate).not.toHaveBeenCalled()
     act(() => source.onopen?.())
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['library'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: libraryKeys.all })
 
     invalidate.mockClear()
     act(() => source.onerror?.())
     act(() => source.onopen?.())
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['library'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: libraryKeys.all })
   })
 
   /** A `lagged` event is the server saying it dropped events for this client. */
@@ -114,7 +115,7 @@ describe('LiveProvider', () => {
     invalidate.mockClear()
 
     act(() => source.emit('lagged', '12'))
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['library'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: libraryKeys.all })
   })
 
   it('routes an event to the keys it makes stale', () => {
@@ -129,7 +130,7 @@ describe('LiveProvider', () => {
       ),
     )
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['library', 'detail', 'm-1'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: libraryKeys.detail('m-1') })
   })
 
   /**
