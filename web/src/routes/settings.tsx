@@ -69,27 +69,35 @@ function SettingsScreen() {
   const busy = new Set(refresh.isPending && refresh.variables ? [refresh.variables] : [])
 
   return (
-    <div className="mx-auto flex h-dvh max-w-3xl flex-col gap-4 overflow-y-auto p-6">
-      <h1 className="text-lg font-semibold">
-        <Trans>Sources</Trans>
-      </h1>
+    /*
+     * The scroll container is the full width; the content is centred inside
+     * it. With `overflow-y-auto` on the centred box itself, the scrollbar was
+     * drawn at that box's right edge — in the middle of the window, with
+     * empty page either side of it.
+     */
+    <div className="h-dvh overflow-y-auto">
+      <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+        <h1 className="text-lg font-semibold">
+          <Trans>Sources</Trans>
+        </h1>
 
-      <AddRepoForm />
+        <AddRepoForm />
 
-      {/* Every mutation's failure is surfaced here rather than swallowed: a
+        {/* Every mutation's failure is surfaced here rather than swallowed: a
           silent no-op after pressing Install is the worst of the options. */}
-      <MutationError error={install.error ?? uninstall.error ?? refresh.error ?? remove.error} />
+        <MutationError error={install.error ?? uninstall.error ?? refresh.error ?? remove.error} />
 
-      <RepoList
-        repos={repos}
-        available={available}
-        busy={busy}
-        installed={installed}
-        onRefresh={(id) => refresh.mutate(id)}
-        onDelete={(id) => remove.mutate(id)}
-        onInstall={(repoId, externalId) => install.mutate({ repoId, externalId })}
-        onUninstall={(id) => uninstall.mutate(id)}
-      />
+        <RepoList
+          repos={repos}
+          available={available}
+          busy={busy}
+          installed={installed}
+          onRefresh={(id) => refresh.mutate(id)}
+          onDelete={(id) => remove.mutate(id)}
+          onInstall={(repoId, externalId) => install.mutate({ repoId, externalId })}
+          onUninstall={(id) => uninstall.mutate(id)}
+        />
+      </div>
     </div>
   )
 }
