@@ -6,7 +6,7 @@ import { LibraryToolbar, type LibraryToolbarProps } from './LibraryToolbar'
 
 function props(overrides: Partial<LibraryToolbarProps> = {}): LibraryToolbarProps {
   return {
-    filters: { q: '', status: '', source: '' },
+    filters: { q: '', status: '', source_id: '' },
     sources: [
       { id: 'src-kaizoku', name: 'Kaizoku' },
       { id: 'src-mangahaven', name: 'MangaHaven' },
@@ -56,7 +56,9 @@ describe('LibraryToolbar', () => {
   it('takes a new value from the URL', async () => {
     const { rerender } = await renderWithProviders(<LibraryToolbar {...props()} />)
 
-    rerender(<LibraryToolbar {...props({ filters: { q: 'orchard', status: '', source: '' } })} />)
+    rerender(
+      <LibraryToolbar {...props({ filters: { q: 'orchard', status: '', source_id: '' } })} />,
+    )
     expect(screen.getByRole('searchbox')).toHaveValue('orchard')
   })
 
@@ -83,7 +85,7 @@ describe('LibraryToolbar', () => {
     const onChange = vi.fn()
     await renderWithProviders(
       <LibraryToolbar
-        {...props({ filters: { q: '', status: 'ongoing', source: '' }, onChange })}
+        {...props({ filters: { q: '', status: 'ongoing', source_id: '' }, onChange })}
       />,
     )
 

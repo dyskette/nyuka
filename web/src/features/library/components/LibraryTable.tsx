@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useRef, useState } from 'react'
 import type { components } from '@/shared/api/schema'
+import { openRowLink } from '@/shared/lib/rowClick'
 import { relativeTime } from '@/shared/lib/time'
 
 type MangaSummary = components['schemas']['MangaSummaryDto']
@@ -323,7 +324,8 @@ function Row({
       // Fixed, because the virtualizer's arithmetic assumes it. A row that
       // grew to fit its content would push every later row out of position.
       style={{ height }}
-      className={`border-border hover:bg-surface-raised border-b ${
+      onClick={openRowLink}
+      className={`border-border hover:bg-surface-raised cursor-pointer border-b ${
         selected ? 'bg-accent-soft' : ''
       }`}
     >
@@ -343,6 +345,7 @@ function Row({
           to="/library/$mangaId"
           params={{ mangaId: manga.id }}
           search={(previous) => previous}
+          data-row-link=""
           className="flex items-center gap-2"
         >
           {/* A colour block rather than the cover: at this row height a

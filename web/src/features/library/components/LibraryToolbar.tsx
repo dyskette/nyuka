@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 export interface LibraryFilters {
   q?: string | undefined
   status: string
-  source: string
+  source_id: string
 }
 
 /** One choice in a filter dropdown. */
@@ -67,10 +67,10 @@ export function LibraryToolbar({
       />
       <Select
         label={t`Source`}
-        value={filters.source}
+        value={filters.source_id}
         options={sources.map((source) => ({ value: source.id, label: source.name }))}
         anyLabel={t`All`}
-        onChange={(source) => onChange({ source })}
+        onChange={(source_id) => onChange({ source_id })}
       />
 
       {/* `aria-live` so a screen reader hears the result of a filter it just

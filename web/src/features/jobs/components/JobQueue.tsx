@@ -2,6 +2,7 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { Link } from '@tanstack/react-router'
 import type { components } from '@/shared/api/schema'
 import { formatBytes, formatRate } from '@/shared/lib/bytes'
+import { openRowLink } from '@/shared/lib/rowClick'
 import { relativeTime } from '@/shared/lib/time'
 import type { Progress } from '@/shared/sse/progress'
 
@@ -95,8 +96,11 @@ function Row({
   onRetry: (jobId: string) => void
 }) {
   return (
-    <tr className="border-border hover:bg-surface-raised border-b">
-      <td className="px-cell h-row max-w-0">
+    <tr
+      onClick={openRowLink}
+      className="border-border hover:bg-surface-raised cursor-pointer border-b"
+    >
+      <td className="px-cell h-row w-full max-w-0">
         <JobLabel job={job} />
       </td>
       <td className="px-cell h-row">
@@ -140,6 +144,7 @@ function JobLabel({ job }: { job: JobSummary }) {
         to="/downloads/$jobId"
         params={{ jobId: job.id }}
         search={(previous) => previous}
+        data-row-link=""
         className="text-muted-foreground block truncate"
       >
         {job.kind}
@@ -154,6 +159,7 @@ function JobLabel({ job }: { job: JobSummary }) {
       to="/downloads/$jobId"
       params={{ jobId: job.id }}
       search={(previous) => previous}
+      data-row-link=""
       className="flex min-w-0 items-baseline gap-1.5"
     >
       {number !== null && (

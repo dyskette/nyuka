@@ -300,7 +300,12 @@ msgstr "Library"
 msgid "Live"
 msgstr "Live"
 
+#: src/routes/library.$mangaId.tsx
+msgid "Load more chapters"
+msgstr "Load more chapters"
+
 #: src/features/library/components/LibraryTable.tsx
+#: src/routes/library.$mangaId.tsx
 msgid "Loading more…"
 msgstr "Loading more…"
 

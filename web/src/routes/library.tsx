@@ -29,7 +29,7 @@ const searchSchema = z.object({
   // Empty string is not a value these can take — an absent filter is an
   // absent key, so a default-valued library has a clean URL.
   status: z.string().optional(),
-  source: z.string().optional(),
+  source_id: z.string().optional(),
   sort: z.enum(['title', 'updated', 'added', 'chapters']).default('updated'),
   dir: z.enum(['asc', 'desc']).default('desc'),
   cursor: z.string().optional(),
@@ -45,7 +45,7 @@ export const Route = createFileRoute('/library')({
   // — while the list component stays mounted, so it reads as a data bug rather
   // than a routing one (ADR-0017).
   search: {
-    middlewares: [retainSearchParams(['q', 'status', 'source', 'sort', 'dir', 'cursor'])],
+    middlewares: [retainSearchParams(['q', 'status', 'source_id', 'sort', 'dir', 'cursor'])],
   },
 
   // Declared before `loader`, because that is what `deps` is inferred from.
@@ -63,7 +63,7 @@ export const Route = createFileRoute('/library')({
   loaderDeps: ({ search }) => ({
     q: search.q,
     status: search.status,
-    source_id: search.source,
+    source_id: search.source_id,
     sort: search.sort,
     dir: search.dir,
   }),
@@ -92,7 +92,7 @@ function LibraryLayout() {
     libraryInfiniteQuery({
       q: search.q,
       status: search.status,
-      source_id: search.source,
+      source_id: search.source_id,
       sort: search.sort,
       dir: search.dir,
     }),
@@ -160,7 +160,7 @@ function LibraryLayout() {
     <div className="flex h-full">
       <main className="flex min-w-0 flex-1 flex-col">
         <LibraryToolbar
-          filters={{ q: search.q, status: search.status ?? '', source: search.source ?? '' }}
+          filters={{ q: search.q, status: search.status ?? '', source_id: search.source_id ?? '' }}
           sources={sources}
           statuses={STATUSES}
           shown={items.length}
@@ -184,7 +184,7 @@ function LibraryLayout() {
       {/* The detail panel renders here. The parent stays mounted, so the
           virtualizer's scroll offset and the infinite query's accumulated
           pages survive opening it. */}
-      <aside className="w-[420px] shrink-0 border-l">
+      <aside className="border-border w-[420px] shrink-0 border-l">
         <Outlet />
       </aside>
     </div>
