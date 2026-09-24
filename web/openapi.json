@@ -1582,6 +1582,42 @@
       }
     },
     "/manga/{id}": {
+      "delete": {
+        "operationId": "removeMangaFromLibrary",
+        "parameters": [
+          {
+            "description": "Series id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Delete the series' CBZ files from the library volume.\n\nDefaults to false. The row is the library's record of a series and the\nfiles are the reader's copy of it, and only one of those is cheap to\nget back — so the destructive half is opt-in and the client asks.",
+            "in": "query",
+            "name": "files",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "404": {
+            "description": "No such series"
+          }
+        },
+        "summary": "`DELETE /api/v1/manga/{id}`",
+        "tags": [
+          "library"
+        ]
+      },
       "get": {
         "operationId": "getManga",
         "parameters": [

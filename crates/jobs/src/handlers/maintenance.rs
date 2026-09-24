@@ -275,6 +275,10 @@ mod tests {
                 next: None,
             })
         }
+
+        async fn delete(&self, _id: MangaId) -> Result<()> {
+            unimplemented!("not exercised by this handler")
+        }
     }
 
     #[derive(Default)]
@@ -330,6 +334,10 @@ mod tests {
                 .expect("lock")
                 .extend_from_slice(missing);
             Ok(missing.len() as u64)
+        }
+
+        async fn downloaded_paths_for_manga(&self, _manga: MangaId) -> Result<Vec<String>> {
+            unimplemented!("not exercised by this handler")
         }
     }
 

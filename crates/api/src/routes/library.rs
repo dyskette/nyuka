@@ -9,8 +9,10 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
 use nyuka_domain::model::{ChapterId, Cursor, MangaId, MangaQuery, MangaSort, SortDir, SourceId};
 use serde::Deserialize;
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult, Problem};
@@ -140,6 +142,62 @@ pub async fn get(
         .await
         .map_err(|e| not_found(e, "series"))?;
     Ok(Json(manga.into()))
+}
+
+/// Whether removing a series also removes what was downloaded of it.
+#[derive(Debug, Default, Deserialize, IntoParams)]
+pub struct RemoveQuery {
+    /// Delete the series' CBZ files from the library volume.
+    ///
+    /// Defaults to false. The row is the library's record of a series and the
+    /// files are the reader's copy of it, and only one of those is cheap to
+    /// get back — so the destructive half is opt-in and the client asks.
+    #[serde(default)]
+    pub files: bool,
+}
+
+/// `DELETE /api/v1/manga/{id}`
+#[utoipa::path(
+    operation_id = "removeMangaFromLibrary",
+    delete,
+    path = "/manga/{id}",
+    tag = "library",
+    params(("id" = Uuid, Path, description = "Series id"), RemoveQuery),
+    responses(
+        (status = NO_CONTENT, description = "Removed"),
+        (status = NOT_FOUND, description = "No such series"),
+    ),
+)]
+pub async fn remove(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<RemoveQuery>,
+) -> ApiResult<StatusCode> {
+    let manga = MangaId(id);
+
+    // Read while the rows still name them: deleting the series cascades to the
+    // chapters these paths hang off, and afterwards nothing can find them.
+    let paths = if query.files {
+        state.chapters.downloaded_paths_for_manga(manga).await?
+    } else {
+        Vec::new()
+    };
+
+    // Files first. A failure here leaves the series in the library with its
+    // files intact, which is a state the reader can retry from; the reverse
+    // order leaves files nothing refers to and no way to reach them.
+    for path in &paths {
+        state.library.delete_chapter(path).await?;
+    }
+
+    state
+        .manga
+        .delete(manga)
+        .await
+        .map_err(|e| not_found(e, "series"))?;
+
+    tracing::info!(manga.id = %manga, files.deleted = paths.len(), "removed from library");
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `GET /api/v1/manga/{id}/chapters`

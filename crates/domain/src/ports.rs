@@ -282,6 +282,13 @@ pub trait MangaRepository: Send + Sync {
         query: &MangaQuery,
         cursor: Option<&Cursor>,
     ) -> Result<Page<MangaSummary>>;
+
+    /// Removes a series and, by cascade, its chapters, downloads and follow.
+    ///
+    /// Files on the library volume are not this port's concern: whether they
+    /// go is the reader's decision, and the caller makes it before getting
+    /// here.
+    async fn delete(&self, id: MangaId) -> Result<()>;
 }
 
 #[async_trait]
@@ -330,6 +337,12 @@ pub trait ChapterRepository: Send + Sync {
     /// chapter at once, and one statement per chapter would be thousands of
     /// round trips.
     async fn forget_downloads(&self, missing: &[ChapterId]) -> Result<u64>;
+
+    /// Every stored file belonging to a series, relative to the library root.
+    ///
+    /// Read before the series is deleted: the cascade takes the rows that
+    /// name these paths, so afterwards there is nothing left to find them by.
+    async fn downloaded_paths_for_manga(&self, manga: MangaId) -> Result<Vec<String>>;
 }
 
 /// Signed-in people, for identity and audit (ADR-0005).

@@ -117,6 +117,10 @@ msgstr "Añadiendo…"
 msgid "All"
 msgstr "Todas"
 
+#: src/features/library/components/RemoveSeries.tsx
+msgid "Also delete the downloaded files"
+msgstr "Eliminar también los archivos descargados"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "Any"
 msgstr "Cualquiera"
@@ -269,6 +273,7 @@ msgstr "Instala una fuente para ver esta serie."
 msgid "Job"
 msgstr "Trabajo"
 
+#: src/features/library/components/RemoveSeries.tsx
 #: src/features/sources/components/RepoList.tsx
 msgid "Keep"
 msgstr "Conservar"
@@ -428,6 +433,7 @@ msgstr "Actualizar"
 msgid "Refreshed {0}"
 msgstr "Actualizado {0}"
 
+#: src/features/library/components/RemoveSeries.tsx
 #: src/features/sources/components/RepoList.tsx
 msgid "Remove"
 msgstr "Eliminar"
@@ -437,9 +443,25 @@ msgstr "Eliminar"
 msgid "Remove {0}"
 msgstr "Eliminar {0}"
 
+#: src/features/library/components/RemoveSeries.tsx
+msgid "Remove {title} from your library"
+msgstr "Quitar {title} de tu biblioteca"
+
+#: src/features/library/components/RemoveSeries.tsx
+msgid "Remove {title} from your library?"
+msgstr "¿Quitar {title} de tu biblioteca?"
+
+#: src/features/library/components/RemoveSeries.tsx
+msgid "Remove from library"
+msgstr "Quitar de la biblioteca"
+
 #: src/features/sources/components/RepoList.tsx
 msgid "Remove this and its series?"
 msgstr "¿Eliminar esto y sus series?"
+
+#: src/features/library/components/RemoveSeries.tsx
+msgid "Removing…"
+msgstr "Quitando…"
 
 #: src/routes/settings.tsx
 msgid "Repository name"
@@ -573,6 +595,7 @@ msgid "Stop following {0}"
 msgstr "Dejar de seguir {0}"
 
 #: src/routes/follows.tsx
+#: src/routes/library.$mangaId.tsx
 #: src/routes/settings.tsx
 msgid "That did not work."
 msgstr "Eso no funcionó."

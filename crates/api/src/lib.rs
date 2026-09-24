@@ -376,7 +376,10 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 fn documented_routes() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::with_openapi(openapi::ApiDoc::openapi())
         .routes(utoipa_axum::routes!(routes::library::list))
-        .routes(utoipa_axum::routes!(routes::library::get))
+        .routes(utoipa_axum::routes!(
+            routes::library::get,
+            routes::library::remove
+        ))
         .routes(utoipa_axum::routes!(routes::library::chapters))
         .routes(utoipa_axum::routes!(routes::library::chapter))
         .routes(utoipa_axum::routes!(

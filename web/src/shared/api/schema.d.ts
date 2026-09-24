@@ -237,7 +237,8 @@ export interface paths {
         get: operations["getManga"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** `DELETE /api/v1/manga/{id}` */
+        delete: operations["removeMangaFromLibrary"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1317,6 +1318,43 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MangaDto"];
                 };
+            };
+            /** @description No such series */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removeMangaFromLibrary: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Delete the series' CBZ files from the library volume.
+                 *
+                 *     Defaults to false. The row is the library's record of a series and the
+                 *     files are the reader's copy of it, and only one of those is cheap to
+                 *     get back — so the destructive half is opt-in and the client asks.
+                 */
+                files?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Series id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No such series */
             404: {

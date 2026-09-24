@@ -813,6 +813,47 @@ impl Repositories {
         }))
     }
 
+    /// Removes a series. Chapters, downloads and the follow go by cascade.
+    #[tracing::instrument(skip(self), fields(manga.id = %id))]
+    pub async fn delete_manga(&self, id: MangaId) -> Result<()> {
+        let result = self
+            .db
+            .execute_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "DELETE FROM manga WHERE id = $1",
+                [id.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+
+        // Distinguished from a delete that did nothing, so the caller can
+        // answer 404 rather than report success for a series that was never
+        // there.
+        if result.rows_affected() == 0 {
+            return Err(DomainError::NotFound);
+        }
+        Ok(())
+    }
+
+    /// The stored files for a series, relative to the library root.
+    pub async fn downloaded_paths_for_manga(&self, manga: MangaId) -> Result<Vec<String>> {
+        let rows = self
+            .db
+            .query_all_raw(Statement::from_sql_and_values(
+                self.db.get_database_backend(),
+                "SELECT d.relative_path FROM downloaded_chapter d \
+                 JOIN chapter c ON c.id = d.chapter_id \
+                 WHERE c.manga_id = $1",
+                [manga.0.into()],
+            ))
+            .await
+            .map_err(db)?;
+
+        rows.into_iter()
+            .map(|row| row.try_get::<String>("", "relative_path").map_err(db))
+            .collect()
+    }
+
     /// Marks rows whose files have gone missing.
     ///
     /// The `reconcile_library` job kind. ADR-0007 notes the asymmetry that

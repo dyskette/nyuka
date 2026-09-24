@@ -355,6 +355,10 @@ mod tests {
                 next: None,
             })
         }
+
+        async fn delete(&self, _id: MangaId) -> Result<()> {
+            unimplemented!("not exercised by this handler")
+        }
     }
 
     #[async_trait::async_trait]
@@ -395,6 +399,10 @@ mod tests {
         }
         async fn forget_downloads(&self, _missing: &[ChapterId]) -> Result<u64> {
             Ok(0)
+        }
+
+        async fn downloaded_paths_for_manga(&self, _manga: MangaId) -> Result<Vec<String>> {
+            unimplemented!("not exercised by this handler")
         }
     }
 

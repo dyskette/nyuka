@@ -34,3 +34,28 @@ export function useRequestDownload(mangaId: string) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: libraryKeys.detail(mangaId) }),
   })
 }
+
+/**
+ * Removes a series from the library.
+ *
+ * `files` asks the server to delete what was downloaded of it as well. The
+ * default is to keep them: the row is the library's record of a series and
+ * the files are the reader's copy, and only one of those is cheap to get
+ * back — so the caller has to say.
+ */
+export function useRemoveFromLibrary() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ mangaId, files }: { mangaId: string; files: boolean }) => {
+      const { error } = await api.DELETE('/manga/{id}', {
+        params: { path: { id: mangaId }, query: { files } },
+      })
+      if (error !== undefined) throw error
+      return mangaId
+    },
+    // The whole feature: the list loses a row, and the panel is showing a
+    // series that no longer exists.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: libraryKeys.all }),
+  })
+}

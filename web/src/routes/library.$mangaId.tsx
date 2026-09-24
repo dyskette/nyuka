@@ -2,9 +2,11 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
-import { useRequestDownload } from '@/features/library/api/mutations'
+import { useRemoveFromLibrary, useRequestDownload } from '@/features/library/api/mutations'
 import { mangaChaptersQuery, mangaDetailQuery } from '@/features/library/api/queries'
 import { ChapterList } from '@/features/library/components/ChapterList'
+import { RemoveSeries } from '@/features/library/components/RemoveSeries'
+import { problemMessage } from '@/shared/api/problem'
 import type { components } from '@/shared/api/schema'
 
 type Manga = components['schemas']['MangaDto']
@@ -59,6 +61,8 @@ function MangaPanel() {
 
 function PanelHeader({ manga }: { manga: Manga }) {
   const { t } = useLingui()
+  const navigate = Route.useNavigate()
+  const remove = useRemoveFromLibrary()
 
   return (
     <header className="border-border p-panel flex shrink-0 gap-3 border-b">
@@ -106,6 +110,24 @@ function PanelHeader({ manga }: { manga: Manga }) {
             ))}
           </ul>
         )}
+
+        <div className="mt-2">
+          <RemoveSeries
+            title={manga.title}
+            removing={remove.isPending}
+            error={
+              remove.isError ? (problemMessage(remove.error) ?? t`That did not work.`) : undefined
+            }
+            onRemove={(files) =>
+              remove.mutate(
+                { mangaId: manga.id, files },
+                // The panel is showing a series that no longer exists, so it
+                // closes onto the list rather than onto its own 404.
+                { onSuccess: () => void navigate({ to: '/library', search: (p) => p }) },
+              )
+            }
+          />
+        </div>
       </div>
     </header>
   )

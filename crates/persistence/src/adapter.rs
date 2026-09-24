@@ -43,6 +43,10 @@ impl MangaRepository for Repositories {
     ) -> Result<Page<MangaSummary>> {
         self.list_manga_summaries(query, cursor).await
     }
+
+    async fn delete(&self, id: MangaId) -> Result<()> {
+        self.delete_manga(id).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -81,6 +85,10 @@ impl ChapterRepository for Repositories {
 
     async fn record_download(&self, download: &DownloadedChapter) -> Result<()> {
         Repositories::record_download(self, download).await
+    }
+
+    async fn downloaded_paths_for_manga(&self, manga: MangaId) -> Result<Vec<String>> {
+        self.downloaded_paths_for_manga(manga).await
     }
 
     async fn forget_downloads(&self, missing: &[ChapterId]) -> Result<u64> {
