@@ -2,6 +2,7 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { useState } from 'react'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
+import { groupByLanguage, languageName, MULTI, matches, ratingBadge } from '../lib/catalog'
 import { languageLabel, languageTitle } from '../lib/languages'
 import { SourceSettingsPanel } from './SourceSettingsPanel'
 
@@ -19,6 +20,12 @@ export interface RepoListProps {
   onUninstall: (sourceId: string) => void
   /** Installed source ids by `repo_id:external_id`, for the uninstall action. */
   installed: ReadonlyMap<string, string>
+  /** Filters the entries by name or address. */
+  query?: string | undefined
+  /** The failed action's explanation, by `repo_id:external_id`. */
+  entryErrors?: ReadonlyMap<string, string> | undefined
+  /** The failed action's explanation, by repository id. */
+  repoErrors?: ReadonlyMap<string, string> | undefined
 }
 
 /**
@@ -38,6 +45,9 @@ export function RepoList({
   onInstall,
   onUninstall,
   installed,
+  query = '',
+  entryErrors = new Map(),
+  repoErrors = new Map(),
 }: RepoListProps) {
   if (repos.length === 0) return <NoRepos />
 
@@ -54,6 +64,9 @@ export function RepoList({
             onInstall={onInstall}
             onUninstall={onUninstall}
             installed={installed}
+            query={query}
+            entryErrors={entryErrors}
+            error={repoErrors.get(repo.id)}
           />
         </li>
       ))}
@@ -70,6 +83,9 @@ function Repo({
   onInstall,
   onUninstall,
   installed,
+  query,
+  entryErrors,
+  error,
 }: {
   repo: SourceRepo
   entries: SourceEntry[] | undefined
@@ -79,6 +95,9 @@ function Repo({
   onInstall: (repoId: string, externalId: string) => void
   onUninstall: (sourceId: string) => void
   installed: ReadonlyMap<string, string>
+  query: string
+  entryErrors: ReadonlyMap<string, string>
+  error: string | undefined
 }) {
   const { t } = useLingui()
   const [confirming, setConfirming] = useState(false)
@@ -144,12 +163,20 @@ function Repo({
         )}
       </header>
 
+      {error !== undefined && (
+        <p className="text-danger px-cell py-1.5 text-xs" role="alert">
+          {error}
+        </p>
+      )}
+
       <SourceTable
         repoId={repo.id}
         entries={entries}
         onInstall={onInstall}
         onUninstall={onUninstall}
         installed={installed}
+        query={query}
+        entryErrors={entryErrors}
       />
     </section>
   )
@@ -161,13 +188,20 @@ function SourceTable({
   onInstall,
   onUninstall,
   installed,
+  query,
+  entryErrors,
 }: {
   repoId: string
   entries: SourceEntry[] | undefined
   onInstall: (repoId: string, externalId: string) => void
   onUninstall: (sourceId: string) => void
   installed: ReadonlyMap<string, string>
+  query: string
+  entryErrors: ReadonlyMap<string, string>
 }) {
+  const { i18n, t } = useLingui()
+  const multiLabel = t`Multi-language`
+
   if (entries === undefined) {
     return (
       <p className="text-muted-foreground p-panel text-sm">
@@ -184,19 +218,44 @@ function SourceTable({
     )
   }
 
+  const visible = entries.filter((entry) => matches(entry, query))
+
+  if (visible.length === 0) {
+    return (
+      <p className="text-muted-foreground p-panel text-sm">
+        <Trans>No source here matches “{query}”.</Trans>
+      </p>
+    )
+  }
+
+  const groups = groupByLanguage(visible, (code) =>
+    code === MULTI ? multiLabel : languageName(code, i18n.locale),
+  )
+
   return (
-    <ul className="flex flex-col">
-      {entries.map((entry) => (
-        <SourceRow
-          key={entry.external_id}
-          repoId={repoId}
-          entry={entry}
-          onInstall={onInstall}
-          onUninstall={onUninstall}
-          installed={installed}
-        />
+    <div className="flex flex-col">
+      {groups.map((group) => (
+        <section key={group.code}>
+          <h4 className="text-muted-foreground bg-surface-raised px-cell sticky top-0 py-1 text-xs font-medium">
+            {group.label}
+          </h4>
+          <ul className="flex flex-col">
+            {group.entries.map((entry) => (
+              <SourceRow
+                key={entry.external_id}
+                repoId={repoId}
+                entry={entry}
+                onInstall={onInstall}
+                onUninstall={onUninstall}
+                installed={installed}
+                showLanguages={group.code === MULTI}
+                error={entryErrors.get(`${repoId}:${entry.external_id}`)}
+              />
+            ))}
+          </ul>
+        </section>
       ))}
-    </ul>
+    </div>
   )
 }
 
@@ -213,12 +272,17 @@ function SourceRow({
   onInstall,
   onUninstall,
   installed,
+  showLanguages,
+  error,
 }: {
   repoId: string
   entry: SourceEntry
   onInstall: (repoId: string, externalId: string) => void
   onUninstall: (sourceId: string) => void
   installed: ReadonlyMap<string, string>
+  /** False under a single-language heading, which already says it. */
+  showLanguages: boolean
+  error: string | undefined
 }) {
   const { t } = useLingui()
   const [open, setOpen] = useState(false)
@@ -246,16 +310,28 @@ function SourceRow({
             <span aria-hidden="true">{open ? '\u25BE' : '\u25B8'}</span>
           </button>
         )}
-        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-        <span className="text-muted-foreground tabular shrink-0 text-xs">v{entry.version}</span>
-        {/* Bounded and allowed to shrink, so the name keeps its width. The
-            full list is on the title. */}
-        <span
-          title={languageTitle(entry.languages)}
-          className="text-muted-foreground min-w-0 max-w-32 shrink truncate text-xs"
-        >
-          {languageLabel(entry.languages)}
-        </span>
+        <SourceIcon entry={entry} />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="min-w-0 truncate">{entry.name}</span>
+            <span className="text-muted-foreground tabular shrink-0 text-xs">v{entry.version}</span>
+            <RatingBadge rating={entry.content_rating} />
+          </div>
+          {entry.base_url !== null && entry.base_url !== undefined && (
+            <p className="text-muted-foreground truncate text-xs">{entry.base_url}</p>
+          )}
+        </div>
+
+        {/* Only where it says something the heading above does not. */}
+        {showLanguages && (
+          <span
+            title={languageTitle(entry.languages)}
+            className="text-muted-foreground min-w-0 max-w-32 shrink truncate text-xs"
+          >
+            {languageLabel(entry.languages)}
+          </span>
+        )}
         <EntryAction
           repoId={repoId}
           entry={entry}
@@ -265,12 +341,59 @@ function SourceRow({
         />
       </div>
 
+      {/*
+        In the row, not at the top of the page. A refusal rendered beside the
+        form means a reader who pressed Install a thousand pixels down the list
+        sees nothing happen at all.
+      */}
+      {error !== undefined && (
+        <p className="text-danger px-cell pb-1.5 text-xs" role="alert">
+          {error}
+        </p>
+      )}
+
       {open && sourceId !== undefined && (
         <div className="bg-surface-raised border-border border-t">
           <SourceSettingsPanel sourceId={sourceId} />
         </div>
       )}
     </li>
+  )
+}
+
+/**
+ * The source's own mark, over a block that shows through when it fails.
+ *
+ * No error handler: an icon that does not load leaves the block, which is
+ * what an entry with no icon shows anyway.
+ */
+function SourceIcon({ entry }: { entry: SourceEntry }) {
+  return (
+    <span className="bg-surface-raised size-6 shrink-0 overflow-hidden rounded-sm">
+      {entry.icon_url !== null && entry.icon_url !== undefined && (
+        <img
+          src={entry.icon_url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          // A repository's icon host is a third party and does not need the
+          // address of the server showing its images.
+          referrerPolicy="no-referrer"
+          className="size-full object-cover"
+        />
+      )}
+    </span>
+  )
+}
+
+function RatingBadge({ rating }: { rating: string }) {
+  const badge = ratingBadge(rating)
+  if (badge === undefined) return null
+
+  return (
+    <span className="bg-surface-raised text-muted-foreground tabular shrink-0 rounded-sm px-1 text-[0.625rem]">
+      {badge}
+    </span>
   )
 }
 

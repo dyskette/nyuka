@@ -15,6 +15,7 @@ import {
   sourceListQuery,
 } from '@/features/sources/api/queries'
 import { RepoList } from '@/features/sources/components/RepoList'
+import { matches } from '@/features/sources/lib/catalog'
 import { problemMessage } from '@/shared/api/problem'
 
 /**
@@ -37,6 +38,7 @@ export const Route = createFileRoute('/settings')({
 
 function SettingsScreen() {
   const { data: repos } = useSuspenseQuery(repoListQuery())
+  const { t } = useLingui()
   const { data: sources } = useSuspenseQuery(sourceListQuery())
 
   // One query per repository, which `useQueries` runs in parallel. A single
@@ -68,6 +70,37 @@ function SettingsScreen() {
 
   const busy = new Set(refresh.isPending && refresh.variables ? [refresh.variables] : [])
 
+  const [query, setQuery] = useState('')
+  const shown = [...available.values()].reduce(
+    (total, entries) => total + entries.filter((entry) => matches(entry, query)).length,
+    0,
+  )
+
+  // Failures go to the row that caused them. A mutation runs one at a time, so
+  // `variables` names that row and the map holds at most one entry.
+  const entryErrors = new Map<string, string>()
+  if (install.isError && install.variables !== undefined) {
+    entryErrors.set(
+      `${install.variables.repoId}:${install.variables.externalId}`,
+      problemMessage(install.error) ?? t`That did not work.`,
+    )
+  }
+  if (uninstall.isError && uninstall.variables !== undefined) {
+    // Uninstalling failed, so the source is still installed and still has a
+    // key here to attach the message to.
+    const key = [...installed.entries()].find(([, id]) => id === uninstall.variables)?.[0]
+    if (key !== undefined) {
+      entryErrors.set(key, problemMessage(uninstall.error) ?? t`That did not work.`)
+    }
+  }
+
+  const repoErrors = new Map<string, string>()
+  for (const mutation of [refresh, remove]) {
+    if (mutation.isError && mutation.variables !== undefined) {
+      repoErrors.set(mutation.variables, problemMessage(mutation.error) ?? t`That did not work.`)
+    }
+  }
+
   return (
     /* The scroll container is full width and the content centred inside it,
        so the scrollbar sits at the window's edge. */
@@ -79,15 +112,16 @@ function SettingsScreen() {
 
         <AddRepoForm />
 
-        {/* Every mutation's failure is surfaced here rather than swallowed: a
-          silent no-op after pressing Install is the worst of the options. */}
-        <MutationError error={install.error ?? uninstall.error ?? refresh.error ?? remove.error} />
+        <SourceFilter query={query} onQuery={setQuery} shown={shown} />
 
         <RepoList
           repos={repos}
           available={available}
           busy={busy}
           installed={installed}
+          query={query}
+          entryErrors={entryErrors}
+          repoErrors={repoErrors}
           onRefresh={(id) => refresh.mutate(id)}
           onDelete={(id) => remove.mutate(id)}
           onInstall={(repoId, externalId) => install.mutate({ repoId, externalId })}
@@ -106,7 +140,7 @@ function AddRepoForm() {
 
   return (
     <form
-      className="border-border flex items-end gap-2 rounded-md border p-3"
+      className="border-border flex flex-col gap-2 rounded-md border p-3"
       onSubmit={(event) => {
         event.preventDefault()
         if (url.trim() === '' || name.trim() === '') return
@@ -123,38 +157,77 @@ function AddRepoForm() {
         )
       }}
     >
-      <label className="flex flex-1 flex-col gap-1 text-xs">
-        <Trans>Repository URL</Trans>
-        <input
-          type="url"
-          required
-          value={url}
-          onChange={(event) => setUrl(event.target.value)}
-          placeholder="https://example.org/index.min.json"
-          aria-label={t`Repository URL`}
-          className="border-border bg-surface h-8 rounded-sm border px-2 text-sm"
-        />
-      </label>
+      <div className="flex items-end gap-2">
+        <label className="flex flex-1 flex-col gap-1 text-xs">
+          <Trans>Repository URL</Trans>
+          <input
+            type="url"
+            required
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://example.org/index.min.json"
+            aria-label={t`Repository URL`}
+            className="border-border bg-surface h-8 rounded-sm border px-2 text-sm"
+          />
+        </label>
 
-      <label className="flex w-48 flex-col gap-1 text-xs">
-        <Trans>Name</Trans>
-        <input
-          required
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          aria-label={t`Repository name`}
-          className="border-border bg-surface h-8 rounded-sm border px-2 text-sm"
-        />
-      </label>
+        <label className="flex w-48 flex-col gap-1 text-xs">
+          <Trans>Name</Trans>
+          <input
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            aria-label={t`Repository name`}
+            className="border-border bg-surface h-8 rounded-sm border px-2 text-sm"
+          />
+        </label>
 
-      <button
-        type="submit"
-        disabled={add.isPending}
-        className="border-border hover:bg-surface-raised h-8 shrink-0 rounded-sm border px-3 text-sm disabled:opacity-50"
-      >
-        {add.isPending ? <Trans>Adding…</Trans> : <Trans>Add repository</Trans>}
-      </button>
+        <button
+          type="submit"
+          disabled={add.isPending}
+          className="border-border hover:bg-surface-raised h-8 shrink-0 rounded-sm border px-3 text-sm disabled:opacity-50"
+        >
+          {add.isPending ? <Trans>Adding…</Trans> : <Trans>Add repository</Trans>}
+        </button>
+      </div>
+
+      <MutationError error={add.error} />
     </form>
+  )
+}
+
+/**
+ * Narrows a long index to what a reader is looking for.
+ *
+ * A repository lists 136 sources. Alphabetical order is only useful to someone
+ * who already knows the name, and the count says whether a query found
+ * anything without reading to the end of the list.
+ */
+function SourceFilter({
+  query,
+  onQuery,
+  shown,
+}: {
+  query: string
+  onQuery: (value: string) => void
+  shown: number
+}) {
+  const { t } = useLingui()
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+        placeholder={t`Search sources by name or address`}
+        aria-label={t`Search sources by name or address`}
+        className="border-border bg-surface h-8 min-w-0 flex-1 rounded-sm border px-2 text-sm"
+      />
+      <span className="text-muted-foreground tabular shrink-0 text-xs">
+        <Trans>{shown} sources</Trans>
+      </span>
+    </div>
   )
 }
 

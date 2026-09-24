@@ -227,11 +227,129 @@ describe('RepoList', () => {
     })
   })
 
-  it('shows a short language list in full, with no tooltip', async () => {
+  /**
+   * The heading already says it, so repeating it on every row below is noise.
+   */
+  it('does not repeat the language on a row under its own heading', async () => {
     await renderWithProviders(<RepoList {...props()} />)
 
-    const languages = screen.getByText('en')
-    expect(languages).toBeInTheDocument()
-    expect(languages).not.toHaveAttribute('title')
+    expect(screen.getByRole('heading', { name: 'English' })).toBeInTheDocument()
+    expect(screen.queryByText('en')).not.toBeInTheDocument()
+  })
+
+  describe('grouping and filtering', () => {
+    const many = [
+      entry({ external_id: 'a', name: 'Asura Scans', languages: ['en'] }),
+      entry({ external_id: 'b', name: 'Catharsis World', languages: ['es'] }),
+      entry({ external_id: 'c', name: 'Cubari', languages: ['en', 'es'] }),
+    ]
+    const withMany = () => props({ available: new Map([[REPO_ID, many]]) })
+
+    it('groups sources under a heading per language', async () => {
+      await renderWithProviders(<RepoList {...withMany()} />)
+
+      const headings = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent)
+      // Multi-language leads; the rest are ordered by the name a reader sees.
+      expect(headings).toEqual(['Multi-language', 'English', 'Spanish'])
+    })
+
+    /** The multi-language group is the one place the codes say something. */
+    it('keeps the language list on a multi-language row', async () => {
+      await renderWithProviders(<RepoList {...withMany()} />)
+      expect(screen.getByText('en, es')).toBeInTheDocument()
+    })
+
+    it('narrows the list to what was typed', async () => {
+      await renderWithProviders(<RepoList {...withMany()} query="cub" />)
+
+      expect(screen.getByText('Cubari')).toBeInTheDocument()
+      expect(screen.queryByText('Asura Scans')).not.toBeInTheDocument()
+      // The emptied groups go with their rows.
+      expect(screen.queryByRole('heading', { name: 'English' })).not.toBeInTheDocument()
+    })
+
+    it('says so when nothing matches', async () => {
+      await renderWithProviders(<RepoList {...withMany()} query="nothing here" />)
+      expect(screen.getByText(/No source here matches/)).toBeInTheDocument()
+    })
+  })
+
+  describe('what the index already carries', () => {
+    it('shows the source icon', async () => {
+      const entries = [entry({ icon_url: 'https://cdn.test/icon.png' })]
+      await renderWithProviders(
+        <RepoList {...props({ available: new Map([[REPO_ID, entries]]) })} />,
+      )
+
+      const icon = document.querySelector('img[src="https://cdn.test/icon.png"]')
+      expect(icon).not.toBeNull()
+      // A third-party host does not need the address of the server showing it.
+      expect(icon).toHaveAttribute('referrerpolicy', 'no-referrer')
+    })
+
+    it('shows the site the source reads', async () => {
+      const entries = [entry({ base_url: 'https://asuracomic.net' })]
+      await renderWithProviders(
+        <RepoList {...props({ available: new Map([[REPO_ID, entries]]) })} />,
+      )
+
+      expect(screen.getByText('https://asuracomic.net')).toBeInTheDocument()
+    })
+
+    it('badges a rating that warns, and only those', async () => {
+      const entries = [
+        entry({ external_id: 'a', name: 'Safe One', content_rating: 'safe' }),
+        entry({ external_id: 'b', name: 'Adult One', content_rating: 'nsfw' }),
+      ]
+      await renderWithProviders(
+        <RepoList {...props({ available: new Map([[REPO_ID, entries]]) })} />,
+      )
+
+      expect(screen.getByText('18+')).toBeInTheDocument()
+      expect(screen.queryByText('17+')).not.toBeInTheDocument()
+    })
+  })
+
+  /**
+   * The failure that sent a reader to the top of the page: the message was
+   * rendered beside the form, and the row they pressed did nothing visible.
+   */
+  describe('a failed action', () => {
+    it('reports it on the row that caused it', async () => {
+      await renderWithProviders(
+        <RepoList
+          {...props()}
+          entryErrors={new Map([[`${REPO_ID}:${entry().external_id}`, 'net::send_all is missing']])}
+        />,
+      )
+
+      const alert = screen.getByRole('alert')
+      expect(alert).toHaveTextContent('net::send_all is missing')
+      // In the row, not somewhere else on the page.
+      expect(alert.closest('li')).toHaveTextContent('MangaHaven')
+    })
+
+    it('leaves the other rows alone', async () => {
+      const entries = [
+        entry({ external_id: 'a', name: 'First' }),
+        entry({ external_id: 'b', name: 'Second' }),
+      ]
+      await renderWithProviders(
+        <RepoList
+          {...props({ available: new Map([[REPO_ID, entries]]) })}
+          entryErrors={new Map([[`${REPO_ID}:a`, 'refused']])}
+        />,
+      )
+
+      expect(screen.getAllByRole('alert')).toHaveLength(1)
+    })
+
+    it('reports a repository failure on the repository', async () => {
+      await renderWithProviders(
+        <RepoList {...props()} repoErrors={new Map([[REPO_ID, 'the index could not be read']])} />,
+      )
+
+      expect(screen.getByRole('alert')).toHaveTextContent('the index could not be read')
+    })
   })
 })

@@ -47,6 +47,10 @@ msgstr "{option}: incluido"
 msgid "{option}: not filtered"
 msgstr "{option}: sin filtrar"
 
+#: src/routes/settings.tsx
+msgid "{shown} sources"
+msgstr "{shown} fuentes"
+
 #: src/features/library/components/LibraryToolbar.tsx
 msgid "{shown} titles"
 msgstr "{shown} títulos"
@@ -303,6 +307,10 @@ msgstr "Mantenimiento"
 msgid "Missing"
 msgstr "Faltan"
 
+#: src/features/sources/components/RepoList.tsx
+msgid "Multi-language"
+msgstr "Multiidioma"
+
 #: src/routes/settings.tsx
 msgid "Name"
 msgstr "Nombre"
@@ -330,6 +338,10 @@ msgstr "Sin portada"
 #: src/features/sources/components/RepoList.tsx
 msgid "No repositories"
 msgstr "Sin repositorios"
+
+#: src/features/sources/components/RepoList.tsx
+msgid "No source here matches “{query}”."
+msgstr "Ninguna fuente de aquí coincide con «{query}»."
 
 #: src/routes/browse.tsx
 msgid "No sources installed"
@@ -467,6 +479,10 @@ msgstr "Buscar «{0}» en Explorar"
 #: src/features/palette/components/CommandPalette.tsx
 msgid "Search sources"
 msgstr "Buscar en las fuentes"
+
+#: src/routes/settings.tsx
+msgid "Search sources by name or address"
+msgstr "Buscar fuentes por nombre o dirección"
 
 #: src/routes/browse.tsx
 msgid "Search this source"
