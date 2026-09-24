@@ -2,6 +2,10 @@
 //! There is no Rust reference implementation, so parity is established by
 //! reading Swift and testing against real sources.
 //!
+//! `abi/tier1-surface.txt` is the generated list of what tier 1 actually is at
+//! the pinned commit, and a test asserts `bindings::PROVIDED` covers it.
+//! Regenerate with `cargo xtask abi-surface` after re-pinning.
+//!
 //! Surface per module, from `aidoku-rs` `crates/lib/src/imports/`:
 //!
 //! - `std` — `destroy`, `buffer_len`, `read_buffer`, `current_date`,
@@ -11,8 +15,9 @@
 //! - `net` — a stateful request builder: `init`, `set_url`, `set_header`,
 //!   `set_body`, `set_timeout`, `send`, `send_all`, `data_len`, `read_data`,
 //!   `get_image`, `get_header`, `get_status_code`, `get_url`, `html`,
-//!   `set_rate_limit`. `send_all` means the host must issue concurrent
-//!   requests.
+//!   `set_rate_limit`. `send_all` issues the batch in bounded parallel.
+//!   `get_image` answers a `canvas::ImageRef` and is therefore tier 3: it is
+//!   refused at install by capability, not provided here.
 //! - `html` — roughly 45 functions, and **mutating**: `set_attr`, `set_text`,
 //!   `set_html`, `prepend`, `append`, `add_class`, `remove_class`, `remove`.
 //!   A read-only parser cannot back this module.

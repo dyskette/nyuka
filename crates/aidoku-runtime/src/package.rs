@@ -132,6 +132,9 @@ pub fn supported_capabilities() -> Vec<Capability> {
 /// web-view functions need a real browser engine and are not implemented.
 pub fn capability_for_import(module: &str, name: &str) -> Option<Capability> {
     Some(match module {
+        // Answers a `canvas::ImageRef`, so it needs the image pipeline rather
+        // than the request builder it is filed under.
+        "net" if name == "get_image" => Capability::Canvas,
         "net" => Capability::Net,
         "html" => Capability::Html,
         "defaults" => Capability::Defaults,
@@ -316,13 +319,14 @@ mod tests {
         "url":"https://example.test","contentRating":0,"languages":["en"],
         "minAppVersion":"0.7.1"}}"#;
 
-    /// `net::send_all` sits inside a provided capability, so only a
-    /// function-level check refuses it.
+    /// A gap inside a provided capability, which only a function-level check
+    /// refuses. The whole pinned tier-1 surface is implemented, so the name
+    /// here is one upstream could add rather than one missing today.
     #[test]
     fn a_source_needing_an_unimplemented_net_function_is_refused() {
         let (bytes, imports) = aix(
             MANIFEST,
-            vec![("net", "send"), ("net", "send_all"), ("std", "destroy")],
+            vec![("net", "send"), ("net", "send_later"), ("std", "destroy")],
         );
 
         let error = load(&bytes, &imports).expect_err("the package is refused");
@@ -330,9 +334,23 @@ mod tests {
         match error {
             LoadError::UnsupportedImports { id, missing } => {
                 assert_eq!(id, "en.example");
-                assert_eq!(missing, vec!["net::send_all"]);
+                assert_eq!(missing, vec!["net::send_later"]);
             }
             other => panic!("expected UnsupportedImports, got {other:?}"),
+        }
+    }
+
+    /// `net::get_image` needs the image pipeline, so it is a capability
+    /// refusal even though it lives in a tier-1 module.
+    #[test]
+    fn get_image_is_refused_as_a_canvas_dependency() {
+        let (bytes, imports) = aix(MANIFEST, vec![("net", "send"), ("net", "get_image")]);
+
+        match load(&bytes, &imports).expect_err("the package is refused") {
+            LoadError::UnsupportedCapabilities { missing, .. } => {
+                assert_eq!(missing, vec![Capability::Canvas]);
+            }
+            other => panic!("expected UnsupportedCapabilities, got {other:?}"),
         }
     }
 
@@ -371,17 +389,22 @@ mod tests {
     #[test]
     fn a_repeated_unprovided_import_is_named_once() {
         let missing = unprovided_imports(vec![
-            ("net", "send_all"),
-            ("net", "send_all"),
-            ("net", "get_image"),
+            ("net", "send_later"),
+            ("net", "send_later"),
+            ("html", "select_last"),
         ]);
 
-        assert_eq!(missing, vec!["net::send_all", "net::get_image"]);
+        assert_eq!(missing, vec!["net::send_later", "html::select_last"]);
     }
 
     #[test]
     fn imports_map_to_capabilities() {
         assert_eq!(capability_for_import("net", "send"), Some(Capability::Net));
+        // `net::get_image` is in the `net` module and is not a `net` gap.
+        assert_eq!(
+            capability_for_import("net", "get_image"),
+            Some(Capability::Canvas)
+        );
         assert_eq!(
             capability_for_import("html", "select"),
             Some(Capability::Html)

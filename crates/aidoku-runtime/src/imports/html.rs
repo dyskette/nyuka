@@ -285,6 +285,94 @@ fn resolve(base: Option<&str>, value: &str) -> Option<String> {
         .map(|u| u.to_string())
 }
 
+/// Aidoku's `Kind` discriminants, which the guest reads straight off the
+/// return value.
+pub mod kind {
+    pub const UNKNOWN: i32 = 0;
+    pub const NODE: i32 = 1;
+    pub const TEXT_NODE: i32 = 2;
+    pub const DATA_NODE: i32 = 3;
+    pub const COMMENT: i32 = 4;
+    pub const ELEMENT: i32 = 5;
+    pub const ELEMENT_LIST: i32 = 6;
+    pub const DOCUMENT: i32 = 7;
+}
+
+/// The raw contents of a text or comment node.
+///
+/// `text()` aggregates descendants, and a leaf has none, so it answers empty
+/// for exactly the nodes this is for.
+fn node_contents(node: &NodeRef<'_>) -> Option<String> {
+    node.query(|n| match &n.data {
+        dom_query::NodeData::Text { contents } | dom_query::NodeData::Comment { contents } => {
+            Some(contents.to_string())
+        }
+        _ => None,
+    })
+    .flatten()
+}
+
+/// Whether a text node holds element data rather than prose.
+///
+/// Jsoup — which this ABI is shaped after — splits the two: the contents of
+/// `<script>` and `<style>` are a `DataNode`, everything else a `TextNode`.
+/// `dom_query` has one text variant, so the parent's tag decides.
+fn is_data_node(node: &NodeRef<'_>) -> bool {
+    if !node.is_text() {
+        return false;
+    }
+    node.parent()
+        .and_then(|p| p.node_name().map(|n| n.to_string()))
+        .is_some_and(|tag| {
+            let tag = tag.to_ascii_lowercase();
+            tag == "script" || tag == "style"
+        })
+}
+
+pub fn node_kind(html: &Rc<Html>, id: NodeId) -> i32 {
+    let node = node(html, id);
+    if node.is_document() || node.is_fragment() {
+        kind::DOCUMENT
+    } else if node.is_element() {
+        kind::ELEMENT
+    } else if node.is_comment() {
+        kind::COMMENT
+    } else if is_data_node(&node) {
+        kind::DATA_NODE
+    } else if node.is_text() {
+        kind::TEXT_NODE
+    } else {
+        kind::NODE
+    }
+}
+
+/// A node's data, following Jsoup: a comment's or data node's own contents,
+/// and for an element the data of every data node beneath it, joined.
+///
+/// Descendants, not children — a `<script>`'s body hangs off the script
+/// element, so an element's own children are never data nodes.
+///
+/// Not [`text`]: a script body is not prose, and collapsing its whitespace or
+/// decoding its entities would corrupt the JSON a source reads out of it.
+pub fn data(html: &Rc<Html>, id: NodeId) -> Option<String> {
+    let node = node(html, id);
+
+    if node.is_comment() || is_data_node(&node) {
+        return Some(node_contents(&node).unwrap_or_default());
+    }
+    if !node.is_element() {
+        return None;
+    }
+
+    let mut out = String::new();
+    for descendant in node.descendants_it() {
+        if is_data_node(&descendant) {
+            out.push_str(&node_contents(&descendant).unwrap_or_default());
+        }
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,6 +401,80 @@ mod tests {
         let html = Rc::new(parse(FIXTURE, Some(BASE), true));
         let root = root(&html);
         (html, root)
+    }
+
+    /// A document carrying each node kind, which `FIXTURE` has no reason to.
+    const KINDS: &str = r#"<div id="host">
+  <!-- a comment -->
+  plain text
+  <script type="application/json">{"pages":[1,2]}</script>
+  <style>.a{color:red}</style>
+</div>"#;
+
+    fn kinds() -> (Rc<Html>, NodeId) {
+        let html = Rc::new(parse(KINDS, Some(BASE), true));
+        let root = root(&html);
+        (html, root)
+    }
+
+    #[test]
+    fn a_node_reports_its_kind() {
+        let (h, r) = kinds();
+        let host = select_first(&h, r, "#host").unwrap();
+        assert_eq!(node_kind(&h, host), kind::ELEMENT);
+
+        let script = select_first(&h, r, "script").unwrap();
+        let body = children(&h, script);
+        // A script's contents are a data node, not prose (Jsoup's split).
+        assert_eq!(node_kind(&h, body[0]), kind::DATA_NODE);
+
+        let comment = children(&h, host)
+            .into_iter()
+            .find(|id| node_kind(&h, *id) == kind::COMMENT)
+            .expect("the comment is a child of #host");
+        assert_eq!(node_kind(&h, comment), kind::COMMENT);
+
+        // Several text-node children are the whitespace between elements, so
+        // this names the one that carries prose.
+        let text = children(&h, host)
+            .into_iter()
+            .find(|id| untrimmed_text(&h, *id).contains("plain text"))
+            .expect("the bare text is a child of #host");
+        assert_eq!(node_kind(&h, text), kind::TEXT_NODE);
+    }
+
+    /// The reason `data` exists: a source reads JSON out of a `<script>`, and
+    /// `text` would collapse the whitespace and decode entities inside it.
+    #[test]
+    fn data_returns_a_script_body_verbatim() {
+        let (h, r) = kinds();
+        let host = select_first(&h, r, "#host").unwrap();
+
+        assert_eq!(
+            data(&h, host).as_deref(),
+            Some(r#"{"pages":[1,2]}.a{color:red}"#)
+        );
+    }
+
+    #[test]
+    fn data_on_a_comment_is_its_contents() {
+        let (h, r) = kinds();
+        let host = select_first(&h, r, "#host").unwrap();
+        let comment = children(&h, host)
+            .into_iter()
+            .find(|id| node_kind(&h, *id) == kind::COMMENT)
+            .expect("the comment is a child of #host");
+
+        assert_eq!(data(&h, comment).as_deref(), Some(" a comment "));
+    }
+
+    /// An element with no script or style children has no data, which is not
+    /// the same as having none to give.
+    #[test]
+    fn data_on_a_plain_element_is_empty() {
+        let (h, r) = doc();
+        let card = select_first(&h, r, "a.card").unwrap();
+        assert_eq!(data(&h, card).as_deref(), Some(""));
     }
 
     #[test]

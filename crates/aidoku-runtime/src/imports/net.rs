@@ -223,6 +223,44 @@ pub fn send(client: &reqwest::blocking::Client, request: &Request) -> Result<Res
     })
 }
 
+/// How many of a `send_all` batch are in flight at once.
+///
+/// A source may hand over any number of requests; this bounds what that costs
+/// the site it points at and this process's threads. Matches the per-source
+/// permit default in ADR-0003, which governs the job engine around the whole
+/// invocation.
+pub const SEND_ALL_CONCURRENCY: usize = 4;
+
+/// Performs a batch of requests, in bounded parallel, preserving order.
+///
+/// Each entry is the result for the request at the same index. A blocking
+/// client on scoped threads rather than an async runtime: `send` is the
+/// blocking path, and one shared model keeps the egress resolver and the
+/// timeout behaviour identical between them.
+pub fn send_all(
+    client: &reqwest::blocking::Client,
+    requests: &[Request],
+) -> Vec<Result<Response, i32>> {
+    let mut out: Vec<Result<Response, i32>> = Vec::with_capacity(requests.len());
+
+    for batch in requests.chunks(SEND_ALL_CONCURRENCY) {
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = batch
+                .iter()
+                .map(|request| scope.spawn(|| send(client, request)))
+                .collect();
+            for handle in handles {
+                // A panicking request is reported as a failure rather than
+                // resumed: it would otherwise take down the whole invocation
+                // and the guest would see no result at all.
+                out.push(handle.join().unwrap_or(Err(err::FAILED)));
+            }
+        });
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,6 +277,148 @@ mod tests {
 
     fn ip(s: &str) -> IpAddr {
         s.parse().unwrap()
+    }
+
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A one-shot HTTP server that reports how many connections it ever had
+    /// open at once.
+    ///
+    /// Driven with a plain client: [`VettingResolver`] refuses loopback, which
+    /// is the behaviour the egress tests assert, so reaching this through one
+    /// is not possible by design.
+    struct Server {
+        port: u16,
+        peak: Arc<AtomicUsize>,
+    }
+
+    fn serve(responses: usize) -> Server {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let peak = Arc::new(AtomicUsize::new(0));
+        let live = Arc::new(AtomicUsize::new(0));
+
+        let reported = peak.clone();
+        std::thread::spawn(move || {
+            let mut workers = Vec::new();
+            for _ in 0..responses {
+                let Ok((stream, _)) = listener.accept() else {
+                    break;
+                };
+                let live = live.clone();
+                let reported = reported.clone();
+                workers.push(std::thread::spawn(move || {
+                    let open = live.fetch_add(1, Ordering::SeqCst) + 1;
+                    reported.fetch_max(open, Ordering::SeqCst);
+
+                    // Held open long enough that concurrent senders overlap
+                    // observably; a serial sender never raises the peak.
+                    std::thread::sleep(Duration::from_millis(120));
+
+                    use std::io::Write;
+                    let mut stream = stream;
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                    );
+                    let _ = stream.flush();
+                    live.fetch_sub(1, Ordering::SeqCst);
+                }));
+            }
+            for worker in workers {
+                let _ = worker.join();
+            }
+        });
+
+        Server { port, peak }
+    }
+
+    fn get(url: &str) -> Request {
+        Request {
+            method: 0,
+            url: Some(url.to_string()),
+            headers: Vec::new(),
+            body: None,
+            response: None,
+        }
+    }
+
+    /// Results line up with the requests by index, which is the whole contract
+    /// the guest relies on when it reads error codes back out of its array.
+    #[test]
+    fn send_all_keeps_the_order_it_was_given() {
+        let server = serve(6);
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .expect("client");
+
+        let requests: Vec<Request> = (0..6)
+            .map(|i| get(&format!("http://127.0.0.1:{}/{i}", server.port)))
+            .collect();
+
+        let results = send_all(&client, &requests);
+
+        assert_eq!(results.len(), 6);
+        for result in &results {
+            assert_eq!(result.as_ref().map(|r| r.status), Ok(200));
+        }
+    }
+
+    /// Parallel, and bounded. Serial sending never raises the peak above one;
+    /// unbounded sending raises it to the batch size.
+    #[test]
+    fn send_all_runs_in_bounded_parallel() {
+        let count = SEND_ALL_CONCURRENCY * 2;
+        let server = serve(count);
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .expect("client");
+
+        let requests: Vec<Request> = (0..count)
+            .map(|i| get(&format!("http://127.0.0.1:{}/{i}", server.port)))
+            .collect();
+
+        send_all(&client, &requests);
+
+        let peak = server.peak.load(Ordering::SeqCst);
+        assert!(peak > 1, "requests were serialised (peak {peak})");
+        assert!(
+            peak <= SEND_ALL_CONCURRENCY,
+            "more than {SEND_ALL_CONCURRENCY} in flight (peak {peak})"
+        );
+    }
+
+    /// One bad request must not lose the others, and the failure has to stay
+    /// at its own index.
+    #[test]
+    fn send_all_reports_failures_per_request() {
+        let server = serve(2);
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .expect("client");
+
+        let requests = vec![
+            get(&format!("http://127.0.0.1:{}/a", server.port)),
+            get("not-a-url"),
+            get(&format!("http://127.0.0.1:{}/b", server.port)),
+        ];
+
+        let results = send_all(&client, &requests);
+
+        assert_eq!(results.len(), 3);
+        assert!(results[0].is_ok());
+        assert_eq!(results[1].as_ref().err().copied(), Some(err::INVALID_URL));
+        assert!(results[2].is_ok());
+    }
+
+    /// Nothing to do, and nothing to join.
+    #[test]
+    fn send_all_of_nothing_is_empty() {
+        let client = reqwest::blocking::Client::new();
+        assert!(send_all(&client, &[]).is_empty());
     }
 
     #[test]

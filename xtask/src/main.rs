@@ -14,6 +14,7 @@ fn main() -> anyhow::Result<()> {
     match task.as_deref() {
         Some("openapi") => openapi(),
         Some("fetch-sources") => fetch_sources(),
+        Some("abi-surface") => abi_surface(),
         Some(other) => {
             eprintln!("unknown task `{other}`");
             usage();
@@ -30,6 +31,7 @@ fn usage() {
     eprintln!("tasks:");
     eprintln!("  openapi          write web/openapi.json from the router's own schema");
     eprintln!("  fetch-sources    download the ADR-0004 regression set of .aix packages");
+    eprintln!("  abi-surface      regenerate the pinned tier-1 import surface snapshot");
 }
 
 /// Where the document lives.
@@ -217,4 +219,131 @@ fn fetch_sources() -> anyhow::Result<()> {
     );
     println!("       --test live_sources -- --ignored --nocapture");
     Ok(())
+}
+
+// --- abi-surface -------------------------------------------------------------
+
+/// Rewrites the snapshot of aidoku-rs' tier-1 host imports.
+///
+/// Reads the cargo git checkout the conformance fixture pins, so the snapshot
+/// is a fact about `ABI_SOURCE_COMMIT` rather than a transcription. Run this
+/// after re-pinning; the host's own test fails until `PROVIDED` covers it.
+fn abi_surface() -> anyhow::Result<()> {
+    let commit = nyuka_aidoku_runtime::ABI_SOURCE_COMMIT;
+    let root = aidoku_checkout(commit)?;
+    let imports = root.join("crates/lib/src/imports");
+
+    let mut found: Vec<String> = Vec::new();
+    for file in ["std.rs", "defaults.rs", "net.rs", "html.rs"] {
+        let text = std::fs::read_to_string(imports.join(file))?;
+        found.extend(extern_imports(&strip_comments(&text)));
+    }
+    found.sort();
+    found.dedup();
+
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../crates/aidoku-runtime/abi/tier1-surface.txt");
+    let header = format!(
+        "# The tier-1 host import surface of aidoku-rs, at the commit in\n\
+         # ABI_SOURCE_COMMIT ({commit}). Generated, not written by hand:\n\
+         #\n\
+         #   cargo xtask abi-surface\n\
+         #\n\
+         # `bindings::PROVIDED` must cover every line. ADR-0004 commits this\n\
+         # project to tier 1 in full.\n\n"
+    );
+    std::fs::write(&path, format!("{header}{}\n", found.join("\n")))?;
+
+    println!("wrote {} ({} imports)", path.display(), found.len());
+    Ok(())
+}
+
+/// The cargo git checkout for the pinned aidoku-rs revision.
+fn aidoku_checkout(commit: &str) -> anyhow::Result<PathBuf> {
+    let home = std::env::var("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| std::env::var("HOME").map(|h| PathBuf::from(h).join(".cargo")))?;
+    let checkouts = home.join("git/checkouts");
+
+    for entry in std::fs::read_dir(&checkouts)? {
+        let dir = entry?.path();
+        if !dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("aidoku-rs-"))
+        {
+            continue;
+        }
+        // Cargo names the directory by the short commit.
+        for rev in std::fs::read_dir(&dir)? {
+            let rev = rev?.path();
+            if rev
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| commit.starts_with(n))
+            {
+                return Ok(rev);
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "no aidoku-rs checkout for {commit} under {}; build the conformance \
+         fixture first (cargo build --manifest-path \
+         crates/aidoku-runtime/conformance/Cargo.toml --target wasm32-unknown-unknown)",
+        checkouts.display()
+    )
+}
+
+fn strip_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `module::name` for every item in a `#[link(wasm_import_module = ...)]`
+/// block, resolving `#[link_name]` to the name that crosses the boundary.
+fn extern_imports(source: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = source;
+
+    while let Some(at) = rest.find("#[link(wasm_import_module = \"") {
+        let after = &rest[at + "#[link(wasm_import_module = \"".len()..];
+        let Some(quote) = after.find('"') else { break };
+        let module = &after[..quote];
+
+        let Some(open) = after.find('{') else { break };
+        let Some(close) = after[open..].find("\n}") else {
+            break;
+        };
+        let body = &after[open + 1..open + close];
+
+        let mut link_name: Option<String> = None;
+        for line in body.lines() {
+            let line = line.trim();
+            if let Some(start) = line.find("link_name = \"") {
+                let tail = &line[start + "link_name = \"".len()..];
+                if let Some(end) = tail.find('"') {
+                    link_name = Some(tail[..end].to_string());
+                }
+                continue;
+            }
+            if let Some(start) = line.find("fn ") {
+                let tail = &line[start + 3..];
+                let name: String = tail
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !name.is_empty() {
+                    out.push(format!("{module}::{}", link_name.take().unwrap_or(name)));
+                }
+            }
+        }
+
+        rest = &after[open + close..];
+    }
+
+    out
 }

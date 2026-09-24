@@ -86,6 +86,10 @@ Implement in this order, and record what is implemented as machine-readable capa
 
 The draft specified `scraper` for HTML parsing. `scraper` is a read-only query API over an `ego-tree` document. The `html` module requires mutation — `set_attr`, `set_text`, `set_html`, `prepend`, `append`, `remove`, `add_class`, `remove_class` — which `scraper` does not provide. Use a mutable DOM: `html5ever` (0.40.x) with an RC-DOM tree plus a selector layer, or `kuchikiki`, which bundles both. Validate the chosen option against `select`, mutation, and `outer_html` round-tripping before committing to it.
 
+#### Correction 3: `net::get_image` is a tier-3 dependency inside a tier-1 module
+
+The `net` row lists `get_image` alongside the request builder, which reads as tier 1. It is not: it answers a `canvas::ImageRef`, so serving it means having the image pipeline this ADR defers. It is mapped to the `canvas` capability and refused at install like any other tier-3 import. Every other function in the `net` module is implemented.
+
 #### Correction 2: FlareSolverr does not implement the webview imports
 
 The draft treats FlareSolverr as the Cloudflare answer. It covers one path and not the other:
@@ -132,6 +136,9 @@ A non-negative return is a **pointer into guest memory**, not a handle: `[0..4]`
 
 ### The required surface is far smaller than the ABI
 
+> [!WARNING]
+> The table below is a **sample**, not the commitment. It is what three sources happened to import; the commitment in [The v1 source commitment](#resolved-the-v1-source-commitment) is tier 1 *in full*. The host was first built to this table, which left `net::send_all` and `env::sleep` unimplemented — `send_all` is in the `net` row of [the ABI table above](#what-the-aidoku-abi-actually-requires) and is what MangaDex needs. Build against `crates/aidoku-runtime/abi/tier1-surface.txt`, which is generated from the pinned commit by `cargo xtask abi-surface` and is what the host's tests assert against.
+
 Parsing the wasm import sections of three real sources gives **32 host functions across 5 modules**, against roughly 90 in the full ABI:
 
 | Module | Functions needed |
@@ -175,6 +182,9 @@ Three templates need `canvas` (`mangareader`, `wpcomics`, `gigaviewer`), so it i
 Follow-up 1 asked for the target `.aix` list, on the reasoning that it, rather than the full ABI, defines tier-1 and tier-2 scope. The spike inverted that: the import analysis across all 136 sources is already done, so what remained was not *which imports* but *what this project is accountable for*.
 
 **v1 supports any source whose required imports are tier 1** — `net`, `std`, `html`, `defaults`. That is 108 of 136 community sources, 79%.
+
+> [!IMPORTANT]
+> That 79% is measured per **capability**, not per function, so it is an upper bound. A source can need only tier-1 modules and still import a function the host does not define — which is what happened to MangaDex. The install check is now function-level, so the enforcement matches the implementation rather than this figure. Re-measuring the corpus against `abi/tier1-surface.txt` would turn the bound into a number.
 
 This is deliberately a capability commitment rather than a named list, because the install-time check already enforces exactly that boundary. A promise phrased as "these twenty sources" would say less than the host does, date on the next upstream release, and need a code change to stay current. Phrased as a capability, the promise and the enforcement are the same mechanism, and a tier-1 source published upstream tomorrow works with no change here.
 

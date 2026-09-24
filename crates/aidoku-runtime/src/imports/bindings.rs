@@ -72,6 +72,34 @@ fn read_encoded(caller: &mut Host<'_>, ptr: i32) -> Option<Vec<u8>> {
     Some(payload)
 }
 
+/// Reads `len` little-endian `i32`s from guest memory.
+fn read_i32s(caller: &mut Host<'_>, ptr: i32, len: i32) -> Option<Vec<i32>> {
+    if len < 0 || ptr < 0 {
+        return None;
+    }
+    let count = len as usize;
+    let bytes = count.checked_mul(4)?;
+    let m = memory(caller)?;
+    let mut buf = vec![0u8; bytes];
+    m.read(&mut *caller, ptr as usize, &mut buf).ok()?;
+    Some(
+        buf.as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| i32::from_le_bytes(*c))
+            .collect(),
+    )
+}
+
+/// Writes `i32`s back over the array the guest passed in.
+fn write_i32s(caller: &mut Host<'_>, ptr: i32, values: &[i32]) -> bool {
+    let Some(m) = memory(caller) else {
+        return false;
+    };
+    let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+    m.write(&mut *caller, ptr as usize, &bytes).is_ok()
+}
+
 /// Stores bytes and returns the handle, for imports that answer with a string.
 fn put_bytes(caller: &mut Host<'_>, bytes: Vec<u8>) -> i32 {
     caller.data_mut().table.insert(Resource::Buffer(bytes))
@@ -87,6 +115,7 @@ pub const PROVIDED: &[(&str, &str)] = &[
     ("env", "abort"),
     ("env", "print"),
     ("env", "send_partial_result"),
+    ("env", "sleep"),
     // std
     ("std", "abort"),
     ("std", "buffer_len"),
@@ -108,6 +137,7 @@ pub const PROVIDED: &[(&str, &str)] = &[
     ("net", "init"),
     ("net", "read_data"),
     ("net", "send"),
+    ("net", "send_all"),
     ("net", "set_body"),
     ("net", "set_header"),
     ("net", "set_rate_limit"),
@@ -122,6 +152,7 @@ pub const PROVIDED: &[(&str, &str)] = &[
     ("html", "children"),
     ("html", "class_name"),
     ("html", "escape"),
+    ("html", "data"),
     ("html", "first"),
     ("html", "get"),
     ("html", "has_attr"),
@@ -129,6 +160,7 @@ pub const PROVIDED: &[(&str, &str)] = &[
     ("html", "html"),
     ("html", "id"),
     ("html", "last"),
+    ("html", "kind"),
     ("html", "next"),
     ("html", "outer_html"),
     ("html", "own_text"),
@@ -153,6 +185,9 @@ pub const PROVIDED: &[(&str, &str)] = &[
     ("html", "untrimmed_text"),
 ];
 
+/// The longest `env::sleep` this host honours.
+const MAX_SLEEP_SECONDS: i32 = 30;
+
 /// Registers every host import the required surface needs.
 pub fn register(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
     register_env(linker)?;
@@ -173,6 +208,13 @@ fn register_env(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
         }
     })?;
     linker.func_wrap("env", "abort", |_c: Host<'_>| {})?;
+    linker.func_wrap("env", "sleep", |_c: Host<'_>, seconds: i32| {
+        // Bounded: epoch interruption cannot preempt a host call, so an
+        // unbounded sleep here would pin a worker for as long as the guest
+        // asked. Sources use this to back off, which fits well inside the cap.
+        let seconds = seconds.clamp(0, MAX_SLEEP_SECONDS);
+        std::thread::sleep(std::time::Duration::from_secs(seconds as u64));
+    })?;
     linker.func_wrap("env", "send_partial_result", |mut c: Host<'_>, ptr: i32| {
         // Sources stream progress through this; it maps onto job.progress.
         if let Some(bytes) = read_encoded(&mut c, ptr) {
@@ -371,6 +413,50 @@ fn register_net(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
             Err(code) => code,
         }
     })?;
+    linker.func_wrap(
+        "net",
+        "send_all",
+        |mut c: Host<'_>, ptr: i32, len: i32| -> i32 {
+            let Some(rids) = read_i32s(&mut c, ptr, len) else {
+                return net_err::INVALID_DESCRIPTOR;
+            };
+
+            let requests: Option<Vec<_>> = rids
+                .iter()
+                .map(|rid| c.data().table.request(*rid).cloned())
+                .collect();
+            let Some(requests) = requests else {
+                return net_err::INVALID_DESCRIPTOR;
+            };
+
+            let results = net::send_all(&c.data().client, &requests);
+
+            // The guest reads per-request outcomes back out of the array it
+            // passed, by index, and treats a non-zero return as "read them".
+            let mut codes = rids.clone();
+            let mut failure = 0;
+            for (index, result) in results.into_iter().enumerate() {
+                match result {
+                    Ok(response) => {
+                        if let Some(r) = c.data_mut().table.request_mut(rids[index]) {
+                            r.response = Some(response);
+                        }
+                    }
+                    Err(code) => {
+                        codes[index] = code;
+                        if failure == 0 {
+                            failure = code;
+                        }
+                    }
+                }
+            }
+
+            if failure != 0 && !write_i32s(&mut c, ptr, &codes) {
+                return net_err::FAILED;
+            }
+            failure
+        },
+    )?;
     linker.func_wrap("net", "data_len", |c: Host<'_>, rid: i32| -> i32 {
         match c
             .data()
@@ -599,9 +685,20 @@ fn register_html(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
             })?;
         };
     }
+    opt_string_accessor!("data", html::data);
     opt_string_accessor!("tag_name", html::tag_name);
     opt_string_accessor!("id", html::element_id);
     opt_string_accessor!("class_name", html::class_name);
+
+    // A list answers `ElementList` before the node table is consulted: it has
+    // many ids and `node!` would reject it.
+    linker.func_wrap("html", "kind", |c: Host<'_>, rid: i32| -> i32 {
+        match c.data().table.get(rid) {
+            Some(Resource::NodeList { .. }) => html::kind::ELEMENT_LIST,
+            Some(Resource::Node { html: doc, id }) => html::node_kind(doc, *id),
+            _ => html_err::INVALID_DESCRIPTOR,
+        }
+    })?;
 
     // Traversal, each returning a node handle or a miss.
     macro_rules! node_accessor {
@@ -849,15 +946,36 @@ mod tests {
         );
     }
 
-    /// Both are in Aidoku's required `net` surface and neither is built, so
-    /// claiming them would admit sources this host cannot run.
+    /// `net::get_image` answers a canvas `ImageRef`, which is tier 3, so it
+    /// stays unprovided and is refused by capability instead.
     #[test]
-    fn the_unimplemented_net_functions_are_not_claimed() {
-        for name in ["send_all", "get_image"] {
-            assert!(
-                !PROVIDED.contains(&("net", name)),
-                "net::{name} is listed as provided but is not implemented"
-            );
-        }
+    fn get_image_is_not_claimed() {
+        assert!(!PROVIDED.contains(&("net", "get_image")));
+    }
+
+    /// ADR-0004 commits this project to tier 1 in full, against the pinned
+    /// aidoku-rs commit. The snapshot is that surface; regenerate it with
+    /// `cargo xtask abi-surface` after re-pinning.
+    #[test]
+    fn the_whole_pinned_tier_one_surface_is_provided() {
+        let snapshot = include_str!("../../abi/tier1-surface.txt");
+
+        let missing: Vec<&str> = snapshot
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            // The one tier-3 dependency inside a tier-1 module: it answers a
+            // canvas `ImageRef`, and is refused by capability.
+            .filter(|line| *line != "net::get_image")
+            .filter(|line| {
+                let (module, name) = line.split_once("::").expect("module::name");
+                !PROVIDED.contains(&(module, name))
+            })
+            .collect();
+
+        assert!(
+            missing.is_empty(),
+            "the host does not provide the pinned tier-1 surface: {missing:?}"
+        );
     }
 }
