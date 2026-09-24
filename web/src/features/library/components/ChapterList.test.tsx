@@ -66,23 +66,73 @@ describe('ChapterList', () => {
     expect(screen.queryByRole('button', { name: 'Download' })).not.toBeInTheDocument()
   })
 
-  /**
-   * The server returns 202 — the file does not exist yet. Showing
-   * "Downloaded" at that point would be a claim about the library that is not
-   * true, so an in-flight request reads as queued.
-   */
-  it('shows an in-flight request as queued, not as downloaded', async () => {
-    await renderWithProviders(
-      <ChapterList
-        chapters={[chapter()]}
-        pending={new Set(['11111111-1111-4111-8111-111111111111'])}
-        onDownload={vi.fn()}
-      />,
-    )
+  describe('while a download is under way', () => {
+    const ID = '11111111-1111-4111-8111-111111111111'
 
-    expect(screen.getByText('Queued')).toBeInTheDocument()
-    expect(screen.queryByText('Downloaded')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Download' })).not.toBeInTheDocument()
+    /**
+     * The server returns 202 — the file does not exist yet. Showing
+     * "Downloaded" at that point would be a claim about the library that is
+     * not true.
+     */
+    it('shows a queued chapter as queued, not as downloaded', async () => {
+      await renderWithProviders(
+        <ChapterList
+          chapters={[chapter()]}
+          downloading={new Map([[ID, { state: 'queued' as const }]])}
+          onDownload={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByText('Queued')).toBeInTheDocument()
+      expect(screen.queryByText('Downloaded')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Download' })).not.toBeInTheDocument()
+    })
+
+    /**
+     * The gap this closes: a chapter went from "Queued" back to a Download
+     * button the moment the request returned, and stayed there for the whole
+     * download. Nothing on the screen said it was happening.
+     */
+    it('counts the pages once the first event arrives', async () => {
+      await renderWithProviders(
+        <ChapterList
+          chapters={[chapter()]}
+          downloading={new Map([[ID, { state: 'running' as const, done: 12, total: 40 }]])}
+          onDownload={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByText(/Downloading 12\/40/)).toBeInTheDocument()
+    })
+
+    /** Progress is not persisted, so a job can be running and not yet be
+        anywhere in particular — which is not the same as being queued. */
+    it('says downloading without a count when no event has arrived', async () => {
+      await renderWithProviders(
+        <ChapterList
+          chapters={[chapter()]}
+          downloading={new Map([[ID, { state: 'running' as const }]])}
+          onDownload={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByText('Downloading')).toBeInTheDocument()
+      expect(screen.queryByText('Queued')).not.toBeInTheDocument()
+    })
+
+    /** A finished file outranks a stale job row. */
+    it('prefers the file over a job still listed as running', async () => {
+      await renderWithProviders(
+        <ChapterList
+          chapters={[chapter({ downloaded: true })]}
+          downloading={new Map([[ID, { state: 'running' as const }]])}
+          onDownload={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByText('Downloaded')).toBeInTheDocument()
+      expect(screen.queryByText(/Downloading/)).not.toBeInTheDocument()
+    })
   })
 
   /** A decimal chapter is real — 10.5 is not a rounding error. */

@@ -211,6 +211,16 @@ msgstr "Descargar automáticamente los nuevos capítulos de {0}"
 msgid "Downloaded"
 msgstr "Descargados"
 
+#: src/features/library/components/ChapterList.tsx
+msgid "Downloading"
+msgstr "Descargando"
+
+#. placeholder {0}: download.done
+#. placeholder {1}: download.total
+#: src/features/library/components/ChapterList.tsx
+msgid "Downloading {0}/{1}"
+msgstr "Descargando {0}/{1}"
+
 #: src/shared/components/AppShell.tsx
 msgid "Downloads"
 msgstr "Descargas"

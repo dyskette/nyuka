@@ -2,6 +2,7 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { useInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
+import { useChapterDownloads } from '@/features/jobs/api/useChapterDownloads'
 import { useRemoveFromLibrary, useRequestDownload } from '@/features/library/api/mutations'
 import { mangaChaptersInfiniteQuery, mangaDetailQuery } from '@/features/library/api/queries'
 import { ChapterList } from '@/features/library/components/ChapterList'
@@ -202,10 +203,14 @@ function Chapters({ mangaId }: { mangaId: string }) {
     mangaChaptersInfiniteQuery(mangaId),
   )
   const download = useRequestDownload(mangaId)
+  const downloading = useChapterDownloads()
 
-  // `variables` is the chapter id currently in flight, so the row it belongs
-  // to shows "Queued" without a second piece of state to keep in step.
-  const pending = new Set(download.isPending ? [download.variables] : [])
+  // The optimistic half. The queue is the source of truth, but the request
+  // that creates the job has to return before the queue knows about it, and
+  // a row that does nothing for a second reads as a button that failed.
+  if (download.isPending && download.variables !== undefined) {
+    downloading.set(download.variables, { state: 'queued' })
+  }
 
   const chapters = data?.pages.flatMap((page) => page.items) ?? []
 
@@ -213,7 +218,7 @@ function Chapters({ mangaId }: { mangaId: string }) {
     <>
       <ChapterList
         chapters={chapters}
-        pending={pending}
+        downloading={downloading}
         onDownload={(chapterId) => download.mutate(chapterId)}
       />
       {hasNextPage && (

@@ -1,6 +1,6 @@
 import { Trans } from '@lingui/react/macro'
 import { useSuspenseInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Outlet, retainSearchParams } from '@tanstack/react-router'
+import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { useCallback, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { libraryInfiniteQuery } from '@/features/library/api/queries'
@@ -21,8 +21,8 @@ const STATUSES = ['unknown', 'ongoing', 'completed', 'cancelled', 'hiatus'] as c
  * The library master list, and the parent of the detail panel (ADR-0017).
  *
  * Search parameters are validated here, on the parent, so the detail route
- * inherits them and `retainSearchParams` can preserve them across opening and
- * closing the panel.
+ * inherits them and every link within the library can carry them across
+ * opening and closing the panel.
  */
 const searchSchema = z.object({
   q: z.string().optional(),
@@ -40,13 +40,12 @@ export const Route = createFileRoute('/library')({
   // Do NOT add @tanstack/zod-adapter — it does not work with Zod 4 (ADR-0008).
   validateSearch: searchSchema,
 
-  // Without this, navigating to /library/$mangaId drops these from the URL,
-  // the parent re-defaults them, and the user's filtered view silently resets
-  // — while the list component stays mounted, so it reads as a data bug rather
-  // than a routing one (ADR-0017).
-  search: {
-    middlewares: [retainSearchParams(['q', 'status', 'source_id', 'sort', 'dir', 'cursor'])],
-  },
+  // No `retainSearchParams`. It retains on *every* arrival, including from
+  // another screen, so `q` and `source_id` were carried in from Browse — which
+  // names its own search box `q` and its own picker `source` — and the library
+  // opened filtered to something the reader never typed here. Every link
+  // within the library carries the filters itself, which is the narrower
+  // statement of what ADR-0017 asked for.
 
   // Declared before `loader`, because that is what `deps` is inferred from.
   //

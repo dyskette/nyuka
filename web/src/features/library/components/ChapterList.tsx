@@ -1,4 +1,5 @@
 import { Trans, useLingui } from '@lingui/react/macro'
+import type { ChapterDownload } from '@/features/jobs/lib/downloads'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
 
@@ -6,13 +7,19 @@ type ChapterSummary = components['schemas']['ChapterSummaryDto']
 
 export interface ChapterListProps {
   chapters: ChapterSummary[]
-  /** Chapters with a download job in flight, by chapter id. */
-  pending?: ReadonlySet<string>
+  /**
+   * What is happening to each chapter right now, by chapter id.
+   *
+   * Not on the chapter itself: `ChapterSummaryDto` says whether a file
+   * exists, and between asking for one and it landing there is nothing on the
+   * chapter to read. It comes from the queue.
+   */
+  downloading?: ReadonlyMap<string, ChapterDownload>
   onDownload: (chapterId: string) => void
 }
 
 /** A series' chapters, with what the reader can do about each. */
-export function ChapterList({ chapters, pending, onDownload }: ChapterListProps) {
+export function ChapterList({ chapters, downloading, onDownload }: ChapterListProps) {
   if (chapters.length === 0) {
     return (
       // A series' chapter list is read when it is added. Refreshing one
@@ -33,7 +40,7 @@ export function ChapterList({ chapters, pending, onDownload }: ChapterListProps)
         <ChapterRow
           key={chapter.id}
           chapter={chapter}
-          pending={pending?.has(chapter.id) ?? false}
+          download={downloading?.get(chapter.id)}
           onDownload={onDownload}
         />
       ))}
@@ -43,11 +50,11 @@ export function ChapterList({ chapters, pending, onDownload }: ChapterListProps)
 
 function ChapterRow({
   chapter,
-  pending,
+  download,
   onDownload,
 }: {
   chapter: ChapterSummary
-  pending: boolean
+  download: ChapterDownload | undefined
   onDownload: (chapterId: string) => void
 }) {
   return (
@@ -61,7 +68,7 @@ function ChapterRow({
           {relativeTime(chapter.published_at)}
         </time>
       )}
-      <ChapterState chapter={chapter} pending={pending} onDownload={onDownload} />
+      <ChapterState chapter={chapter} download={download} onDownload={onDownload} />
     </li>
   )
 }
@@ -75,11 +82,11 @@ function ChapterRow({
  */
 function ChapterState({
   chapter,
-  pending,
+  download,
   onDownload,
 }: {
   chapter: ChapterSummary
-  pending: boolean
+  download: ChapterDownload | undefined
   onDownload: (chapterId: string) => void
 }) {
   const { t } = useLingui()
@@ -116,11 +123,29 @@ function ChapterState({
     )
   }
 
-  if (pending) {
+  if (download !== undefined) {
     return (
-      <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
-        <span className="bg-accent size-1.5 rounded-full" aria-hidden="true" />
-        <Trans>Queued</Trans>
+      <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs">
+        {/* Pulsing while it runs, still while it waits: the difference
+            between the two is the thing a reader is looking for, and it is
+            carried by the word beside it as well (ADR-0016). */}
+        <span
+          className={`bg-accent size-1.5 rounded-full ${
+            download.state === 'running' ? 'animate-pulse' : ''
+          }`}
+          aria-hidden="true"
+        />
+        {download.state === 'queued' ? (
+          <Trans>Queued</Trans>
+        ) : download.total !== undefined && download.done !== undefined ? (
+          <span className="tabular">
+            <Trans>
+              Downloading {download.done}/{download.total}
+            </Trans>
+          </span>
+        ) : (
+          <Trans>Downloading</Trans>
+        )}
       </span>
     )
   }
