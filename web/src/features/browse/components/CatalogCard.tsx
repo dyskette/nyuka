@@ -40,12 +40,8 @@ export function CatalogCard({ item, adding = false, onAdd }: CatalogCardProps) {
           <InLibraryBadge mangaId={item.manga_id} />
         </div>
 
-        {/*
-          Two lines reserved whether or not the title needs them. `line-clamp-2`
-          alone left one-line titles a line short, so the action below sat at a
-          different height on every card. `min-h-10` is two lines of `text-sm`,
-          whose line height is `1.25rem`.
-        */}
+        {/* Two lines reserved either way, so the action below sits at one
+            height. `min-h-10` is two lines of `text-sm`. */}
         <span className="line-clamp-2 min-h-10 text-sm font-medium" title={item.title}>
           {item.title}
         </span>
@@ -100,9 +96,8 @@ function InLibraryBadge({ mangaId }: { mangaId: string | null | undefined }) {
 /**
  * The one box both actions wear.
  *
- * A card offers exactly one of "Add" and "Open in library", so the two sit in
- * the same place on neighbouring cards. Declared once because a grid where
- * they differ reads as one card being broken rather than as two states.
+ * A card offers exactly one of "Add" and "Open in library", and they land in
+ * the same place on neighbouring cards, so they must not drift apart.
  */
 const ACTION_BOX =
   'border-border hover:bg-accent-soft block w-full rounded-sm border px-2 py-1 text-center text-xs'

@@ -125,17 +125,9 @@ export function LibraryTable({
           </tr>
         </thead>
         <tbody>
-          {/*
-            The spacers hold the scrollbar at the height of the whole list and
-            carry nothing, so they stay out of the accessibility tree.
-
-            Biome objects to `aria-hidden` here, and to `role="presentation"`,
-            on the grounds that a `tr` is interactive. It is not: `row` is an
-            ARIA structure role, and is focusable only inside a `grid` or
-            `treegrid`. This is a plain `table` whose rows take no focus, so
-            the rule's premise does not hold and the suppression is the answer
-            rather than a different attribute.
-          */}
+          {/* The spacers hold the scrollbar at the height of the whole list
+              and carry nothing. Biome reads a `tr` as interactive; `row` is an
+              ARIA structure role, focusable only inside a `grid`. */}
           {padTop > 0 && (
             // biome-ignore lint/a11y/noAriaHiddenOnFocusable: a `tr` in a plain `table` is not focusable; see above.
             <tr aria-hidden="true">

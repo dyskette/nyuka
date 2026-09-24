@@ -169,10 +169,8 @@ describe('RepoList', () => {
   })
 
   /**
-   * One source in the community index declares forty languages. Joined into
-   * the row they took its whole width, and the name — which is `flex-1
-   * truncate` — was squeezed to nothing. On screen the title disappeared
-   * entirely and the overflow collided with the rows above and below.
+   * One in the community index declares forty. Joined into the row they take
+   * its whole width, leaving the name none.
    */
   describe('a source that declares many languages', () => {
     const many = [

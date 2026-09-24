@@ -84,13 +84,8 @@ function Control({
     case 'unsupported':
       return (
         <p className="text-muted-foreground text-xs">
-          {/*
-            "not supported yet", not "not available here": the second reads as
-            "not on this screen" and sends a reader looking for where it is.
-            Nyuka does not render this kind of filter anywhere. Named, because
-            a reader who knows a source filters by year should be told that
-            rather than left wondering where the control went.
-          */}
+          {/* Named, because a reader who knows a source filters by year
+              should be told that rather than left looking for the control. */}
           <Trans>
             {filter.title} is not supported yet ({filter.declaredType})
           </Trans>

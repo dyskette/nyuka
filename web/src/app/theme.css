@@ -174,13 +174,9 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Tailwind 4 dropped Preflight's `cursor: pointer` on buttons, so every
-   control in the app inherited the browser default of `cursor: default` and
-   read as unclickable. Restored once here rather than per component.
-
-   `:where()` has zero specificity, so a component that wants a different
-   cursor still wins. Disabled controls keep the default: there is nothing to
-   click, and the arrow is what says so. */
+/* Tailwind 4's Preflight leaves buttons at the browser default of
+   `cursor: default`. `:where()` carries no specificity, so a component
+   wanting another cursor still wins. */
 :where(button, select, summary, [role="button"], input[type="checkbox"], input[type="radio"]):not(
   :disabled,
   [aria-disabled="true"]

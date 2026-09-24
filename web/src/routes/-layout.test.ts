@@ -6,16 +6,10 @@ import { describe, expect, it } from 'vitest'
  * The shell owns the viewport height; a screen fills the cell it is given.
  *
  * `AppShell` is `grid h-dvh grid-rows-[1fr_auto]` — the screen, then the
- * status bar. Every screen also set `h-dvh`, which is the whole window rather
- * than the window less the status bar, so each one overhung its cell by
- * exactly the status bar's height and `overflow-hidden` cut that strip off.
+ * status bar — so a screen setting `h-dvh` overhangs its cell by the status
+ * bar's height and `overflow-hidden` cuts that strip off.
  *
- * It showed as the "Next page" button in Browse being sliced in half at the
- * bottom of the catalog, but it was every screen: the last row of the
- * library, the last job in the queue, the end of the settings column.
- *
- * Nothing in jsdom lays out, so this is asserted over the source. A screen
- * that needs a viewport-height element inside itself should say so here.
+ * Asserted over the source because nothing in jsdom lays out.
  */
 describe('a screen', () => {
   const dir = join(import.meta.dirname ?? __dirname, '.')

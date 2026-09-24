@@ -227,9 +227,8 @@ function SourceRow({
   return (
     <li className="border-border border-b last:border-b-0">
       {/*
-        `min-h-row`, not `h-row`. A fixed height with content that does not fit
-        does not clip it — it overflows and collides with the rows above and
-        below, which is what forty languages in one row did.
+        `min-h-row`, not `h-row`: a fixed height does not clip content that
+        exceeds it, it overflows into the neighbouring rows.
       */}
       <div className="px-cell flex min-h-row items-center gap-2 text-sm">
         {sourceId === undefined ? (
@@ -249,12 +248,8 @@ function SourceRow({
         )}
         <span className="min-w-0 flex-1 truncate">{entry.name}</span>
         <span className="text-muted-foreground tabular shrink-0 text-xs">v{entry.version}</span>
-        {/*
-          Bounded, and allowed to shrink. This was `shrink-0` over the whole
-          joined list, so a source declaring forty languages took the row and
-          left the name — which is `flex-1 truncate` — no width at all. The
-          full list is on the title, for the one reader who wants it.
-        */}
+        {/* Bounded and allowed to shrink, so the name keeps its width. The
+            full list is on the title. */}
         <span
           title={languageTitle(entry.languages)}
           className="text-muted-foreground min-w-0 max-w-32 shrink truncate text-xs"

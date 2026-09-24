@@ -160,13 +160,8 @@ function JobLabel({ job }: { job: JobSummary }) {
         <span className="tabular text-muted-foreground shrink-0 text-xs">{number}</span>
       )}
       <span className="truncate">{subject.chapter_title ?? subject.manga_title}</span>
-      {/*
-        `shrink truncate`, not `shrink-0 truncate`. A flex child that cannot
-        shrink is never narrower than its own content, so `truncate` has
-        nothing to act on: a long series title pushes the chapter title — which
-        is the primary half of this label — out of the cell instead of giving
-        way itself. Same defect as the language list in the source rows.
-      */}
+      {/* The series is the secondary half of this label, so it gives way
+          first. `shrink-0` would leave `truncate` nothing to act on. */}
       {subject.chapter_title !== null && subject.chapter_title !== undefined && (
         <span className="text-muted-foreground min-w-0 max-w-40 shrink truncate text-xs">
           {subject.manga_title}
@@ -235,11 +230,8 @@ function ProgressCell({ progress }: { progress: Progress | undefined }) {
           }}
         />
       </span>
-      {/*
-        Two spans rather than an `aria-label` on one. A `span` has the generic
-        role, which takes no accessible name — the label was simply dropped and
-        a screen reader read "18/42" as written, slash and all.
-      */}
+      {/* Two spans: a `span` has the generic role, which takes no
+          accessible name, so an `aria-label` here is dropped. */}
       <span className="tabular text-muted-foreground text-xs" aria-hidden="true">
         {progress.done}/{progress.total}
       </span>

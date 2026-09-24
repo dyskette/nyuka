@@ -1,27 +1,15 @@
 // `shrink-0` and `truncate` on one element cancel each other out.
 //
-// `truncate` is `overflow: hidden; text-overflow: ellipsis; white-space:
-// nowrap`. None of it does anything until the element is narrower than its own
-// content, and `flex-shrink: 0` is the rule that says it never will be. The
-// pair reads as "cut this if it runs long" and behaves as "let this push
-// everything else out of the row".
+// `truncate` does nothing until an element is narrower than its content, and
+// `flex-shrink: 0` is the rule that it never will be. The pair reads as "cut
+// this if it runs long" and behaves as "let this push everything else out of
+// the row". Use `min-w-0 shrink truncate`, with a `max-w-*` when it should not
+// take its whole share to begin with.
 //
-// Two shipped that way. A source declaring forty languages took the whole
-// source row and left the name — `flex-1 truncate` — no width at all, which on
-// screen was rows overlapping with their titles gone. The queue's series title
-// carried the same pair, waiting for a long enough title.
-//
-// The fix is `shrink` with `min-w-0`, plus a `max-w-*` when the element should
-// not take its share of the row to begin with.
-//
-// The pattern is a regex over the class string rather than a JSX-shaped
-// pattern: Biome's GritQL does not match `className=$c`, and bare `$class`
-// matches every node in the file. The regex is anchored, so it matches the
-// string literal itself and not the elements containing it. Covers `"…"` and
-// `` `…` ``; a class assembled by a helper call is out of reach.
-//
-// Verified to fire on both orders and on a template literal, and not on
-// `shrink truncate`, `shrink-0 rounded-full`, or either class alone.
+// A regex over the class string, not a JSX pattern: Biome's GritQL does not
+// match `className=$c`, and a bare `$class` matches every node. Anchored, so
+// it matches the string literal and not the elements around it. Covers `"…"`
+// and `` `…` ``; a class built by a helper call is out of reach.
 language js
 
 $class where {

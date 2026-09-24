@@ -1,10 +1,8 @@
 /**
  * How a source's languages are shown in a list.
  *
- * A source declares whatever it supports, and some declare a great many: the
- * community index has one with 40. Joined into a row they are not information
- * — nobody reads forty two-letter codes — and they are wide enough to push
- * everything else out of the row, which is what they did.
+ * Some declare 40. Joined into a row they are neither readable nor narrow
+ * enough to share it.
  */
 
 /** How many are shown before the rest become a count. */
@@ -13,9 +11,8 @@ const SHOWN = 2
 /**
  * A short label, with the remainder as a count.
  *
- * Truncating with an ellipsis instead would say only that something was cut;
- * a count says how much, which is the part that tells a reader whether to
- * look closer.
+ * A count says how much was left out, where an ellipsis says only that
+ * something was.
  */
 export function languageLabel(languages: string[]): string {
   if (languages.length === 0) return ''

@@ -8,18 +8,14 @@ describe('activeSource', () => {
     expect(activeSource('second', installed)).toBe('second')
   })
 
-  /**
-   * The case the detail panel got wrong: arriving from the sidebar, nothing
-   * is in the URL and the grid is already showing the first source.
-   */
+  /** Arriving from the sidebar, with nothing in the URL. */
   it('falls back to the first installed source', () => {
     expect(activeSource(undefined, installed)).toBe('first')
   })
 
   /**
-   * Honoured even when it is not installed, so the screen can say the source
-   * is gone rather than quietly showing a different one's catalog under the
-   * same address.
+   * Honoured even when missing, so the screen can say the source is gone
+   * rather than show another one's catalog under the same address.
    */
   it('does not substitute for a source that is named but missing', () => {
     expect(activeSource('uninstalled', installed)).toBe('uninstalled')

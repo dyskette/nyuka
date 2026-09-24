@@ -198,19 +198,10 @@ pub async fn details(
 
 /// The chapter list, from whichever call carries it.
 ///
-/// Aidoku sources come in two shapes: some return chapters alongside a
-/// series' details, and some expose them only through a separate
-/// `get_chapter_list`. Asking again when the details already carried them
-/// would double the request rate toward a third party for nothing.
-///
-/// `add` used to store only what the details happened to include, on the
-/// reasoning that a second request was traffic toward a list nobody was
-/// looking at yet. They are: the catalog card turns into "Open in library"
-/// the moment the add returns, so a series from a source of the second kind
-/// opened on an empty chapter list — and nothing would ever fill it, because
-/// no endpoint refreshes a single series.
-///
-/// `Refresher` in the jobs crate resolves the same two shapes the same way.
+/// Aidoku sources come in two shapes: some return chapters with a series'
+/// details, others only through a separate `get_chapter_list`. Asking again
+/// when the details carried them would double the request rate toward a third
+/// party for nothing. `Refresher` in the jobs crate resolves it the same way.
 async fn chapter_list(
     items: &dyn nyuka_domain::ports::SourceItem,
     source: SourceId,
@@ -259,10 +250,8 @@ pub async fn add(
         .await
         .map_err(|e| not_found(e, "series"))?;
 
-    // Read before the series is written, so the add is all or nothing. A
-    // source that answers with details and then fails on chapters leaves
-    // nothing behind, and pressing Add again is a retry rather than a series
-    // that is present in the library and permanently empty.
+    // Read before the series is written, so a failure here leaves nothing
+    // behind and Add stays a retry.
     let chapters = chapter_list(state.items.as_ref(), source, &key, details.chapters.take())
         .await
         .map_err(|e| not_found(e, "series"))?;
@@ -409,8 +398,8 @@ mod tests {
         }
     }
 
-    /// A source whose separate chapter call is counted, so a test can say
-    /// whether it was reached rather than only what came back.
+    /// Counts the separate chapter call, so a test can say whether it was
+    /// reached rather than only what came back.
     struct CountingSource {
         calls: AtomicUsize,
         chapters: Vec<SourceChapter>,
@@ -452,9 +441,7 @@ mod tests {
         }
     }
 
-    /// The defect: Asura returns details without chapters, so a series added
-    /// from it went into the library with an empty chapter list that nothing
-    /// would ever fill.
+    /// Asura returns details without chapters.
     #[tokio::test]
     async fn asks_the_source_when_the_details_carried_no_chapters() {
         let items = source(vec![chapter("ch-1"), chapter("ch-2")]);
@@ -467,9 +454,7 @@ mod tests {
         assert_eq!(items.calls.load(Ordering::SeqCst), 1);
     }
 
-    /// The other half: a source that already sent them must not be asked
-    /// again. Two requests per add toward a third party, for a list already
-    /// in hand, is what the original code was right to avoid.
+    /// A source that already sent them must not be asked twice.
     #[tokio::test]
     async fn does_not_ask_again_when_the_details_carried_them() {
         let items = source(vec![chapter("from-the-separate-call")]);

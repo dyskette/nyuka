@@ -69,12 +69,8 @@ function SettingsScreen() {
   const busy = new Set(refresh.isPending && refresh.variables ? [refresh.variables] : [])
 
   return (
-    /*
-     * The scroll container is the full width; the content is centred inside
-     * it. With `overflow-y-auto` on the centred box itself, the scrollbar was
-     * drawn at that box's right edge — in the middle of the window, with
-     * empty page either side of it.
-     */
+    /* The scroll container is full width and the content centred inside it,
+       so the scrollbar sits at the window's edge. */
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
         <h1 className="text-lg font-semibold">
