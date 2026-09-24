@@ -195,7 +195,7 @@ describe('SourceSettings', () => {
 
     const row = screen.getByRole('listitem')
     expect(within(row).getByText('LOGIN')).toBeInTheDocument()
-    expect(within(row).getByText(/Not available here \(login\)/)).toBeInTheDocument()
+    expect(within(row).getByText(/Not supported yet \(login\)/)).toBeInTheDocument()
   })
 
   it('locks a control while its save is in flight', async () => {

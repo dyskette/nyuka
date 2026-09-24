@@ -154,7 +154,7 @@ describe('CatalogFilters', () => {
     await renderWithProviders(<CatalogFilters filters={filters} state={{}} onChange={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /Filters/ }))
 
-    expect(screen.getByText(/Year is not available here \(range\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Year is not supported yet \(range\)/)).toBeInTheDocument()
   })
 
   it('renders nothing when a source declares no filters', async () => {

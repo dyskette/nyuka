@@ -26,8 +26,8 @@ msgstr "{0} followed"
 #. placeholder {0}: filter.title
 #. placeholder {1}: filter.declaredType
 #: src/features/browse/components/CatalogFilters.tsx
-msgid "{0} is not available here ({1})"
-msgstr "{0} is not available here ({1})"
+msgid "{0} is not supported yet ({1})"
+msgstr "{0} is not supported yet ({1})"
 
 #. placeholder {0}: progress.done
 #. placeholder {1}: progress.total
@@ -336,8 +336,8 @@ msgid "No sources installed"
 msgstr "No sources installed"
 
 #: src/features/sources/components/SourceSettings.tsx
-msgid "Not available here ({declaredType})"
-msgstr "Not available here ({declaredType})"
+msgid "Not supported yet ({declaredType})"
+msgstr "Not supported yet ({declaredType})"
 
 #: src/features/browse/components/CatalogGrid.tsx
 msgid "Nothing here"

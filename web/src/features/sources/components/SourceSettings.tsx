@@ -69,9 +69,14 @@ function Unsupported({ declaredType, title }: { declaredType: string; title: str
     <>
       <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">{title}</span>
       <span className="text-muted-foreground shrink-0 text-xs">
-        {/* Named, because "not supported" without saying what leaves a reader
-            unable to tell a gap from a bug. */}
-        <Trans>Not available here ({declaredType})</Trans>
+        {/*
+          "Not supported yet", not "not available here": the second reads as
+          "not on this screen" and sends a reader looking for where it is.
+          There is no such place — nyuka does not render this kind of control
+          at all. The kind is named because "not supported" without saying
+          what leaves a reader unable to tell a gap from a bug.
+        */}
+        <Trans>Not supported yet ({declaredType})</Trans>
       </span>
     </>
   )
