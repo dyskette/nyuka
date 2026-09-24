@@ -320,8 +320,8 @@ msgid "Next page"
 msgstr "Página siguiente"
 
 #: src/features/library/components/ChapterList.tsx
-msgid "No chapters yet. Refresh the series to fetch its chapter list."
-msgstr "Todavía no hay capítulos. Actualiza la serie para obtener su lista de capítulos."
+msgid "No chapters. The source listed none when this series was added."
+msgstr "No hay capítulos. La fuente no listó ninguno cuando se añadió esta serie."
 
 #: src/features/browse/components/CatalogCard.tsx
 msgid "No cover"

@@ -22,8 +22,12 @@ export interface ChapterListProps {
 export function ChapterList({ chapters, pending, onDownload }: ChapterListProps) {
   if (chapters.length === 0) {
     return (
+      // A series' chapter list is read when it is added. Refreshing one
+      // afterwards is a capability the API does not have — see the gap table
+      // in `docs/design/README.md` — so this says what happened rather than
+      // naming an action nobody can take.
       <p className="text-muted-foreground p-panel text-sm">
-        <Trans>No chapters yet. Refresh the series to fetch its chapter list.</Trans>
+        <Trans>No chapters. The source listed none when this series was added.</Trans>
       </p>
     )
   }

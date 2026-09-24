@@ -108,7 +108,7 @@ describe('ChapterList', () => {
     await renderWithProviders(<ChapterList chapters={[]} onDownload={vi.fn()} />)
 
     expect(screen.queryByRole('list')).not.toBeInTheDocument()
-    expect(screen.getByText(/No chapters yet/)).toBeInTheDocument()
+    expect(screen.getByText(/No chapters\./)).toBeInTheDocument()
   })
 
   describe('retrieving the file', () => {

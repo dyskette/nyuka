@@ -320,8 +320,8 @@ msgid "Next page"
 msgstr "Next page"
 
 #: src/features/library/components/ChapterList.tsx
-msgid "No chapters yet. Refresh the series to fetch its chapter list."
-msgstr "No chapters yet. Refresh the series to fetch its chapter list."
+msgid "No chapters. The source listed none when this series was added."
+msgstr "No chapters. The source listed none when this series was added."
 
 #: src/features/browse/components/CatalogCard.tsx
 msgid "No cover"

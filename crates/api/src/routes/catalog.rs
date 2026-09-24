@@ -196,6 +196,33 @@ pub async fn details(
     Ok(Json(item))
 }
 
+/// The chapter list, from whichever call carries it.
+///
+/// Aidoku sources come in two shapes: some return chapters alongside a
+/// series' details, and some expose them only through a separate
+/// `get_chapter_list`. Asking again when the details already carried them
+/// would double the request rate toward a third party for nothing.
+///
+/// `add` used to store only what the details happened to include, on the
+/// reasoning that a second request was traffic toward a list nobody was
+/// looking at yet. They are: the catalog card turns into "Open in library"
+/// the moment the add returns, so a series from a source of the second kind
+/// opened on an empty chapter list — and nothing would ever fill it, because
+/// no endpoint refreshes a single series.
+///
+/// `Refresher` in the jobs crate resolves the same two shapes the same way.
+async fn chapter_list(
+    items: &dyn nyuka_domain::ports::SourceItem,
+    source: SourceId,
+    key: &ExternalKey,
+    from_details: Option<Vec<nyuka_domain::model::SourceChapter>>,
+) -> nyuka_domain::Result<Vec<nyuka_domain::model::SourceChapter>> {
+    match from_details {
+        Some(chapters) => Ok(chapters),
+        None => items.chapters(source, key).await,
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddRequest {
     pub source_id: Uuid,
@@ -226,9 +253,17 @@ pub async fn add(
     let source = SourceId(body.source_id);
     let key = ExternalKey(body.external_key);
 
-    let details = state
+    let mut details = state
         .items
         .details(source, &key)
+        .await
+        .map_err(|e| not_found(e, "series"))?;
+
+    // Read before the series is written, so the add is all or nothing. A
+    // source that answers with details and then fails on chapters leaves
+    // nothing behind, and pressing Add again is a retry rather than a series
+    // that is present in the library and permanently empty.
+    let chapters = chapter_list(state.items.as_ref(), source, &key, details.chapters.take())
         .await
         .map_err(|e| not_found(e, "series"))?;
 
@@ -259,14 +294,7 @@ pub async fn add(
         })
         .await?;
 
-    // Chapters the details call already returned are stored now rather than
-    // waiting for a refresh, so the series is readable immediately. A source
-    // that did not send them gets them on the first follow check or manual
-    // refresh — asking again here would double the request rate for a list
-    // nobody is looking at yet.
-    if let Some(chapters) = details.chapters {
-        state.chapters.upsert_many(id, &chapters).await?;
-    }
+    state.chapters.upsert_many(id, &chapters).await?;
 
     Ok(Json(state.manga.get(id).await?.into()))
 }
@@ -354,4 +382,131 @@ async fn mark_present(
         out.push(dto);
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nyuka_domain::model::{SourceChapter, SourcePage};
+    use nyuka_domain::ports::SourceItem;
+    // `Result` in this module is the API's, which is not what the port returns.
+    use nyuka_domain::Result as DomainResult;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const SOURCE: SourceId = SourceId(Uuid::from_u128(11));
+
+    fn chapter(key: &str) -> SourceChapter {
+        SourceChapter {
+            key: ExternalKey(key.into()),
+            title: None,
+            number: None,
+            volume: None,
+            published_at: None,
+            scanlators: Vec::new(),
+            url: None,
+            language: None,
+            locked: false,
+        }
+    }
+
+    /// A source whose separate chapter call is counted, so a test can say
+    /// whether it was reached rather than only what came back.
+    struct CountingSource {
+        calls: AtomicUsize,
+        chapters: Vec<SourceChapter>,
+    }
+
+    #[async_trait::async_trait]
+    impl SourceItem for CountingSource {
+        async fn details(
+            &self,
+            _source: SourceId,
+            _key: &ExternalKey,
+        ) -> DomainResult<SourceManga> {
+            Err(nyuka_domain::DomainError::NotFound)
+        }
+
+        async fn chapters(
+            &self,
+            _source: SourceId,
+            _key: &ExternalKey,
+        ) -> DomainResult<Vec<SourceChapter>> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(self.chapters.clone())
+        }
+
+        async fn pages(
+            &self,
+            _source: SourceId,
+            _manga: &ExternalKey,
+            _chapter: &ExternalKey,
+        ) -> DomainResult<Vec<SourcePage>> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn source(chapters: Vec<SourceChapter>) -> CountingSource {
+        CountingSource {
+            calls: AtomicUsize::new(0),
+            chapters,
+        }
+    }
+
+    /// The defect: Asura returns details without chapters, so a series added
+    /// from it went into the library with an empty chapter list that nothing
+    /// would ever fill.
+    #[tokio::test]
+    async fn asks_the_source_when_the_details_carried_no_chapters() {
+        let items = source(vec![chapter("ch-1"), chapter("ch-2")]);
+
+        let chapters = chapter_list(&items, SOURCE, &ExternalKey("series".into()), None)
+            .await
+            .expect("the chapter list is read");
+
+        assert_eq!(chapters.len(), 2, "the separate call's chapters are used");
+        assert_eq!(items.calls.load(Ordering::SeqCst), 1);
+    }
+
+    /// The other half: a source that already sent them must not be asked
+    /// again. Two requests per add toward a third party, for a list already
+    /// in hand, is what the original code was right to avoid.
+    #[tokio::test]
+    async fn does_not_ask_again_when_the_details_carried_them() {
+        let items = source(vec![chapter("from-the-separate-call")]);
+
+        let chapters = chapter_list(
+            &items,
+            SOURCE,
+            &ExternalKey("series".into()),
+            Some(vec![chapter("from-the-details")]),
+        )
+        .await
+        .expect("the chapter list is read");
+
+        assert_eq!(chapters[0].key.0, "from-the-details");
+        assert_eq!(
+            items.calls.load(Ordering::SeqCst),
+            0,
+            "the source was asked for a list it had already sent"
+        );
+    }
+
+    /// An empty list is an answer, not an absence. A source that says a
+    /// series has no chapters yet must not be asked a second time.
+    #[tokio::test]
+    async fn an_empty_list_in_the_details_is_still_an_answer() {
+        let items = source(vec![chapter("ch-1")]);
+
+        let chapters = chapter_list(
+            &items,
+            SOURCE,
+            &ExternalKey("series".into()),
+            Some(Vec::new()),
+        )
+        .await
+        .expect("the chapter list is read");
+
+        assert!(chapters.is_empty());
+        assert_eq!(items.calls.load(Ordering::SeqCst), 0);
+    }
 }
