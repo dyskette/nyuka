@@ -475,6 +475,25 @@ fn map_load_error(e: package::LoadError) -> DomainError {
     }
 }
 
+/// What a guest error code means, in words.
+///
+/// The number alone told a reader nothing and sent them looking through this
+/// repository for a table they cannot see.
+fn guest_reason(code: i32) -> String {
+    use crate::error::aidoku as e;
+    match code {
+        e::UNIMPLEMENTED => "it does not implement this".into(),
+        e::REQUEST => "a request it made did not succeed".into(),
+        e::HTML => "it could not read the page it was given".into(),
+        e::JS => "it needs script evaluation, which this server does not run".into(),
+        e::CANVAS => "it needs image processing, which this server does not do".into(),
+        e::UTF8 => "it received text it could not decode".into(),
+        e::JSON_PARSE => "it could not parse the site's response".into(),
+        e::DESERIALIZE => "it produced data this server could not read".into(),
+        other => format!("error code {other}"),
+    }
+}
+
 /// Maps a run failure, deciding whether the job engine should retry.
 ///
 /// A network failure inside the source is worth retrying; a source that
@@ -483,9 +502,14 @@ fn map_load_error(e: package::LoadError) -> DomainError {
 fn map_run_error(e: RunError) -> DomainError {
     match e {
         RunError::Guest(code) => DomainError::Source {
-            message: format!("source returned error code {code}"),
+            message: format!("the source failed: {}", guest_reason(code)),
             // -3 is the guest's request error: transient.
             retryable: code == crate::error::aidoku::REQUEST,
+        },
+        // The source explained itself; the explanation is the message.
+        RunError::Message(message) => DomainError::Source {
+            message,
+            retryable: false,
         },
         RunError::MissingExport(name) => DomainError::Source {
             message: format!("source does not implement {name}"),

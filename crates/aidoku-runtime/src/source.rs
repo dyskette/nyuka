@@ -34,8 +34,11 @@ use crate::state::{Defaults, HostState};
 /// What went wrong running a source.
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
-    #[error("source returned error code {0}")]
+    #[error("{0}")]
     Guest(i32),
+    /// The source failed with something it wrote for a person to read.
+    #[error("{0}")]
+    Message(String),
     #[error("source has no export named {0}")]
     MissingExport(String),
     #[error("source result was malformed: {0}")]
@@ -49,6 +52,10 @@ pub enum RunError {
     #[error(transparent)]
     Wasm(#[from] wasmtime::Error),
 }
+
+/// What a guest writes where a result block's length goes when it is instead
+/// returning an `AidokuError::Message`.
+const MESSAGE_SENTINEL: i32 = -1;
 
 /// One instantiated source, ready for a single call.
 ///
@@ -129,6 +136,9 @@ impl Invocation {
         if ret < 0 {
             return Err(RunError::Guest(ret));
         }
+        if let Some(message) = self.read_error_message(ret)? {
+            return Err(RunError::Message(message));
+        }
         let payload = self.read_result(ret)?;
         let decoded = postcard::from_bytes::<T>(&payload).map_err(|source| RunError::Decode {
             entry: name,
@@ -145,12 +155,52 @@ impl Invocation {
         Ok(decoded)
     }
 
+    /// A source's own error message, if that is what it returned.
+    ///
+    /// An `AidokuError::Message` comes back as a *non-negative* pointer with
+    /// `-1` where a result block carries its length, and its own layout after
+    /// that: `[-1, capacity, length, bytes]`. Read as a result block it looks
+    /// like a length of -1, which is how a source explaining itself in words
+    /// surfaced as "malformed data" and its explanation was discarded.
+    fn read_error_message(&mut self, ptr: i32) -> Result<Option<String>, RunError> {
+        let memory = self.memory()?;
+
+        let mut header = [0u8; 12];
+        memory
+            .read(&mut self.store, ptr as usize, &mut header)
+            .map_err(|e| RunError::Malformed(e.to_string()))?;
+
+        let sentinel = i32::from_le_bytes(header[0..4].try_into().expect("12 bytes read"));
+        if sentinel != MESSAGE_SENTINEL {
+            return Ok(None);
+        }
+
+        // The length counts the twelve-byte header with it.
+        let total = i32::from_le_bytes(header[8..12].try_into().expect("12 bytes read"));
+        let Ok(len) = usize::try_from(total - 12) else {
+            return Err(RunError::Malformed(format!(
+                "error message length {total} is shorter than its own header"
+            )));
+        };
+
+        let mut bytes = vec![0u8; len];
+        memory
+            .read(&mut self.store, (ptr + 12) as usize, &mut bytes)
+            .map_err(|e| RunError::Malformed(e.to_string()))?;
+
+        Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
+    }
+
+    fn memory(&mut self) -> Result<wasmtime::Memory, RunError> {
+        match self.instance.get_export(&mut self.store, "memory") {
+            Some(Extern::Memory(memory)) => Ok(memory),
+            _ => Err(RunError::Malformed("source exports no memory".into())),
+        }
+    }
+
     /// Reads the `[len, capacity, payload]` block a successful call returns.
     fn read_result(&mut self, ptr: i32) -> Result<Vec<u8>, RunError> {
-        let Some(Extern::Memory(memory)) = self.instance.get_export(&mut self.store, "memory")
-        else {
-            return Err(RunError::Malformed("source exports no memory".into()));
-        };
+        let memory = self.memory()?;
         let mut header = [0u8; 8];
         memory
             .read(&mut self.store, ptr as usize, &mut header)
