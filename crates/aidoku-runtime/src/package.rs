@@ -44,6 +44,12 @@ pub enum LoadError {
         id: String,
         missing: Vec<Capability>,
     },
+    /// The package imports host functions this build does not define.
+    ///
+    /// Distinct from [`Self::UnsupportedCapabilities`]: the capability is
+    /// provided and a function within it is not.
+    #[error("source '{id}' imports host functions this build does not define: {}", .missing.join(", "))]
+    UnsupportedImports { id: String, missing: Vec<String> },
 }
 
 fn format_caps(caps: &[Capability]) -> String {
@@ -159,6 +165,32 @@ pub fn required_capabilities<'a>(
     out
 }
 
+/// The imports a module needs that this host does not define, as
+/// `module::name`, deduplicated and in the order they appear.
+///
+/// Imports outside the supported capabilities are skipped; the capability
+/// check names those, which is the more useful message.
+pub fn unprovided_imports<'a>(
+    imports: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (module, name) in imports {
+        if capability_for_import(module, name)
+            .is_none_or(|c| !supported_capabilities().contains(&c))
+        {
+            continue;
+        }
+        if crate::imports::bindings::PROVIDED.contains(&(module, name)) {
+            continue;
+        }
+        let qualified = format!("{module}::{name}");
+        if !out.contains(&qualified) {
+            out.push(qualified);
+        }
+    }
+    out
+}
+
 /// Loads a package and refuses it if this host cannot run it.
 pub fn load(bytes: &[u8], module_imports: &dyn ModuleImports) -> Result<Package, LoadError> {
     let cursor = std::io::Cursor::new(bytes);
@@ -198,6 +230,16 @@ pub fn load(bytes: &[u8], module_imports: &dyn ModuleImports) -> Result<Package,
         return Err(LoadError::UnsupportedCapabilities {
             id: manifest.info.id,
             missing,
+        });
+    }
+
+    // Capabilities are too coarse to link against: `net` is provided and
+    // `net::send_all` is not, and the difference is a trap at first use.
+    let unknown = unprovided_imports(imports.iter().map(|(m, n)| (m.as_str(), n.as_str())));
+    if !unknown.is_empty() {
+        return Err(LoadError::UnsupportedImports {
+            id: manifest.info.id,
+            missing: unknown,
         });
     }
 
@@ -273,6 +315,69 @@ mod tests {
     const MANIFEST: &str = r#"{"info":{"id":"en.example","name":"Example","version":4,
         "url":"https://example.test","contentRating":0,"languages":["en"],
         "minAppVersion":"0.7.1"}}"#;
+
+    /// `net::send_all` sits inside a provided capability, so only a
+    /// function-level check refuses it.
+    #[test]
+    fn a_source_needing_an_unimplemented_net_function_is_refused() {
+        let (bytes, imports) = aix(
+            MANIFEST,
+            vec![("net", "send"), ("net", "send_all"), ("std", "destroy")],
+        );
+
+        let error = load(&bytes, &imports).expect_err("the package is refused");
+
+        match error {
+            LoadError::UnsupportedImports { id, missing } => {
+                assert_eq!(id, "en.example");
+                assert_eq!(missing, vec!["net::send_all"]);
+            }
+            other => panic!("expected UnsupportedImports, got {other:?}"),
+        }
+    }
+
+    /// The other direction: refusing a source this host can run.
+    #[test]
+    fn a_source_within_the_implemented_surface_installs() {
+        let (bytes, imports) = aix(
+            MANIFEST,
+            vec![
+                ("net", "send"),
+                ("net", "set_url"),
+                ("html", "select"),
+                ("defaults", "get"),
+                ("std", "destroy"),
+                ("env", "print"),
+            ],
+        );
+
+        load(&bytes, &imports).expect("the package loads");
+    }
+
+    /// "needs canvas" tells an operator more than eleven function names.
+    #[test]
+    fn a_missing_capability_is_still_reported_as_one() {
+        let (bytes, imports) = aix(MANIFEST, vec![("canvas", "new_context")]);
+
+        match load(&bytes, &imports).expect_err("the package is refused") {
+            LoadError::UnsupportedCapabilities { missing, .. } => {
+                assert_eq!(missing, vec![Capability::Canvas]);
+            }
+            other => panic!("expected UnsupportedCapabilities, got {other:?}"),
+        }
+    }
+
+    /// Reported once, however many times a source imports it.
+    #[test]
+    fn a_repeated_unprovided_import_is_named_once() {
+        let missing = unprovided_imports(vec![
+            ("net", "send_all"),
+            ("net", "send_all"),
+            ("net", "get_image"),
+        ]);
+
+        assert_eq!(missing, vec!["net::send_all", "net::get_image"]);
+    }
 
     #[test]
     fn imports_map_to_capabilities() {

@@ -466,6 +466,11 @@ fn map_load_error(e: package::LoadError) -> DomainError {
                     .join(", "),
             )
         }
+        // A gap inside a provided capability is still a host gap, not a bad
+        // package.
+        package::LoadError::UnsupportedImports { missing, .. } => {
+            DomainError::UnsupportedCapability(missing.join(", "))
+        }
         other => DomainError::Invalid(other.to_string()),
     }
 }

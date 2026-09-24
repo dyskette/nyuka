@@ -77,6 +77,82 @@ fn put_bytes(caller: &mut Host<'_>, bytes: Vec<u8>) -> i32 {
     caller.data_mut().table.insert(Resource::Buffer(bytes))
 }
 
+/// Every `(module, function)` this host defines.
+///
+/// `package::load` refuses a source importing anything outside this set: a
+/// capability being provided does not mean every function in it is (ADR-0004).
+/// `every_registered_import_is_listed` keeps it in step with `register`.
+pub const PROVIDED: &[(&str, &str)] = &[
+    // env
+    ("env", "abort"),
+    ("env", "print"),
+    ("env", "send_partial_result"),
+    // std
+    ("std", "abort"),
+    ("std", "buffer_len"),
+    ("std", "current_date"),
+    ("std", "destroy"),
+    ("std", "parse_date"),
+    ("std", "print"),
+    ("std", "read_buffer"),
+    ("std", "utc_offset"),
+    // defaults
+    ("defaults", "get"),
+    ("defaults", "set"),
+    // net
+    ("net", "data_len"),
+    ("net", "get_header"),
+    ("net", "get_status_code"),
+    ("net", "get_url"),
+    ("net", "html"),
+    ("net", "init"),
+    ("net", "read_data"),
+    ("net", "send"),
+    ("net", "set_body"),
+    ("net", "set_header"),
+    ("net", "set_rate_limit"),
+    ("net", "set_timeout"),
+    ("net", "set_url"),
+    // html
+    ("html", "add_class"),
+    ("html", "append"),
+    ("html", "attr"),
+    ("html", "base_uri"),
+    ("html", "child_nodes"),
+    ("html", "children"),
+    ("html", "class_name"),
+    ("html", "escape"),
+    ("html", "first"),
+    ("html", "get"),
+    ("html", "has_attr"),
+    ("html", "has_class"),
+    ("html", "html"),
+    ("html", "id"),
+    ("html", "last"),
+    ("html", "next"),
+    ("html", "outer_html"),
+    ("html", "own_text"),
+    ("html", "parent"),
+    ("html", "parse"),
+    ("html", "parse_fragment"),
+    ("html", "prepend"),
+    ("html", "previous"),
+    ("html", "remove"),
+    ("html", "remove_attr"),
+    ("html", "remove_class"),
+    ("html", "select"),
+    ("html", "select_first"),
+    ("html", "set_attr"),
+    ("html", "set_html"),
+    ("html", "set_text"),
+    ("html", "siblings"),
+    ("html", "size"),
+    ("html", "tag_name"),
+    ("html", "text"),
+    ("html", "unescape"),
+    ("html", "untrimmed_text"),
+];
+
 /// Registers every host import the required surface needs.
 pub fn register(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
     register_env(linker)?;
@@ -720,4 +796,68 @@ fn parse_into(
         html: parsed,
         id: root,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::Defaults;
+
+    struct NoDefaults;
+
+    impl Defaults for NoDefaults {
+        fn get(&self, _key: &str) -> Option<Vec<u8>> {
+            None
+        }
+        fn set(&self, _key: &str, _value: Vec<u8>) {}
+        fn remove(&self, _key: &str) {}
+    }
+
+    /// Exactly what `register` defines: a name listed but not registered lets
+    /// a source install and trap, and one registered but not listed refuses a
+    /// source this host can run. Read from a real linker, so any `func_wrap`
+    /// counts.
+    #[test]
+    fn every_registered_import_is_listed() {
+        let engine = wasmtime::Engine::default();
+        let mut linker: Linker<HostState> = Linker::new(&engine);
+        register(&mut linker).expect("the host imports register");
+
+        let mut store = wasmtime::Store::new(
+            &engine,
+            HostState::new(
+                std::sync::Arc::new(NoDefaults),
+                reqwest::blocking::Client::new(),
+            ),
+        );
+
+        let mut registered: Vec<(String, String)> = linker
+            .iter(&mut store)
+            .map(|(module, name, _)| (module.to_string(), name.to_string()))
+            .collect();
+        registered.sort();
+
+        let mut listed: Vec<(String, String)> = PROVIDED
+            .iter()
+            .map(|(m, n)| ((*m).to_string(), (*n).to_string()))
+            .collect();
+        listed.sort();
+
+        assert_eq!(
+            registered, listed,
+            "PROVIDED and `register` disagree; the left side is what the linker defines"
+        );
+    }
+
+    /// Both are in Aidoku's required `net` surface and neither is built, so
+    /// claiming them would admit sources this host cannot run.
+    #[test]
+    fn the_unimplemented_net_functions_are_not_claimed() {
+        for name in ["send_all", "get_image"] {
+            assert!(
+                !PROVIDED.contains(&("net", name)),
+                "net::{name} is listed as provided but is not implemented"
+            );
+        }
+    }
 }
