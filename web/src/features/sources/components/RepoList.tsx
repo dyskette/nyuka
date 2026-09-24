@@ -2,6 +2,7 @@ import { Trans, useLingui } from '@lingui/react/macro'
 import { useState } from 'react'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
+import { languageLabel, languageTitle } from '../lib/languages'
 import { SourceSettingsPanel } from './SourceSettingsPanel'
 
 type SourceRepo = components['schemas']['SourceRepoDto']
@@ -225,7 +226,12 @@ function SourceRow({
 
   return (
     <li className="border-border border-b last:border-b-0">
-      <div className="px-cell flex h-row items-center gap-2 text-sm">
+      {/*
+        `min-h-row`, not `h-row`. A fixed height with content that does not fit
+        does not clip it — it overflows and collides with the rows above and
+        below, which is what forty languages in one row did.
+      */}
+      <div className="px-cell flex min-h-row items-center gap-2 text-sm">
         {sourceId === undefined ? (
           // A source that is not installed has no settings to show, so the
           // space stays empty rather than holding a control that does nothing.
@@ -243,7 +249,18 @@ function SourceRow({
         )}
         <span className="min-w-0 flex-1 truncate">{entry.name}</span>
         <span className="text-muted-foreground tabular shrink-0 text-xs">v{entry.version}</span>
-        <span className="text-muted-foreground shrink-0 text-xs">{entry.languages.join(', ')}</span>
+        {/*
+          Bounded, and allowed to shrink. This was `shrink-0` over the whole
+          joined list, so a source declaring forty languages took the row and
+          left the name — which is `flex-1 truncate` — no width at all. The
+          full list is on the title, for the one reader who wants it.
+        */}
+        <span
+          title={languageTitle(entry.languages)}
+          className="text-muted-foreground min-w-0 max-w-32 shrink truncate text-xs"
+        >
+          {languageLabel(entry.languages)}
+        </span>
         <EntryAction
           repoId={repoId}
           entry={entry}

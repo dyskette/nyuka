@@ -167,4 +167,73 @@ describe('RepoList', () => {
     const header = screen.getByRole('heading', { name: 'Example Repo' }).closest('header')
     expect(within(header as HTMLElement).getByText(/Never refreshed/)).toBeInTheDocument()
   })
+
+  /**
+   * One source in the community index declares forty languages. Joined into
+   * the row they took its whole width, and the name — which is `flex-1
+   * truncate` — was squeezed to nothing. On screen the title disappeared
+   * entirely and the overflow collided with the rows above and below.
+   */
+  describe('a source that declares many languages', () => {
+    const many = [
+      'en',
+      'sq',
+      'ar',
+      'az',
+      'bn',
+      'bg',
+      'my',
+      'ca',
+      'zh-Hans',
+      'zh-Hant',
+      'hr',
+      'cs',
+      'da',
+      'nl',
+      'eo',
+      'et',
+      'fil',
+      'fi',
+      'fr',
+      'ka',
+    ]
+
+    it('still shows the name', async () => {
+      await renderWithProviders(
+        <RepoList {...props({ available: new Map([[REPO_ID, [entry({ languages: many })]]]) })} />,
+      )
+
+      expect(screen.getByText('MangaHaven')).toBeInTheDocument()
+    })
+
+    /**
+     * A count rather than an ellipsis: "+18" says how much was left out,
+     * which is what tells a reader whether to look closer.
+     */
+    it('shows a couple and counts the rest', async () => {
+      await renderWithProviders(
+        <RepoList {...props({ available: new Map([[REPO_ID, [entry({ languages: many })]]]) })} />,
+      )
+
+      expect(screen.getByText('en, sq +18')).toBeInTheDocument()
+      // Not the whole list, which is the thing that did not fit.
+      expect(screen.queryByText(/zh-Hant/)).not.toBeInTheDocument()
+    })
+
+    it('keeps the full list reachable', async () => {
+      await renderWithProviders(
+        <RepoList {...props({ available: new Map([[REPO_ID, [entry({ languages: many })]]]) })} />,
+      )
+
+      expect(screen.getByText('en, sq +18')).toHaveAttribute('title', many.join(', '))
+    })
+  })
+
+  it('shows a short language list in full, with no tooltip', async () => {
+    await renderWithProviders(<RepoList {...props()} />)
+
+    const languages = screen.getByText('en')
+    expect(languages).toBeInTheDocument()
+    expect(languages).not.toHaveAttribute('title')
+  })
 })

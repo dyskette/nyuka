@@ -160,8 +160,15 @@ function JobLabel({ job }: { job: JobSummary }) {
         <span className="tabular text-muted-foreground shrink-0 text-xs">{number}</span>
       )}
       <span className="truncate">{subject.chapter_title ?? subject.manga_title}</span>
+      {/*
+        `shrink truncate`, not `shrink-0 truncate`. A flex child that cannot
+        shrink is never narrower than its own content, so `truncate` has
+        nothing to act on: a long series title pushes the chapter title — which
+        is the primary half of this label — out of the cell instead of giving
+        way itself. Same defect as the language list in the source rows.
+      */}
       {subject.chapter_title !== null && subject.chapter_title !== undefined && (
-        <span className="text-muted-foreground shrink-0 truncate text-xs">
+        <span className="text-muted-foreground min-w-0 max-w-40 shrink truncate text-xs">
           {subject.manga_title}
         </span>
       )}

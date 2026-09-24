@@ -54,5 +54,8 @@
       "tailwindDirectives": true
     }
   },
-  "plugins": ["./biome-plugins/no-inline-query-keys.grit"]
+  "plugins": [
+    "./biome-plugins/no-inline-query-keys.grit",
+    "./biome-plugins/no-unshrinkable-truncate.grit"
+  ]
 }
