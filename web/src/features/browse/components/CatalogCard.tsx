@@ -21,7 +21,7 @@ export interface CatalogCardProps {
  */
 export function CatalogCard({ item, adding = false, onAdd }: CatalogCardProps) {
   return (
-    <div className="group flex flex-col gap-2">
+    <div className="group flex h-full flex-col gap-2">
       {/*
         The cover and the title open the panel, which is where a reader decides
         whether to add. The action below stays a separate control: adding
@@ -40,12 +40,20 @@ export function CatalogCard({ item, adding = false, onAdd }: CatalogCardProps) {
           <InLibraryBadge mangaId={item.manga_id} />
         </div>
 
-        <span className="line-clamp-2 text-sm font-medium" title={item.title}>
+        {/*
+          Two lines reserved whether or not the title needs them. `line-clamp-2`
+          alone left one-line titles a line short, so the action below sat at a
+          different height on every card. `min-h-10` is two lines of `text-sm`,
+          whose line height is `1.25rem`.
+        */}
+        <span className="line-clamp-2 min-h-10 text-sm font-medium" title={item.title}>
           {item.title}
         </span>
       </Link>
 
-      <Action item={item} adding={adding} onAdd={onAdd} />
+      <div className="mt-auto">
+        <Action item={item} adding={adding} onAdd={onAdd} />
+      </div>
     </div>
   )
 }
@@ -89,6 +97,16 @@ function InLibraryBadge({ mangaId }: { mangaId: string | null | undefined }) {
   )
 }
 
+/**
+ * The one box both actions wear.
+ *
+ * A card offers exactly one of "Add" and "Open in library", so the two sit in
+ * the same place on neighbouring cards. Declared once because a grid where
+ * they differ reads as one card being broken rather than as two states.
+ */
+const ACTION_BOX =
+  'border-border hover:bg-accent-soft block w-full rounded-sm border px-2 py-1 text-center text-xs'
+
 function Action({
   item,
   adding,
@@ -106,7 +124,7 @@ function Action({
         to="/library/$mangaId"
         params={{ mangaId: item.manga_id }}
         search={{ tab: 'overview' }}
-        className="text-accent text-xs"
+        className={ACTION_BOX}
       >
         <Trans>Open in library</Trans>
       </Link>
@@ -121,7 +139,7 @@ function Action({
       // The title, not "add": a screen reader's list of buttons would
       // otherwise be forty identical entries.
       aria-label={t`Add ${item.title} to your library`}
-      className="border-border hover:bg-accent-soft rounded-sm border px-2 py-1 text-xs disabled:opacity-50"
+      className={`${ACTION_BOX} disabled:opacity-50`}
     >
       {adding ? <Trans>Adding…</Trans> : <Trans>Add</Trans>}
     </button>
