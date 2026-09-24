@@ -157,7 +157,7 @@ function LibraryLayout() {
   }, [items])
 
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-full">
       <main className="flex min-w-0 flex-1 flex-col">
         <LibraryToolbar
           filters={{ q: search.q, status: search.status ?? '', source: search.source ?? '' }}

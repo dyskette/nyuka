@@ -53,7 +53,7 @@ function BrowseScreen() {
   if (sources.length === 0) return <NoSources />
 
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-full">
       <main className="flex min-w-0 flex-1 flex-col">
         <BrowseToolbar sources={sources} active={active} q={q} />
         <div className="min-h-0 flex-1 overflow-y-auto">

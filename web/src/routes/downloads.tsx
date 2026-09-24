@@ -44,7 +44,7 @@ function DownloadsScreen() {
   const retry = useRetryJob()
 
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-full">
       <main className="flex min-w-0 flex-1 flex-col">
         <StateFilter active={state} />
         <div className="min-h-0 flex-1 overflow-y-auto">

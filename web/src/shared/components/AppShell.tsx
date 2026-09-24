@@ -23,7 +23,17 @@ export function AppShell({
   return (
     <div className="grid h-dvh grid-cols-[13rem_1fr] grid-rows-[1fr_auto]">
       <Sidebar />
-      <div className="min-w-0 overflow-hidden">{children}</div>
+      {/*
+        `min-h-0` so the `1fr` row may be shorter than its content. A grid
+        item's default `min-height: auto` refuses to shrink below what it
+        holds, which would push the status bar off the bottom of the window.
+
+        A screen fills this cell with `h-full`. It must not set `h-dvh`: that
+        is the whole window, and this cell is the window less the status bar,
+        so the screen would overhang by exactly the status bar's height and
+        `overflow-hidden` would cut it off. `routes` has a test for it.
+      */}
+      <div className="min-h-0 min-w-0 overflow-hidden">{children}</div>
       <StatusBar onOpenPalette={onOpenPalette} />
     </div>
   )

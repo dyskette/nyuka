@@ -75,7 +75,7 @@ function SettingsScreen() {
      * drawn at that box's right edge — in the middle of the window, with
      * empty page either side of it.
      */
-    <div className="h-dvh overflow-y-auto">
+    <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
         <h1 className="text-lg font-semibold">
           <Trans>Sources</Trans>

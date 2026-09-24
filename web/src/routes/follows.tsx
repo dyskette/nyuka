@@ -42,7 +42,7 @@ function FollowsScreen() {
   )
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-full flex-col">
       <header className="border-border px-cell flex h-row shrink-0 items-center border-b">
         <h1 className="text-sm font-medium">
           <Trans>Follows</Trans>
