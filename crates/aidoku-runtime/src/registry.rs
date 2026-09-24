@@ -234,6 +234,24 @@ impl AidokuRegistry {
             .write(stored, bytes)
             .map_err(|e| DomainError::Storage(format!("saving the source package: {e}")))?;
 
+        // Before the module is registered, so the first call a source makes
+        // already finds them. `defaults::get` answers an unset key with an
+        // error, and a source reads its own settings at start-up — MangaDex
+        // reports "Unable to fetch default content ratings" when nothing
+        // answers.
+        //
+        // Only keys with nothing stored: reinstalling to upgrade must not
+        // throw away what a reader chose.
+        let declared = prepared
+            .settings
+            .clone()
+            .unwrap_or(serde_json::Value::Array(Vec::new()));
+        for seed in crate::settings::declared_defaults(&declared) {
+            if self.sources.kv_get(stored, &seed.key).await?.is_none() {
+                self.sources.kv_set(stored, &seed.key, seed.value).await?;
+            }
+        }
+
         let installed = self.runtime.register(stored, repo, prepared)?;
         tracing::info!(
             source.id = %stored,

@@ -76,6 +76,7 @@ pub mod models;
 pub mod package;
 pub mod registry;
 pub mod resource;
+pub mod settings;
 pub mod source;
 pub mod state;
 

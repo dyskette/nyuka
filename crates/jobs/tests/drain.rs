@@ -120,9 +120,14 @@ async fn shutdown_finishes_in_flight_work_and_stops_claiming() {
         },
     );
 
-    // Long enough for both workers to claim, short enough that neither has
-    // finished when shutdown begins.
-    tokio::time::sleep(Duration::from_millis(120)).await;
+    // Waited for rather than slept through. A fixed sleep raced the workers'
+    // first claim and failed about one run in three under load, while the
+    // deadline here stays well inside the handler's 400 ms so the "nothing
+    // has finished" invariant below still holds.
+    let deadline = std::time::Instant::now() + Duration::from_millis(300);
+    while started.load(Ordering::SeqCst) < 2 && std::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
     assert_eq!(
         started.load(Ordering::SeqCst),
         2,

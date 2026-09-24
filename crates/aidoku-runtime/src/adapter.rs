@@ -250,13 +250,34 @@ impl SourceRuntime {
         let defaults = self.defaults.clone();
 
         let joined = tokio::task::spawn_blocking(move || {
-            let mut invocation = invoke(&runtime, &loaded.module, defaults)?;
-            f(&mut invocation)
+            let mut invocation = match invoke(&runtime, &loaded.module, defaults) {
+                Ok(invocation) => invocation,
+                // Nothing ran, so there is nothing it could have printed.
+                Err(e) => return (Err(e), Vec::new()),
+            };
+            let outcome = f(&mut invocation);
+            // Taken before the invocation is dropped: a source writes these
+            // through `print`, and they are the only account of what it did
+            // that anyone outside the sandbox can read. Aidoku's own error
+            // path prints too, so a failure usually explains itself here.
+            (outcome, invocation.logs().to_vec())
         })
         .await
         .map_err(|e| DomainError::Internal(format!("source task failed: {e}")))?;
 
-        joined.map_err(map_run_error)
+        let (outcome, logs) = joined;
+        // A failing source explains itself at the default log level, because
+        // that is exactly when someone is reading. A working one is chatty and
+        // stays behind `nyuka_aidoku_runtime=debug`.
+        for line in logs {
+            if outcome.is_err() {
+                tracing::warn!(source.id = %source, "{line}");
+            } else {
+                tracing::debug!(source.id = %source, "{line}");
+            }
+        }
+
+        outcome.map_err(map_run_error)
     }
 }
 
