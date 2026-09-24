@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { CatalogFilters } from '@/features/browse/components/CatalogFilters'
 import { CatalogGrid } from '@/features/browse/components/CatalogGrid'
 import { parseFilters, parseState, toValues } from '@/features/browse/lib/filters'
+import { activeSource } from '@/features/browse/lib/source'
 import { useAddToLibrary } from '@/features/sources/api/mutations'
 import { catalogQuery, sourceFiltersQuery, sourceListQuery } from '@/features/sources/api/queries'
 import { isProblem, ProblemType, problemMessage } from '@/shared/api/problem'
@@ -45,13 +46,9 @@ function BrowseScreen() {
   const { source, q, filters, cursor } = Route.useSearch()
   const { data: sources } = useSuspenseQuery(sourceListQuery())
 
-  // Falling back to the first installed source rather than showing an empty
-  // screen: arriving from the sidebar with no source chosen is the common
-  // case, and asking the reader to pick before showing anything is a step
-  // with one sensible answer.
-  // `GET /sources` returns a bare array: the installed set is bounded by
-  // what an operator installed, so it is not paged.
-  const active = source ?? sources[0]?.id
+  // The detail panel resolves this the same way, through the same function —
+  // see `activeSource`.
+  const active = activeSource(source, sources)
 
   if (sources.length === 0) return <NoSources />
 

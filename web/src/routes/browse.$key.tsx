@@ -1,8 +1,13 @@
 import { Trans, useLingui } from '@lingui/react/macro'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { activeSource } from '@/features/browse/lib/source'
 import { useAddToLibrary } from '@/features/sources/api/mutations'
-import { catalogChaptersQuery, catalogItemQuery } from '@/features/sources/api/queries'
+import {
+  catalogChaptersQuery,
+  catalogItemQuery,
+  sourceListQuery,
+} from '@/features/sources/api/queries'
 import { problemMessage } from '@/shared/api/problem'
 import type { components } from '@/shared/api/schema'
 import { relativeTime } from '@/shared/lib/time'
@@ -25,9 +30,9 @@ type Chapter = components['schemas']['ChapterDto']
  * on this request, so nothing is trusted to be present or well-formed.
  */
 export const Route = createFileRoute('/browse/$key')({
-  // No loader. The parent's search parameters carry the source id, and a
-  // loader cannot see them without duplicating the fallback logic that picks
-  // the first installed source — so the component reads both from one place.
+  // No loader. The source id comes from the parent's search parameters, which
+  // a loader cannot see; the component reads them and resolves the same
+  // fallback the catalog grid does.
   component: CatalogPanel,
   errorComponent: PanelError,
 })
@@ -35,16 +40,23 @@ export const Route = createFileRoute('/browse/$key')({
 function CatalogPanel() {
   const { key } = Route.useParams()
   const { source } = Route.useSearch()
+  // Already loaded: the parent route's loader ensures it before this renders,
+  // so this reads the cache rather than opening a second request.
+  const { data: sources } = useSuspenseQuery(sourceListQuery())
 
-  if (source === undefined) {
+  const active = activeSource(source, sources)
+
+  // Only reachable with nothing installed at all, which the screen behind
+  // this panel is already saying.
+  if (active === undefined) {
     return (
       <p className="text-muted-foreground p-panel text-sm">
-        <Trans>Pick a source to see this series.</Trans>
+        <Trans>Install a source to see this series.</Trans>
       </p>
     )
   }
 
-  return <Details sourceId={source} externalKey={key} />
+  return <Details sourceId={active} externalKey={key} />
 }
 
 function Details({ sourceId, externalKey }: { sourceId: string; externalKey: string }) {

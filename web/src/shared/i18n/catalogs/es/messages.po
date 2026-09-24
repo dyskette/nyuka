@@ -257,6 +257,10 @@ msgstr "Instalar"
 msgid "Install {0}"
 msgstr "Instalar {0}"
 
+#: src/routes/browse.$key.tsx
+msgid "Install a source to see this series."
+msgstr "Instala una fuente para ver esta serie."
+
 #: src/features/jobs/components/JobQueue.tsx
 msgid "Job"
 msgstr "Trabajo"
@@ -376,10 +380,6 @@ msgstr "Resumen"
 #: src/routes/downloads.$jobId.tsx
 msgid "Pages"
 msgstr "Páginas"
-
-#: src/routes/browse.$key.tsx
-msgid "Pick a source to see this series."
-msgstr "Elige una fuente para ver esta serie."
 
 #: src/routes/downloads.$jobId.tsx
 msgid "Priority"
