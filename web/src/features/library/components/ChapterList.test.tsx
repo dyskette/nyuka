@@ -21,17 +21,18 @@ function chapter(overrides: Partial<ChapterSummary> = {}): ChapterSummary {
 
 describe('ChapterList', () => {
   /**
-   * The server pages ascending so its cursor stays stable as chapters are
-   * added. A reader opening a series wants the newest, so the loaded page is
-   * reversed here — losing that would silently show the oldest chapters.
+   * The server orders newest first and pages in that order. Reversing here as
+   * well would put the oldest at the top, which is what this did while the
+   * server paged ascending: a reader saw the oldest fifty, backwards, and the
+   * rest of the series was unreachable.
    */
-  it('shows the newest chapter first', async () => {
+  it('renders in the order it was given', async () => {
     await renderWithProviders(
       <ChapterList
         chapters={[
-          chapter({ id: 'a', number: 1, title: 'First' }),
-          chapter({ id: 'b', number: 2, title: 'Second' }),
           chapter({ id: 'c', number: 3, title: 'Third' }),
+          chapter({ id: 'b', number: 2, title: 'Second' }),
+          chapter({ id: 'a', number: 1, title: 'First' }),
         ]}
         onDownload={vi.fn()}
       />,
@@ -91,6 +92,21 @@ describe('ChapterList', () => {
     )
 
     expect(screen.getByText('10.5')).toBeInTheDocument()
+  })
+
+  /**
+   * Sources commonly key a chapter by its number, and the number already has
+   * a column — a row reading "50  50" looks like a rendering fault.
+   */
+  it('does not print the number twice when the key is the number', async () => {
+    await renderWithProviders(
+      <ChapterList
+        chapters={[chapter({ title: null, number: 50, external_key: '50' })]}
+        onDownload={vi.fn()}
+      />,
+    )
+
+    expect(screen.getAllByText('50')).toHaveLength(1)
   })
 
   it('falls back to the source key when a chapter has no title', async () => {

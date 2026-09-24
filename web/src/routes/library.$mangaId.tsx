@@ -1,9 +1,9 @@
 import { Trans, useLingui } from '@lingui/react/macro'
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
 import { useRemoveFromLibrary, useRequestDownload } from '@/features/library/api/mutations'
-import { mangaChaptersQuery, mangaDetailQuery } from '@/features/library/api/queries'
+import { mangaChaptersInfiniteQuery, mangaDetailQuery } from '@/features/library/api/queries'
 import { ChapterList } from '@/features/library/components/ChapterList'
 import { RemoveSeries } from '@/features/library/components/RemoveSeries'
 import { problemMessage } from '@/shared/api/problem'
@@ -35,7 +35,7 @@ export const Route = createFileRoute('/library/$mangaId')({
   loader: ({ context, params }) =>
     Promise.all([
       context.queryClient.ensureQueryData(mangaDetailQuery(params.mangaId)),
-      context.queryClient.ensureQueryData(mangaChaptersQuery(params.mangaId)),
+      context.queryClient.ensureInfiniteQueryData(mangaChaptersInfiniteQuery(params.mangaId)),
     ]),
 
   component: MangaPanel,
@@ -198,19 +198,37 @@ function Overview({ manga }: { manga: Manga }) {
 }
 
 function Chapters({ mangaId }: { mangaId: string }) {
-  const { data } = useQuery(mangaChaptersQuery(mangaId))
+  const { data, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery(
+    mangaChaptersInfiniteQuery(mangaId),
+  )
   const download = useRequestDownload(mangaId)
 
   // `variables` is the chapter id currently in flight, so the row it belongs
   // to shows "Queued" without a second piece of state to keep in step.
   const pending = new Set(download.isPending ? [download.variables] : [])
 
+  const chapters = data?.pages.flatMap((page) => page.items) ?? []
+
   return (
-    <ChapterList
-      chapters={data?.items ?? []}
-      pending={pending}
-      onDownload={(chapterId) => download.mutate(chapterId)}
-    />
+    <>
+      <ChapterList
+        chapters={chapters}
+        pending={pending}
+        onDownload={(chapterId) => download.mutate(chapterId)}
+      />
+      {hasNextPage && (
+        <div className="flex justify-center p-3">
+          <button
+            type="button"
+            onClick={() => void fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="border-border hover:bg-surface-raised rounded-sm border px-3 py-1 text-xs disabled:opacity-50"
+          >
+            {isFetchingNextPage ? <Trans>Loading more…</Trans> : <Trans>Load more chapters</Trans>}
+          </button>
+        </div>
+      )}
+    </>
   )
 }
 

@@ -114,20 +114,28 @@ export function mangaDetailQuery(mangaId: string) {
   })
 }
 
-/** A series' chapters, each with its download state. */
-export function mangaChaptersQuery(mangaId: string, cursor?: string) {
-  return queryOptions({
-    queryKey: libraryKeys.chapters(mangaId, cursor),
-    queryFn: async ({ signal }) =>
+/**
+ * Every chapter of a series, newest first, a page at a time.
+ *
+ * Infinite rather than a single page: the server returns fifty and a series
+ * runs to hundreds, so one page showed a reader the fifty newest and offered
+ * no way to reach the rest.
+ */
+export function mangaChaptersInfiniteQuery(mangaId: string) {
+  return infiniteQueryOptions({
+    queryKey: libraryKeys.allChapters(mangaId),
+    queryFn: async ({ pageParam, signal }) =>
       unwrap(
         await api.GET('/manga/{id}/chapters', {
           params: {
             path: { id: mangaId },
-            query: { ...(cursor ? { cursor } : {}) },
+            query: { ...(pageParam ? { cursor: pageParam } : {}) },
           },
           signal,
         }),
       ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     staleTime: 30_000,
   })
 }

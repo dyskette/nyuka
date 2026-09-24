@@ -11,14 +11,7 @@ export interface ChapterListProps {
   onDownload: (chapterId: string) => void
 }
 
-/**
- * A series' chapters, newest first, with what the reader can do about each.
- *
- * Reversed from the API's order: the server pages ascending by number so a
- * cursor stays stable as chapters are added, and a reader opening a series
- * wants the newest. Reversing the loaded page rather than asking the server
- * keeps the pagination contract intact.
- */
+/** A series' chapters, with what the reader can do about each. */
 export function ChapterList({ chapters, pending, onDownload }: ChapterListProps) {
   if (chapters.length === 0) {
     return (
@@ -34,7 +27,9 @@ export function ChapterList({ chapters, pending, onDownload }: ChapterListProps)
 
   return (
     <ul className="flex flex-col">
-      {chapters.toReversed().map((chapter) => (
+      {/* The server orders them newest first, so the page order is the
+          reading order and paging on keeps it. */}
+      {chapters.map((chapter) => (
         <ChapterRow
           key={chapter.id}
           chapter={chapter}
@@ -158,5 +153,9 @@ function chapterLabel(chapter: ChapterSummary): string {
   if (chapter.title !== null && chapter.title !== undefined && chapter.title !== '') {
     return chapter.title
   }
-  return chapter.external_key
+  // The key is only worth showing when it says something the number column
+  // does not. Sources commonly key a chapter by its number, and printing it
+  // again beside itself reads as a rendering fault.
+  const number = chapter.number != null ? String(Number(chapter.number)) : null
+  return chapter.external_key === number ? '' : chapter.external_key
 }

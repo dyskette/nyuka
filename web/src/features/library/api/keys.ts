@@ -50,6 +50,6 @@ export const libraryKeys = {
   details: () => [...libraryKeys.all, 'detail'] as const,
   detail: (mangaId: string) => [...libraryKeys.details(), mangaId] as const,
 
-  chapters: (mangaId: string, cursor?: string) =>
-    [...libraryKeys.detail(mangaId), 'chapters', { cursor: cursor ?? null }] as const,
+  /** Every page of a series' chapters, in one cache entry. */
+  allChapters: (mangaId: string) => [...libraryKeys.detail(mangaId), 'chapters', 'all'] as const,
 }

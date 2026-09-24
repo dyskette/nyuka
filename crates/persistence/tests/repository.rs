@@ -933,6 +933,63 @@ async fn a_series_with_no_chapters_still_appears_with_zero_counts() {
     assert_eq!(summary.downloaded_count, 0);
 }
 
+/// Newest first, and paging keeps going that way.
+///
+/// The panel shows one page and reverses nothing. While this ordered
+/// ascending, page one was the *oldest* fifty and a 162-chapter series had
+/// 112 chapters no client could reach.
+#[tokio::test(flavor = "multi_thread")]
+async fn chapters_page_newest_first() {
+    let Some((_db, repos, manga)) = fresh("nyuka_test_repo_chapter_desc").await else {
+        return;
+    };
+
+    // More than one page, so the assertion is about paging and not just
+    // about a single ORDER BY.
+    let total = 120;
+    let chapters: Vec<SourceChapter> = (1..=total)
+        .map(|n| chapter(&format!("c{n}"), n as f32))
+        .collect();
+    repos
+        .upsert_chapters(manga, &chapters)
+        .await
+        .expect("chapters");
+
+    let first = repos
+        .list_chapter_summaries(manga, None)
+        .await
+        .expect("first page");
+    assert_eq!(
+        first.items.first().and_then(|c| c.chapter.number),
+        Some(total as f32),
+        "the first page does not start at the newest chapter"
+    );
+
+    let cursor = first.next.clone().expect("a second page");
+    let second = repos
+        .list_chapter_summaries(manga, Some(&cursor))
+        .await
+        .expect("second page");
+
+    let last_of_first = first.items.last().and_then(|c| c.chapter.number);
+    let first_of_second = second.items.first().and_then(|c| c.chapter.number);
+    assert!(
+        first_of_second < last_of_first,
+        "paging turned around: {last_of_first:?} then {first_of_second:?}"
+    );
+
+    // Every chapter, once, across the pages.
+    let mut seen: Vec<f32> = first
+        .items
+        .iter()
+        .chain(second.items.iter())
+        .filter_map(|c| c.chapter.number)
+        .collect();
+    let before = seen.len();
+    seen.dedup();
+    assert_eq!(seen.len(), before, "a chapter appeared on both pages");
+}
+
 /// The panel's chapter list, with each chapter's download state.
 ///
 /// The `LEFT JOIN` is what makes a chapter with no file still appear. An
@@ -972,14 +1029,15 @@ async fn a_chapter_summary_reports_which_chapters_are_downloaded() {
 
     assert_eq!(page.items.len(), 4, "every chapter, downloaded or not");
 
+    // Newest first, so chapter 2 of four is third from the top.
     let downloaded: Vec<bool> = page.items.iter().map(|c| c.downloaded).collect();
     assert_eq!(
         downloaded,
-        vec![false, true, false, false],
-        "ordered by chapter number, with the state on the right row"
+        vec![false, false, true, false],
+        "ordered by chapter number descending, with the state on the right row"
     );
 
-    let second = &page.items[1];
+    let second = &page.items[2];
     assert_eq!(second.size_bytes, Some(4096));
     assert_eq!(second.chapter.id, ids[1]);
     assert!(

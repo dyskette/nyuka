@@ -641,16 +641,19 @@ impl Repositories {
             .transpose()
             .map_err(|_| DomainError::Invalid("cursor is not a chapter id".into()))?;
 
+        // Newest first, matching `list_chapter_summaries`. The two page the
+        // same rows and a caller moving between them must not see the order
+        // change under it.
         let (sql, values): (&str, Vec<Value>) = match after {
             Some(id) => (
-                "SELECT * FROM chapter WHERE manga_id = $1 AND (number, id) > \
+                "SELECT * FROM chapter WHERE manga_id = $1 AND (number, id) < \
                  (SELECT COALESCE(number, 0), id FROM chapter WHERE id = $2) \
-                 ORDER BY number NULLS FIRST, id LIMIT $3",
+                 ORDER BY number DESC NULLS LAST, id DESC LIMIT $3",
                 vec![manga.0.into(), id.into(), ((PAGE_SIZE + 1) as i64).into()],
             ),
             None => (
                 "SELECT * FROM chapter WHERE manga_id = $1 \
-                 ORDER BY number NULLS FIRST, id LIMIT $2",
+                 ORDER BY number DESC NULLS LAST, id DESC LIMIT $2",
                 vec![manga.0.into(), ((PAGE_SIZE + 1) as i64).into()],
             ),
         };
@@ -711,19 +714,23 @@ impl Repositories {
                       FROM chapter c \
                       LEFT JOIN downloaded_chapter d ON d.chapter_id = c.id ";
 
+        // Newest first, which is the order a series is read in and the order
+        // the panel shows. Ascending with the panel reversing what it loaded
+        // gave the *oldest* fifty backwards, and left chapters 51 and up
+        // unreachable — the panel has one page and no way to ask for another.
         let (sql, values): (String, Vec<Value>) = match after {
             Some(id) => (
                 format!(
-                    "{select} WHERE c.manga_id = $1 AND (c.number, c.id) > \
+                    "{select} WHERE c.manga_id = $1 AND (c.number, c.id) < \
                      (SELECT COALESCE(number, 0), id FROM chapter WHERE id = $2) \
-                     ORDER BY c.number NULLS FIRST, c.id LIMIT $3"
+                     ORDER BY c.number DESC NULLS LAST, c.id DESC LIMIT $3"
                 ),
                 vec![manga.0.into(), id.into(), ((PAGE_SIZE + 1) as i64).into()],
             ),
             None => (
                 format!(
                     "{select} WHERE c.manga_id = $1 \
-                     ORDER BY c.number NULLS FIRST, c.id LIMIT $2"
+                     ORDER BY c.number DESC NULLS LAST, c.id DESC LIMIT $2"
                 ),
                 vec![manga.0.into(), ((PAGE_SIZE + 1) as i64).into()],
             ),
